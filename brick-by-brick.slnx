@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="brick-by-brick/brick-by-brick.csproj" />
+  <Project Path="CakeBuild/CakeBuild.csproj" />
+</Solution>
