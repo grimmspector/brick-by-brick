@@ -3,11 +3,12 @@
     "type": "Code",
     "modid": "brick-by-brick",
     "name": "brick_by_brick",
-    "authors": [
-        "Unknown"
-    ],
-    "description": "To be added",
-    "version": "1.0.0",
+  "authors": [
+    "Grimm Spector",
+    "Sekhaleph"
+  ],
+    "description": "A mod to add immersive mechanics for buildilng stone, brick and similar block types with trowels and individual pieces.",
+    "version": "0.1.0",
     "dependencies": {
         "game": "1.21.0"
     }
