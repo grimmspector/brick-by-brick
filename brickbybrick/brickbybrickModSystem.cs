@@ -1,4 +1,5 @@
 ﻿using brickbybrick.Blocks;
+using brickbybrick.items;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -14,6 +15,7 @@ namespace brickbybrick
         {
             Mod.Logger.Notification("Hello from template mod: " + api.Side);
             api.RegisterBlockClass(Mod.Info.ModID + ".trampoline", typeof(BlockTrampoline));
+            api.RegisterItemClass(Mod.Info.ModID + ".thornsblade", typeof(ItemThornsBlade));
         }
 
         public override void StartServerSide(ICoreServerAPI api)

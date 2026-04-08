@@ -1,5 +1,6 @@
 ﻿//Here are the imports for this script. Most of these will add automatically.
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 
 /*
@@ -14,22 +15,13 @@ namespace brickbybrick.Blocks
     */
     internal class BlockTrampoline : Block
     {
-        //Any code within this 'override' function will be called when a trampoline block is placed. 
-        public override void OnBlockPlaced(IWorldAccessor world, BlockPos blockPos, ItemStack byItemStack = null)
+        public override void OnEntityCollide(IWorldAccessor world, Entity entity, BlockPos pos, BlockFacing facing, Vec3d collideSpeed, bool isImpact)
         {
-            //Log a message to the console.
-            api.Logger.Event("Trampoline Block Placed!");
-            //Perform any default logic when our block is placed.
-            base.OnBlockPlaced(world, blockPos, byItemStack);
-        }
-
-        //Any code within this 'override' function will be called when a trampoline block is broken.
-        public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
-        {
-            //Log a message to the console.
-            api.Logger.Event("Trampoline Block Broken!");
-            //Perform any default logic when our block is broken (e.g., dropping the block as an item.)
-            base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
+            base.OnEntityCollide(world, entity, pos, facing, collideSpeed, isImpact);
+            if (isImpact && facing.IsVertical)
+            {
+                entity.Pos.Motion.Y = entity.Pos.Motion.Y * -0.8f;
+            }
         }
     }
 }
