@@ -1,7 +1,7 @@
 {
     "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
     "type": "Code",
-    "modid": "brick-by-brick",
+    "modid": "brickbybrick",
     "name": "brick_by_brick",
   "authors": [
     "Grimm Spector",
