@@ -1,0 +1,424 @@
+{
+	"editor": {
+		"collapsedPaths": "Root/Handle/Lashings CW,Root/Handle/Lashings CCW2",
+		"allAngles": false,
+		"entityTextureMode": false
+	},
+	"textureWidth": 16,
+	"textureHeight": 16,
+	"textureSizes": {
+	},
+	"textures": {
+	},
+	"elements": [
+		{
+			"name": "Handle",
+			"from": [ 0.0, 7.4, 7.5 ],
+			"to": [ 4.0, 8.4, 8.5 ],
+			"rotationOrigin": [ 0.5, 8.0, 8.0 ],
+			"faces": {
+				"north": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 1.0 ] },
+				"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 1.0 ] },
+				"south": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 1.0 ] },
+				"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 1.0 ] },
+				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 1.0 ] },
+				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 1.0 ] }
+			},
+			"children": [
+				{
+					"name": "Tang",
+					"from": [ 3.7, 0.3, 0.2 ],
+					"to": [ 4.7, 0.9, 0.8 ],
+					"rotationOrigin": [ 3.7, 0.3, 0.2 ],
+					"rotationZ": -22.5,
+					"faces": {
+						"north": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+						"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"south": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+						"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"up": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+						"down": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] }
+					},
+					"children": [
+						{
+							"name": "Tang2",
+							"from": [ 0.9846, -0.0251, 0.0 ],
+							"to": [ 1.9846, 0.5749, 0.6 ],
+							"rotationOrigin": [ 0.9846, -0.0251, 0.0 ],
+							"rotationZ": 22.5,
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] }
+							}
+						}
+					]
+				},
+				{
+					"name": "Blade",
+					"from": [ 5.4, 0.0, 0.2 ],
+					"to": [ 10.4, 0.4, 0.8 ],
+					"rotationOrigin": [ 5.4, 0.0, 0.2 ],
+					"faces": {
+						"north": { "texture": "#null", "uv": [ 0.0, 0.0, 5.0, 0.5 ] },
+						"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"south": { "texture": "#null", "uv": [ 0.0, 0.0, 5.0, 0.5 ] },
+						"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"up": { "texture": "#null", "uv": [ 0.0, 0.0, 5.0, 0.5 ] },
+						"down": { "texture": "#null", "uv": [ 0.0, 0.0, 5.0, 0.5 ] }
+					},
+					"children": [
+						{
+							"name": "Round-off top",
+							"from": [ 0.1, 0.3, 0.0 ],
+							"to": [ 0.4, 0.5, 0.6 ],
+							"rotationOrigin": [ 0.1, 0.3, 0.0 ],
+							"rotationZ": -22.5,
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+							}
+						},
+						{
+							"name": "Round-off bottom",
+							"from": [ 0.1, -0.1, 0.0 ],
+							"to": [ 0.4, 0.1, 0.6 ],
+							"rotationOrigin": [ 0.1, -0.1, 0.0 ],
+							"rotationZ": 22.5,
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+							}
+						},
+						{
+							"name": "Right side",
+							"from": [ 0.3, 0.0, 0.6 ],
+							"to": [ 4.3, 0.4, 1.2 ],
+							"rotationOrigin": [ 0.3, 0.0, 0.6 ],
+							"rotationX": -5.0,
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] }
+							},
+							"children": [
+								{
+									"name": "Right side2",
+									"from": [ 0.4, 0.0, 0.6 ],
+									"to": [ 3.4, 0.4, 1.2 ],
+									"rotationOrigin": [ 0.4, 0.0, 0.6 ],
+									"faces": {
+										"north": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] },
+										"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"south": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] },
+										"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"up": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] },
+										"down": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] }
+									}
+								}
+							]
+						},
+						{
+							"name": "Left side",
+							"from": [ 0.3, 0.05, -0.6 ],
+							"to": [ 4.3, 0.45, 0.0 ],
+							"rotationOrigin": [ 0.3, 0.0, -0.6 ],
+							"rotationX": 5.0,
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 4.0, 0.5 ] }
+							},
+							"children": [
+								{
+									"name": "Left side2",
+									"from": [ 0.4, 0.0, -0.6 ],
+									"to": [ 3.4, 0.4, 0.0 ],
+									"rotationOrigin": [ 0.4, 0.0, -0.6 ],
+									"faces": {
+										"north": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] },
+										"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"south": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] },
+										"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"up": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] },
+										"down": { "texture": "#null", "uv": [ 0.0, 0.0, 3.0, 0.5 ] }
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Lashings CCW",
+					"from": [ 3.8, 1.0, 1.0 ],
+					"to": [ 4.0, 1.1, 2.1 ],
+					"rotationOrigin": [ 3.8, 1.0, 1.0 ],
+					"rotationX": 90.0,
+					"faces": {
+						"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+						"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+						"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+						"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+					},
+					"children": [
+						{
+							"name": "Lashings2",
+							"from": [ 0.0, 0.1, -0.1 ],
+							"to": [ 0.2, 0.2, 1.1 ],
+							"rotationOrigin": [ 0.0, 0.1, -0.1 ],
+							"rotationX": 90.0,
+							"rotationY": -22.5,
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+							},
+							"children": [
+								{
+									"name": "Lashings3",
+									"from": [ 0.0, 0.1, 1.3 ],
+									"to": [ 0.2, 0.2, 2.4 ],
+									"rotationOrigin": [ 0.0, 0.1, 1.3 ],
+									"rotationX": -90.0,
+									"rotationZ": 22.5,
+									"faces": {
+										"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+										"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+										"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+										"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+									},
+									"children": [
+										{
+											"name": "Lashings4",
+											"from": [ 0.0, 0.0, 1.2 ],
+											"to": [ 0.2, 0.1, 2.3 ],
+											"rotationOrigin": [ 0.0, 0.0, 1.1 ],
+											"rotationX": -90.0,
+											"rotationZ": 0.0,
+											"faces": {
+												"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+												"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+												"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+												"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+												"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+												"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+											},
+											"children": [
+												{
+													"name": "Lashings5",
+													"from": [ 0.0, 0.0, 1.2 ],
+													"to": [ 0.2, 0.1, 2.3 ],
+													"rotationOrigin": [ 0.0, 0.0, 1.1 ],
+													"rotationX": -90.0,
+													"rotationZ": 0.0,
+													"faces": {
+														"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+														"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+														"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+														"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+														"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+														"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+													},
+													"children": [
+														{
+															"name": "Lashings6",
+															"from": [ 0.0, 0.0, 1.2 ],
+															"to": [ 0.2, 0.1, 2.3 ],
+															"rotationOrigin": [ 0.0, 0.0, 1.1 ],
+															"rotationX": -90.0,
+															"rotationY": -11.25,
+															"rotationZ": 0.0,
+															"faces": {
+																"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+																"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+																"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+																"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+															},
+															"children": [
+																{
+																	"name": "Lashings7",
+																	"from": [ 0.0, 0.0, 1.2 ],
+																	"to": [ 0.2, 0.1, 2.3 ],
+																	"rotationOrigin": [ 0.0, 0.0, 1.1 ],
+																	"rotationX": -90.0,
+																	"rotationY": 0.0,
+																	"rotationZ": 11.25,
+																	"faces": {
+																		"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																		"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+																		"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																		"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+																		"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+																		"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+																	},
+																	"children": [
+																		{
+																			"name": "Lashings8",
+																			"from": [ 0.0, 0.05, 1.0 ],
+																			"to": [ 0.2, 0.15, 2.4 ],
+																			"rotationOrigin": [ 0.0, 0.1, 1.1 ],
+																			"rotationX": -92.0,
+																			"rotationY": 34.0,
+																			"rotationZ": 0.0,
+																			"faces": {
+																				"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																				"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+																				"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																				"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+																				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+																				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+																			}
+																		}
+																	]
+																}
+															]
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Lashings CW",
+					"from": [ 2.8, 1.0, 1.0 ],
+					"to": [ 3.0, 1.1, 2.0 ],
+					"rotationOrigin": [ 2.8, 1.0, 1.0 ],
+					"rotationX": 90.0,
+					"faces": {
+						"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+						"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+						"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+						"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+					},
+					"children": [
+						{
+							"name": "Lashings CW2",
+							"from": [ 0.0, 0.0, 0.1 ],
+							"to": [ 0.2, 0.1, 0.6 ],
+							"rotationOrigin": [ 0.0, 0.1, 0.1 ],
+							"rotationX": 110.0,
+							"rotationY": 45.0,
+							"rotationZ": -22.5,
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+							},
+							"children": [
+								{
+									"name": "Lashings CW3",
+									"from": [ 0.0, -0.05, 0.5 ],
+									"to": [ 0.2, 0.05, 1.0 ],
+									"rotationOrigin": [ 0.0, -0.1, 0.5 ],
+									"rotationX": -10.0,
+									"rotationY": 0.0,
+									"rotationZ": 11.25,
+									"faces": {
+										"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+										"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+									},
+									"children": [
+										{
+											"name": "Lashings CW4",
+											"from": [ 0.0, 0.0, 0.5 ],
+											"to": [ 0.2, 0.1, 1.2 ],
+											"rotationOrigin": [ 0.0, -0.05, 0.5 ],
+											"rotationX": -15.0,
+											"rotationY": 0.0,
+											"rotationZ": 0.0,
+											"faces": {
+												"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+												"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+												"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+												"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+												"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+												"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+											},
+											"children": [
+												{
+													"name": "Lashings CW5",
+													"from": [ 0.0, 0.1, 0.8 ],
+													"to": [ 0.2, 0.2, 1.8 ],
+													"rotationOrigin": [ 0.0, 0.05, 0.8 ],
+													"rotationX": -78.5,
+													"rotationY": 0.0,
+													"rotationZ": 0.0,
+													"faces": {
+														"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+														"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+														"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+														"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+														"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+														"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+													},
+													"children": [
+														{
+															"name": "Lashings CW6",
+															"from": [ 0.0, 0.1, 1.1 ],
+															"to": [ 0.2, 0.2, 2.6 ],
+															"rotationOrigin": [ 0.0, 0.05, 1.1 ],
+															"rotationX": -90.0,
+															"rotationY": 0.0,
+															"rotationZ": 0.0,
+															"faces": {
+																"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																"east": { "texture": "#null", "uv": [ 0.0, 0.0, 1.5, 0.5 ] },
+																"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+																"west": { "texture": "#null", "uv": [ 0.0, 0.0, 1.5, 0.5 ] },
+																"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.5 ] },
+																"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 1.5 ] }
+															}
+														}
+													]
+												}
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		}
+	]}
