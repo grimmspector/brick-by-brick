@@ -16,6 +16,7 @@ namespace brickbybrick
             Mod.Logger.Notification("Hello from template mod: " + api.Side);
             api.RegisterBlockClass(Mod.Info.ModID + ".trampoline", typeof(BlockTrampoline));
             api.RegisterItemClass(Mod.Info.ModID + ".thornsblade", typeof(ItemThornsBlade));
+            api.RegisterItemClass(Mod.Info.ModID + ".trowel", typeof(ItemTrowel));
         }
 
         public override void StartServerSide(ICoreServerAPI api)
