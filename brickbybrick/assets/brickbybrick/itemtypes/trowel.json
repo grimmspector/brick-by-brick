@@ -1,14 +1,17 @@
 {
     "code": "trowel",
 
-    "behaviours":[{
-        "properties":{
-            "strikesound":"game:sounds/player/strike"
-        },
-        "attributes":{
-            "heldItemPitchFollow": "1"
-        }
-    }],
+  "behaviours": [
+    {
+      "properties": {
+        "strikesound": "game:sounds/player/strike"
+      },
+      "ctrlKey": true,
+      "attributes": {
+        "heldItemPitchFollow": "1"
+      }
+    }
+  ],
 
     "heldTpHitAnimation": "knifestab",
 
