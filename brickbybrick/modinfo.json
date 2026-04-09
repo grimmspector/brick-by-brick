@@ -1,8 +1,8 @@
 {
     "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
     "type": "Code",
-    "modid": "brick-by-brick",
-    "name": "brick_by_brick",
+    "modid": "brickbybrick",
+    "name": "Brick-by-Brick",
   "authors": [
     "Grimm Spector",
     "Sekhaleph"
