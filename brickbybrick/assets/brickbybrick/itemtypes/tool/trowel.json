@@ -8,20 +8,11 @@
       },
       "ctrlKey": true,
       "attributes": {
-        "heldItemPitchFollow": "1"
+        "heldItemPitchFollow": "1",
+        "OffHandHeldItem": true
       }
     }
   ],
-    "behaviours":[{
-        "properties":{
-            "strikesound":"game:sounds/player/strike"
-        },
-        "attributes":{
-            "heldItemPitchFollow": "1",
-            "OffHandHeldItem": true
-        }
-    }],
-
     "heldTpHitAnimation": "knifestab",
 
     "variantgroups": [
@@ -33,9 +24,6 @@
       "material": { "base": "game:block/metal/ingot/{material}"},
       "string": { "base": "game:item/tool/material/string" },
       "handle": { "base": "game:item/tool/material/handle" }
-        "material": { "base": "game:block/metal/ingot/{material}"},
-        "string": { "base": "game:item/tool/material/string"},
-        "handle": {"base": "game:item/tool/material/handle"}
     },
     "ShapeByType": {
          "*" :{ "base":  "shapes/item/trowel" }
