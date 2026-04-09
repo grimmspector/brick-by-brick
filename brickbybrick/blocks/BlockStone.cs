@@ -7,7 +7,7 @@ namespace brickbybrick.Blocks
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
         {
             base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent,ref handling);
-            byEntity.World.Api.Logger.Event("Trowel used!");
+            byEntity.World.Api.Logger.Event("Block placed! ");
             byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
             byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
             byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
@@ -20,7 +20,7 @@ namespace brickbybrick.Blocks
             base.OnHeldInteractStep(secondsUsed, slot, byEntity, blockSel, entitySel);
             if (secondsUsed > 1)
             {
-                byEntity.World.Api.Logger.Event("Trowel used for more than 1 second!");
+                byEntity.World.Api.Logger.Event("Block used for more than one second!");
                 byEntity.World.Api.Logger.Event("Seconds used: " + secondsUsed);
                 byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
                 byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
