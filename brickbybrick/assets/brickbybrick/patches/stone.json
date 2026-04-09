@@ -1,0 +1,8 @@
+[
+  {
+    "file": "game:itemtypes/resource/stone",
+    "op": "replace",
+    "path": "/storageFlags",
+    "value": 261
+  }
+]
