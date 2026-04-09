@@ -18,9 +18,9 @@
     }],
 //Change strings to mod directory before compiling!//
     "Textures": {
-        "material": { "base": "block/metal/ingot/{material}"},
-        "string": { "base": "item/tool/material/string"},
-        "handle": {"base": "item/tool/material/handle"}
+        "material": { "base": "game:block/metal/ingot/{material}"},
+        "string": { "base": "game:item/tool/material/string"},
+        "handle": {"base": "game:item/tool/material/handle"}
     },
     "ShapeByType": {
          "*" :{ "base":  "shapes/item/trowel" }
