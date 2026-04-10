@@ -17,13 +17,12 @@ namespace brickbybrick.items
      if (!byEntity.World.Claims.TryAccess(player, blockSel.Position, EnumBlockAccessFlags.BuildOrBreak))
            {
                 var block = api.World.BlockAccessor.GetBlock(blockSel.Position);
-            byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
-                
+                byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
                 byEntity.World.Api.Logger.Event("Block code: " + block.Code);
-            byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
+                byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
                 byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
-           return;
-         }
+                return;
+           }
             byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
             handling = EnumHandHandling.PreventDefault;
             return;
