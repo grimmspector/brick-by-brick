@@ -11,19 +11,21 @@ namespace brickbybrick.items
             base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent,ref handling);
 
             byEntity.World.Api.Logger.Event("Trowel used!");
-            if (blockSel != null)
-            {
-                var pos = api.World.BlockAccessor.GetBlock(blockSel.Position);
-                var code = api.World.BlockAccessor.GetBlock(blockSel.Block.Code);
-                byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
+            if (blockSel == null) return;
+            var player = (byEntity as EntityPlayer)?.Player;
+
+     //       if (!byEntity.World.Claims.TryAccess(player, blockSel.Position, EnumBlockAccessFlags.BuildOrBreak))
+      //      {
+                //api.World.BlockAccessor.MarkBlockEntityDirty(blockSel.Position.AddCopy(blockSel.Face));
+                //api.World.BlockAccessor.MarkBlockDirty(blockSel.Position.AddCopy(blockSel.Face));
+                //var pos = api.World.BlockAccessor.GetBlock(blockSel.Position);
+                //var code = api.World.BlockAccessor.GetBlock(blockSel.Block.Code);
                 byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
+                byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
                 byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
                 byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
-            }
-            else
-            {
-                byEntity.World.Api.Logger.Event("No block selected.");
-            }
+          //      return;
+        //    }
             byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
             handling = EnumHandHandling.PreventDefault;
             return;
@@ -31,7 +33,7 @@ namespace brickbybrick.items
         public override bool OnHeldInteractStep(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)
         {
             base.OnHeldInteractStep(secondsUsed, slot, byEntity, blockSel, entitySel);
-            byEntity.World.Api.Logger.Event("Trowel used for " + secondsUsed + " seconds!");
+            byEntity.World.Api.Logger.Event("Trowel used continuously for " + secondsUsed + " seconds!");
             if (secondsUsed > 1)
             {
                 byEntity.World.Api.Logger.Event("Trowel used for more than 1 second!");
