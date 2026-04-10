@@ -14,6 +14,7 @@ namespace brickbybrick.items
             byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
             byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
             byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
+            handling = EnumHandHandling.PreventDefault;
             return;
         }
         public override bool OnHeldInteractStep(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)

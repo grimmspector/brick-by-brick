@@ -1,6 +1,6 @@
 {
   "code": "trowel",
-  "class": "brickbybrick.itemtrowel",
+  "class": "brickbybrick.trowel",
   "behaviours": [
     {
       "properties": {
