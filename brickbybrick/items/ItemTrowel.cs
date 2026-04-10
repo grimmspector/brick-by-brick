@@ -1,5 +1,6 @@
 ﻿using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.GameContent;
 
 namespace brickbybrick.items
 {
@@ -8,11 +9,21 @@ namespace brickbybrick.items
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
         {
             base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent,ref handling);
+
             byEntity.World.Api.Logger.Event("Trowel used!");
-            byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
-            byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
-            byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
-            byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
+            if (blockSel != null)
+            {
+                var pos = api.World.BlockAccessor.GetBlock(blockSel.Position);
+                var code = api.World.BlockAccessor.GetBlock(blockSel.Block.Code);
+                byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
+                byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
+                byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
+                byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
+            }
+            else
+            {
+                byEntity.World.Api.Logger.Event("No block selected.");
+            }
             byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
             handling = EnumHandHandling.PreventDefault;
             return;
