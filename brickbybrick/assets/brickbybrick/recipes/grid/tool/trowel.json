@@ -8,7 +8,7 @@
         },
         "S": {
             "type": "item",
-            "code": "stick"
+            "code": "game:stick"
         }
     },
     "width": 1,
