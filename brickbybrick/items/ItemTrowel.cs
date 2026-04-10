@@ -19,6 +19,7 @@ namespace brickbybrick.items
         public override bool OnHeldInteractStep(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)
         {
             base.OnHeldInteractStep(secondsUsed, slot, byEntity, blockSel, entitySel);
+            byEntity.World.Api.Logger.Event("Trowel used for " + secondsUsed + " seconds!");
             if (secondsUsed > 1)
             {
                 byEntity.World.Api.Logger.Event("Trowel used for more than 1 second!");
