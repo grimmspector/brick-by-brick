@@ -1,0 +1,16 @@
+{
+    "ingredient": {"type": "item", "code": "ingot-*", "name": "metal",
+     "allowedvariants": [ "copper", "tinbronze", "bismuthbronze", "blackbronze", "iron", "meteoriciron", "steel"] 
+    },
+    "pattern": [
+        [
+            "___###__",
+            "_#####__",
+            "########",
+            "_#####__",
+            "___###__"
+        ]
+    ],
+    "name": "trowel",
+    "output": {"type": "item", "code": "trowelhead-{metal}"}
+}
