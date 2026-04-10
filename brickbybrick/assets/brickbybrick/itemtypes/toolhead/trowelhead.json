@@ -1,0 +1,31 @@
+{
+    "code": "trowelhead",
+    "creativeinventory": { "general": ["*"], "items": ["*"] },
+
+    "variantgroups": [
+        {"code": "material", "states": 
+        ["copper", "tinbronze", "bismuthbronze", "blackbronze", "iron", "meteoriciron", "steel"] 
+        }
+    ],
+
+    "ShapeByType": {
+         "*" :{ "base":  "shapes/item/tool/trowelhead" }
+    },
+
+    "textures": {
+        "material": { "base": "game:block/metal/ingot/{material}"}
+    },
+
+    "guiTransform": {
+		"translation": { "x": 0, "y": -2, "z": 0 },
+		"rotation": { "x": -90, "y": 45, "z": 29 },
+		"scale": 2.22
+	},
+
+	"tpHandTransform": {
+		"translation": { "x": -1.4, "y": -1.15, "z": -0.6 },
+		"rotation": { "x": 180, "y": 30, "z": 18 },
+		"scale": 0.56
+	}
+
+}
