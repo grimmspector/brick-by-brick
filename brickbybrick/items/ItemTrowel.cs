@@ -14,18 +14,16 @@ namespace brickbybrick.items
             if (blockSel == null) return;
             var player = (byEntity as EntityPlayer)?.Player;
 
-     //       if (!byEntity.World.Claims.TryAccess(player, blockSel.Position, EnumBlockAccessFlags.BuildOrBreak))
-      //      {
-                //api.World.BlockAccessor.MarkBlockEntityDirty(blockSel.Position.AddCopy(blockSel.Face));
-                //api.World.BlockAccessor.MarkBlockDirty(blockSel.Position.AddCopy(blockSel.Face));
-                //var pos = api.World.BlockAccessor.GetBlock(blockSel.Position);
-                //var code = api.World.BlockAccessor.GetBlock(blockSel.Block.Code);
-                byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
-                byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
-                byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
+     if (!byEntity.World.Claims.TryAccess(player, blockSel.Position, EnumBlockAccessFlags.BuildOrBreak))
+           {
+                var block = api.World.BlockAccessor.GetBlock(blockSel.Position);
+            byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
+                
+                byEntity.World.Api.Logger.Event("Block code: " + block.Code);
+            byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
                 byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
-          //      return;
-        //    }
+           return;
+         }
             byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
             handling = EnumHandHandling.PreventDefault;
             return;
