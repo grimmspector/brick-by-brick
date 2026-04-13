@@ -12,16 +12,17 @@ Vintage Story Mod Brick-by-Brick fir manual brick block building
 	+ Add tiers to bloomeries 
 	+ Add context menu to select brick block variant
 	+ Add tiered mortar system for cementation furnaces & beehive kilns
+	+ Compatability with XSkills (xp for clayworking and mining)
 
 ### CHANGES
 
 	+ Change brick and stone item textures except when holding a single brick (Always finish a build by placing the final brick. So satisfying!)
 	+ Change brick and stone ground-placement behaviours {stackability, pathmaking, block assembly}
-	+ Rebalance mortar production ratios & consumption ratios [+configurable]
+	+ Double mortar (temp)
 
 
 
-## FUTURE PLANS:
+## FUTURE PLANS
 
 	+ Visibly differently coloured mortar types on ALL blocks
 	+ Full compatability with rock and brick types from other mods
@@ -30,4 +31,18 @@ Vintage Story Mod Brick-by-Brick fir manual brick block building
 	+ Curing time for mortar on placed brickblocks that allows them to be retrievable or deconstructed (with mortar loss)
 	+ Artist to make nice visuals for the DB page 
 	+ Language localization
+	+ Sledgehammer tool for breaking placed bricks
+	+ Rebalance mortar production ratios & consumption ratios [+configurable]
+	+ Total configuration
+
+## PRIORITIES
+
+	1. Config files
+	1. Rebalancing mortar recipe
+	1. Artist 
+	1. Curing timer on mortared bricks
+	1. Compatability with everyone
+	1. Sledgehammer
+	1. Immersive game changes
+	1. Different coloured mortar and all permutations
 	
