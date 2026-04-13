@@ -38,11 +38,11 @@ Vintage Story Mod Brick-by-Brick fir manual brick block building
 ## PRIORITIES
 
 	1. Config files
-	1. Rebalancing mortar recipe
-	1. Artist 
-	1. Curing timer on mortared bricks
-	1. Compatability with everyone
-	1. Sledgehammer
-	1. Immersive game changes
-	1. Different coloured mortar and all permutations
+	2. Rebalancing mortar recipe
+	3. Artist 
+	4. Curing timer on mortared bricks
+	5. Compatability with everyone
+	6. Sledgehammer
+	7. Immersive game changes
+	8. Different coloured mortar and all permutations
 	
