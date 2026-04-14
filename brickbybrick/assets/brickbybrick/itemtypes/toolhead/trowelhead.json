@@ -3,17 +3,15 @@
     "creativeinventory": { "general": ["*"], "items": ["*"] },
 
     "variantgroups": [
-        {"code": "material", 
+        {"code": "metal", 
         "states": ["copper", "tinbronze", "bismuthbronze", "blackbronze", "iron", "meteoriciron", "steel"] 
         }
     ],
 
-    "ShapeByType": {
-         "*" :{ "base":  "brickbybrick:shapes/item/tool/trowelhead" }
-    },
+    "shape": { "base":  "shapes/item/tool/trowelhead" },
 
     "textures": {
-        "material": { "base": "game:block/metal/ingot/{material}"}
+        "material": { "base": "game:block/metal/ingot/{metal}"}
     },
 
     "guiTransform": {
