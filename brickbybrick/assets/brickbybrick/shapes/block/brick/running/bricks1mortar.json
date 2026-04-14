@@ -1,0 +1,73 @@
+{
+	"editor": {
+		"collapsedPaths": "Root/Mortar",
+		"allAngles": false,
+		"entityTextureMode": false
+	},
+	"textureWidth": 16,
+	"textureHeight": 16,
+	"textureSizes": {
+	},
+	"textures": {
+	},
+	"elements": [
+		{
+			"name": "Bricks",
+			"from": [ 0.0, 0.0, 0.0 ],
+			"to": [ 16.0, 4.0, 16.0 ],
+			"faces": {
+				"north": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 4.0 ] },
+				"east": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 4.0 ] },
+				"south": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 4.0 ] },
+				"west": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 4.0 ] },
+				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 16.0 ], "windMode": [-1,-1,-1,-1] },
+				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 16.0 ] }
+			}
+		},
+		{
+			"name": "Mortar",
+			"from": [ 0.5, 4.0, 0.5 ],
+			"to": [ 15.5, 4.5, 15.5 ],
+			"rotationOrigin": [ 0.5, 4.0, 0.5 ],
+			"faces": {
+				"north": { "texture": "#null", "uv": [ 0.0, 0.0, 15.0, 0.5 ] },
+				"east": { "texture": "#null", "uv": [ 0.0, 0.0, 15.0, 0.5 ] },
+				"south": { "texture": "#null", "uv": [ 0.0, 0.0, 15.0, 0.5 ] },
+				"west": { "texture": "#null", "uv": [ 0.0, 0.0, 15.0, 0.5 ] },
+				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 15.0, 15.0 ] },
+				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 15.0, 15.0 ], "windMode": [-1,-1,-1,-1], "enabled": false }
+			},
+			"children": [
+				{
+					"name": "Mortar2",
+					"from": [ 1.0, 0.0, 1.0 ],
+					"to": [ 14.0, 0.6, 14.0 ],
+					"rotationOrigin": [ 1.0, 0.0, 1.0 ],
+					"faces": {
+						"north": { "texture": "#null", "uv": [ 0.0, 0.0, 13.0, 0.5 ] },
+						"east": { "texture": "#null", "uv": [ 0.0, 0.0, 13.0, 0.5 ] },
+						"south": { "texture": "#null", "uv": [ 0.0, 0.0, 13.0, 0.5 ] },
+						"west": { "texture": "#null", "uv": [ 0.0, 0.0, 13.0, 0.5 ] },
+						"up": { "texture": "#null", "uv": [ 0.0, 0.0, 13.0, 13.0 ] },
+						"down": { "texture": "#null", "uv": [ 0.0, 0.0, 13.0, 13.0 ], "windMode": [-1,-1,-1,-1], "enabled": false }
+					},
+					"children": [
+						{
+							"name": "Mortar3",
+							"from": [ 2.0, 0.0, 2.0 ],
+							"to": [ 11.0, 0.8, 11.0 ],
+							"rotationOrigin": [ 2.0, 0.0, 2.0 ],
+							"faces": {
+								"north": { "texture": "#null", "uv": [ 0.0, 0.0, 9.0, 0.5 ] },
+								"east": { "texture": "#null", "uv": [ 0.0, 0.0, 9.0, 0.5 ] },
+								"south": { "texture": "#null", "uv": [ 0.0, 0.0, 9.0, 0.5 ] },
+								"west": { "texture": "#null", "uv": [ 0.0, 0.0, 9.0, 0.5 ] },
+								"up": { "texture": "#null", "uv": [ 0.0, 0.0, 9.0, 9.0 ] },
+								"down": { "texture": "#null", "uv": [ 0.0, 0.0, 9.0, 9.0 ], "windMode": [-1,-1,-1,-1], "enabled": false }
+							}
+						}
+					]
+				}
+			]
+		}
+	]}

@@ -27,7 +27,7 @@
     "string": { "base": "game:item/tool/material/string" },
     "handle": { "base": "game:item/tool/material/handle" }
   },
-  "shape": { "base": "shapes/item/tool/trowel" },
+  "shape": { "base": "brickbybrick:shapes/item/tool/trowel" },
   "creativeinventory": {
     "general": [ "*" ],
     "items": [ "*" ],
