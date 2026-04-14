@@ -3,13 +3,13 @@
     "creativeinventory": { "general": ["*"], "items": ["*"] },
 
     "variantgroups": [
-        {"code": "material", "states": 
-        ["copper", "tinbronze", "bismuthbronze", "blackbronze", "iron", "meteoriciron", "steel"] 
+        {"code": "material", 
+        "states": ["copper", "tinbronze", "bismuthbronze", "blackbronze", "iron", "meteoriciron", "steel"] 
         }
     ],
 
     "ShapeByType": {
-         "*" :{ "base":  "shapes/item/tool/trowelhead" }
+         "*" :{ "base":  "brickbybrick:shapes/item/tool/trowelhead" }
     },
 
     "textures": {
