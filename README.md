@@ -34,6 +34,9 @@ Vintage Story Mod Brick-by-Brick fir manual brick block building
 	+ Sledgehammer tool for breaking placed bricks
 	+ Rebalance mortar production ratios & consumption ratios [+configurable]
 	+ Total configuration
+	+ Correction of all stone/brick textures {only stairs, slabs, blocks} to match all sides with apparent bricks
+	+ Modify brick/stone creation/drops and mechanics for a "realistic" mode where individual bricks/stones in the corrected textured blocks is built one-to-one from new/modified bricks/stones
+	+ Extend beyond stairs, slabs and blocks
 
 ## PRIORITIES
 
@@ -45,4 +48,5 @@ Vintage Story Mod Brick-by-Brick fir manual brick block building
 	6. Sledgehammer
 	7. Immersive game changes
 	8. Different coloured mortar and all permutations
-	
+	9. Modify stone/brick creation/drops and implement "realistic" mode (optional)
+	10. Extend to other block types, including vanilla and mods
