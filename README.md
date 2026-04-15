@@ -20,6 +20,7 @@ Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 
 		[ ] Add sequential construction of stairs
 		[ ] Add sequential construction of blocks
 	[ ] Add context menu to select brick block variant
+	[ ] Add languge file references for all blocks in english
 
 ### CHANGES
 
