@@ -1,6 +1,6 @@
 {
-  "code": "cobbleblock", //test comment
-  "class": "brickbybrick.cobbleblock",
+  "code": "brickblock", //test comment
+  "class": "brickbybrick.brickblock",
   "variantgroups": [
     {
       "code": "rock",
@@ -23,18 +23,28 @@
     "construction": [ "*" ],
     "brickbybrick": [ "*" ]
   },
+  "sideopaque": false,
   //"shape": { "base": "game:block/basic/cube" },
   "shape": { "base": "brickbybrick:shapes/block/brick/running/bricks1" },
   //"drawtype": "cube",
-  "blockmaterial": "Stone",
+  "blockmaterial": "Ceramic",
   "textures": {
     "material": { "base": "game:block/stone/cobblestone/{rock}*" }
   },
+  "drops": [ {
+    "type": "item",
+    "code":"stone-{rock}",
+    "quantity":  {
+      "avg": 2.5,
+      "var": 0.5
+    }
+  ],
   "replaceable": 140,
   "fertility": 0,
   "resistance": 4,
   "sounds": {
     "walk": "walk/stone",
+    "place": "block/ceramicplace",
     "byTool": {
       "Pickaxe": {
         "hit": "block/rock-hit-pickaxe",

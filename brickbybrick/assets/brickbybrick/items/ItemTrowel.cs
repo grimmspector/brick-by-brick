@@ -1,11 +1,49 @@
-﻿using Vintagestory.API.Common;
+﻿using System;
+using System.Collections.Generic;
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
 namespace brickbybrick.items
 {
     internal class ItemTrowel : Item
     {
+        WorldInteraction[]? interactions;
+        //ProPickWorkSpace tws; //Fix later
+        SkillItem[]? toolModes;
+
+        public override void OnLoaded(ICoreAPI api)
+        {
+            if (api is not ICoreClientAPI capi) return;
+
+            interactions = ObjectCacheUtil.GetOrCreate(capi, "trowelInteractions", () =>
+            {
+                List<ItemStack> stacks = new List<ItemStack>();
+
+                foreach (Block block in capi.World.Blocks)
+                {
+                    if (block.Code == null) continue;
+
+                    if (block.Code.PathStartsWith("soil"))
+                    {
+                        stacks.Add(new ItemStack(block));
+                    }
+                }
+
+                return new WorldInteraction[]
+                {
+                    new WorldInteraction()
+                    {
+                        ActionLangCode = "heldhelp-till",
+                        MouseButton = EnumMouseButton.Right,
+                        Itemstacks = stacks.ToArray()
+                    }
+                };
+            });
+        }
+
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
         {
             base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent,ref handling);
