@@ -18,6 +18,7 @@ namespace brickbybrick
             api.RegisterItemClass(Mod.Info.ModID + ".thornsblade", typeof(ItemThornsBlade));
             api.RegisterItemClass(Mod.Info.ModID + ".trowel", typeof(ItemTrowel));
             api.RegisterBlockClass(Mod.Info.ModID + ".cobbleblock", typeof(BlockStone));
+            api.RegisterBlockClass(Mod.Info.ModID + ".brickblock", typeof(BlockBrick));
         }
 
         public override void StartServerSide(ICoreServerAPI api)
