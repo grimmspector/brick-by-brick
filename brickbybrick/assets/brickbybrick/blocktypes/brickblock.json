@@ -1,0 +1,61 @@
+{
+  "code": "brickblock", //test comment
+  "class": "brickbybrick.brickblock",
+  "variantgroups": [
+    {
+      "code": "rock",
+      "loadFromProperties": "block/rockwithdeposit"
+    },
+    {
+      "code": "stage",
+      "states": [ "1", "2", "3" ]
+    }
+  ],
+  "skipVariants": [ "*-obsidian*", "*-halite*", "*-scoria*", "*-tuff" ],
+  "attributes": {
+    "mapColorCode": "settlement",
+    "handbook": {
+      "groupBy": [ "cobblestone-*" ]
+    }
+  },
+  "creativeinventory": {
+    "general": [ "*" ],
+    "construction": [ "*" ],
+    "Brick-by-Brick": [ "*" ]
+  },
+  //"shape": { "base": "game:block/basic/cube" },
+  "shape": { "base": "brickbybrick:shapes/block/brick/running/bricks1" },
+  //"drawtype": "cube",
+  "blockmaterial": "Stone",
+  "textures": {
+    "material": { "base": "game:block/stone/cobblestone/{rock}*" }
+  },
+  "replaceable": 140,
+  "fertility": 0,
+  "resistance": 4,
+  "sounds": {
+    "walk": "walk/stone",
+    "byTool": {
+      "Pickaxe": {
+        "hit": "block/rock-hit-pickaxe",
+        "break": "block/rock-break-pickaxe"
+      }
+    }
+  },
+  "heldTpIdleAnimation": "holdbothhandslarge",
+  "heldRightReadyAnimation": "heldblockready",
+  "heldTpUseAnimation": "twohandplaceblock",
+  "tpHandTransform": {
+    "translation": {
+      "x": -1.23,
+      "y": -0.91,
+      "z": -0.8
+    },
+    "rotation": {
+      "x": -2,
+      "y": 25,
+      "z": -78
+    },
+    "scale": 0.4
+  }
+}
