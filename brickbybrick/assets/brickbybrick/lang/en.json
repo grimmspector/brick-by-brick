@@ -1,5 +1,7 @@
+//if you need to add other lang entries, there is a command to just export a list of all missing item/block/entity names.
+//.debug expclang
 {
 	"block-trampoline": "Trampoline",
-	"item-thornsblade": "Thorns Blade"
-
+	"item-thornsblade": "Thorns Blade",
+	"game:tabname-brickbybrick": "Brick-by-Brick"
 }
