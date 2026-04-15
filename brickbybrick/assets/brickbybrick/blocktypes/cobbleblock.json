@@ -21,7 +21,7 @@
   "creativeinventory": {
     "general": [ "*" ],
     "construction": [ "*" ],
-    "Brick-by-Brick":  [ "*" ]
+    "brickbybrick": [ "*" ]
   },
   //"shape": { "base": "game:block/basic/cube" },
   "shape": { "base": "brickbybrick:shapes/block/brick/running/bricks1" },
