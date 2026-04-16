@@ -3,12 +3,20 @@
   "class": "brickbybrick.brickblock",
   "variantgroups": [
     {
-      "code": "rock",
-      "loadFromProperties": "block/rockwithdeposit"
+      "code": "color",
+      "states": [ "fire", "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" ]
+    },
+    {
+      "code": "state",
+      "states": [ "four", "eight" ]
+    },
+    {
+      "code": "type",
+      "states": [ "header", "headero", "soldier", "soldiero", "running", "runningo", "runningl", "runningr" ]
     },
     {
       "code": "stage",
-      "states": [ "1", "2", "3" ]
+      "states": [ "1", "2", "3", "4", "5", "6" ]
     }
   ],
   "skipVariants": [ "*-obsidian*", "*-halite*", "*-scoria*", "*-tuff" ],
@@ -23,22 +31,252 @@
     "construction": [ "*" ],
     "brickbybrick": [ "*" ]
   },
-  "sideopaque": false,
+  "sideopaque": { all: false },
   //"shape": { "base": "game:block/basic/cube" },
-  "shape": { "base": "brickbybrick:shapes/block/brick/running/bricks1" },
+  "shapebytype": { "*": { "base": "brickbybrick:shapes/block/brick/{type}}/brickblock-{stage}" } },
   //"drawtype": "cube",
   "blockmaterial": "Ceramic",
-  "textures": {
-    "material": { "base": "game:block/stone/cobblestone/{rock}*" }
-  },
-  "drops": [ {
-    "type": "item",
-    "code":"stone-{rock}",
-    "quantity":  {
-      "avg": 2.5,
-      "var": 0.5
+  "texturesByType": {
+    "*-cream*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/{type}/cream*"
+      }
+
+    },
+    "*-eight-running-*": {
+      "all": {
+        "base": "game:block/clay/brick/eight/running/cream1",
+        "overlays": [
+          "game:block/clay/brick/eight/running/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/eight/running/cream2",
+            "overlays": [ "game:block/clay/brick/eight/running/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-four-running-clinker": {
+      "all": {
+        "base": "game:block/clay/brick/four/running/clinker*"
+      }
+    },
+    "*-four-running-*": {
+      "all": {
+        "base": "game:block/clay/brick/four/running/cream1",
+        "overlays": [
+          "game:block/clay/brick/four/running/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/four/running/cream2",
+            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+          },
+          {
+            "base": "game:block/clay/brick/four/running/cream3",
+            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+          },
+          {
+            "base": "game:block/clay/brick/four/running/cream4",
+            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+          },
+          {
+            "base": "game:block/clay/brick/four/running/cream5",
+            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-four-runningo-*": {
+      "all": {
+        "base": "game:block/clay/brick/four/runningo/cream1",
+        "overlays": [
+          "game:block/clay/brick/four/runningo/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/four/runningo/cream2",
+            "overlays": [ "game:block/clay/brick/four/runningo/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-eight-runningo-*": {
+      "all": {
+        "base": "game:block/clay/brick/eight/runningo/cream1",
+        "overlays": [
+          "game:block/clay/brick/eight/runningo/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/eight/runningo/cream2",
+            "overlays": [ "game:block/clay/brick/eight/runningo/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-four-runningr-*": {
+      "all": {
+        "base": "game:block/clay/brick/four/runningr/cream1",
+        "overlays": [
+          "game:block/clay/brick/four/runningr/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/four/runningr/cream2",
+            "overlays": [ "game:block/clay/brick/four/runningr/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-eight-runningr-*": {
+      "all": {
+        "base": "game:block/clay/brick/eight/runningr/cream1",
+        "overlays": [
+          "game:block/clay/brick/eight/runningr/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/eight/runningr/cream2",
+            "overlays": [ "game:block/clay/brick/eight/runningr/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-four-runningl-*": {
+      "all": {
+        "base": "game:block/clay/brick/four/runningl/cream1",
+        "overlays": [
+          "game:block/clay/brick/four/runningl/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/four/runningl/cream2",
+            "overlays": [ "game:block/clay/brick/four/runningl/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-eight-runningl-*": {
+      "all": {
+        "base": "game:block/clay/brick/eight/runningl/cream1",
+        "overlays": [
+          "game:block/clay/brick/eight/runningl/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/eight/runningl/cream2",
+            "overlays": [ "game:block/clay/brick/eight/runningl/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-four-soldier-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/soldier/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/soldier/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/{state}/soldier/cream2",
+            "overlays": [ "game:block/clay/brick/{state}/soldier/{color}1" ]
+          },
+          {
+            "base": "game:block/clay/brick/{state}/soldier/cream3",
+            "overlays": [ "game:block/clay/brick/{state}/soldier/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-eight-soldier-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/soldier/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/soldier/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/{state}/soldier/cream2",
+            "overlays": [ "game:block/clay/brick/{state}/soldier/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-four-soldiero-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/soldiero/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/soldiero/{color}1"
+        ]
+      }
+    },
+    "*-eight-soldiero-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/soldiero/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/soldiero/{color}1"
+        ]
+      }
+    },
+    "*-eight-header-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/header/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/header/{color}1"
+        ]
+      }
+    },
+    "*-four-header-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/header/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/header/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/{state}/header/cream2",
+            "overlays": [ "game:block/clay/brick/{state}/header/{color}1" ]
+          }
+        ]
+      }
+    },
+    "*-eight-headero-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/headero/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/headero/{color}1"
+        ]
+      }
+    },
+    "*-four-headero-*": {
+      "all": {
+        "base": "game:block/clay/brick/{state}/headero/cream1",
+        "overlays": [
+          "game:block/clay/brick/{state}/headero/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/{state}/headero/cream2",
+            "overlays": [ "game:block/clay/brick/{state}/headero/{color}1" ]
+          }
+        ]
+      }
     }
-  ],
+  },
+  "dropsByType": {
+    "*": [
+      {
+        "type": "item",
+        "code": "burnedbrick-{color}",
+        "quantity": {
+          "avg": 2.5,
+          "var": 0.5
+        }
+      }
+    ]
+  },
   "replaceable": 140,
   "fertility": 0,
   "resistance": 4,
