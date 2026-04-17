@@ -19,13 +19,6 @@
       "states": [ "1", "2", "3", "4", "5", "6" ]
     }
   ],
-  "skipVariants": [ "*-obsidian*", "*-halite*", "*-scoria*", "*-tuff" ],
-  "attributes": {
-    "mapColorCode": "settlement",
-    "handbook": {
-      "groupBy": [ "cobblestone-*" ]
-    }
-  },
   "creativeinventory": {
     "general": [ "*" ],
     "construction": [ "*" ],
@@ -33,18 +26,19 @@
   },
   "sideopaque": { all: false },
   //"shape": { "base": "game:block/basic/cube" },
-  "shapebytype": { "*": { "base": "brickbybrick:shapes/block/brick/{type}}/brickblock-{stage}" } },
+  "shapebytype": { "*": { "base": "brickbybrick:shapes/block/brick/{type}/brickblock-{stage}" } },
   //"drawtype": "cube",
   "blockmaterial": "Ceramic",
   "texturesByType": {
     "*-cream*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/{type}/cream*"
       }
+      
 
     },
     "*-eight-running-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/eight/running/cream1",
         "overlays": [
           "game:block/clay/brick/eight/running/{color}1"
@@ -58,12 +52,12 @@
       }
     },
     "*-four-running-clinker": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/four/running/clinker*"
       }
     },
     "*-four-running-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/four/running/cream1",
         "overlays": [
           "game:block/clay/brick/four/running/{color}1"
@@ -89,7 +83,7 @@
       }
     },
     "*-four-runningo-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/four/runningo/cream1",
         "overlays": [
           "game:block/clay/brick/four/runningo/{color}1"
@@ -103,7 +97,7 @@
       }
     },
     "*-eight-runningo-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/eight/runningo/cream1",
         "overlays": [
           "game:block/clay/brick/eight/runningo/{color}1"
@@ -117,7 +111,7 @@
       }
     },
     "*-four-runningr-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/four/runningr/cream1",
         "overlays": [
           "game:block/clay/brick/four/runningr/{color}1"
@@ -131,7 +125,7 @@
       }
     },
     "*-eight-runningr-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/eight/runningr/cream1",
         "overlays": [
           "game:block/clay/brick/eight/runningr/{color}1"
@@ -145,7 +139,7 @@
       }
     },
     "*-four-runningl-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/four/runningl/cream1",
         "overlays": [
           "game:block/clay/brick/four/runningl/{color}1"
@@ -159,7 +153,7 @@
       }
     },
     "*-eight-runningl-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/eight/runningl/cream1",
         "overlays": [
           "game:block/clay/brick/eight/runningl/{color}1"
@@ -173,7 +167,7 @@
       }
     },
     "*-four-soldier-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/soldier/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/soldier/{color}1"
@@ -191,7 +185,7 @@
       }
     },
     "*-eight-soldier-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/soldier/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/soldier/{color}1"
@@ -205,7 +199,7 @@
       }
     },
     "*-four-soldiero-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/soldiero/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/soldiero/{color}1"
@@ -213,7 +207,7 @@
       }
     },
     "*-eight-soldiero-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/soldiero/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/soldiero/{color}1"
@@ -221,7 +215,7 @@
       }
     },
     "*-eight-header-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/header/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/header/{color}1"
@@ -229,7 +223,7 @@
       }
     },
     "*-four-header-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/header/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/header/{color}1"
@@ -243,7 +237,7 @@
       }
     },
     "*-eight-headero-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/headero/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/headero/{color}1"
@@ -251,7 +245,7 @@
       }
     },
     "*-four-headero-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/{state}/headero/cream1",
         "overlays": [
           "game:block/clay/brick/{state}/headero/{color}1"
