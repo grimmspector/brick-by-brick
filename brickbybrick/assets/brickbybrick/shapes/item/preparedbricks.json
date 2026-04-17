@@ -27,7 +27,7 @@
   "creativeinventory": {
     "general": [ "*" ],
     "items": [ "*" ],
-    "Brick-By-Brick": [ "*" ]
+    "brickbybrick": [ "*" ]
   },
 
   "variantgroups": [
