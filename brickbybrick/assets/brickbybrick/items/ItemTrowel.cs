@@ -38,22 +38,22 @@ namespace brickbybrick.items
 
                 if (capi != null)
                 {
-                    modes[0].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/heatmap.svg"), 48, 48, 5, ColorUtil.WhiteArgb));
+                    modes[0].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
                     modes[0].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 1)
                 {
-                    modes[1].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick.svg"), 48, 48, 5, ColorUtil.WhiteArgb));
+                    modes[1].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
                     modes[1].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 2)
                 {
-                    modes[2].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick-stair.svg"), 48, 48, 5, ColorUtil.WhiteArgb));
+                    modes[2].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
                     modes[2].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 3)
                 {
-                    modes[3].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick-block.svg"), 48, 48, 5, ColorUtil.WhiteArgb));
+                    modes[3].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
                     modes[3].TexturePremultipliedAlpha = false;
                 }
                 return modes;

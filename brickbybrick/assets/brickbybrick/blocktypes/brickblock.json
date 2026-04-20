@@ -263,7 +263,7 @@
     "*": [
       {
         "type": "item",
-        "code": "burnedbrick-{color}",
+        "code": "game:burnedbrick-{color}",
         "quantity": {
           "avg": 2.5,
           "var": 0.5
