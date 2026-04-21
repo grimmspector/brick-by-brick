@@ -17,9 +17,9 @@ Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 
 		[ ] Add bucket & barrel as sources for trowels to pick up liquid mortar and clay
 		[x] Add liquid items {clay, mortar, refactory mortar}
 	[ ] Add sequential construction of assemblable brick & stone blocks in-world {slabs, stairs, blocks}
-		[ ] Add sequential construction of slabs
-		[ ] Add sequential construction of stairs
-		[ ] Add sequential construction of blocks
+		[ ] Add sequential construction of slabs {basic brick, stone, refractory brick, brick patterns, cobblestone patterns}
+		[ ] Add sequential construction of stairs {basic brick, stone, refractory brick, brick patterns, cobblestone patterns}
+		[ ] Add sequential construction of blocks {basic brick, stone, refractory brick, brick patterns, cobblestone patterns}
 		[ ] Ensure all blocks have the correct opaqueness, texture alignment and hitboxes/collision.
 	[ ] Add context menu to select brick block variant
 	[ ] Add languge file references for all blocks in english
@@ -28,7 +28,7 @@ Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 
 
 	[ ] Change brick and stone item textures except when holding a single brick (Always finish a build by placing the final brick. So satisfying!)
 	[ ] Change brick and stone ground-placement behaviours {stackability, pathmaking, block assembly}
-	[ ] Double mortar (temp)
+	[ ] Double mortar (temporary)
 
 ### FUTURE PLANS
 	
