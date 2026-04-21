@@ -20,7 +20,7 @@
       }
     }
   },
-  "shape": { "base": "item/liquid" },
+  "shape": { "base": "game:item/liquid" },
   "texture": { "base": "game:block/liquid/waterportion" },
   "creativeinventoryStacks": [
     {
@@ -28,12 +28,12 @@
       "stacks": [
         {
           "type": "block",
-          "code": "woodbucket",
+          "code": "game:woodbucket",
           "attributes": {
             "ucontents": [
               {
                 "type": "item",
-                "code": "liquidmortarportion",
+                "code": "brickbybrick:liquidmortarportion",
                 "makefull": true
               }
             ]
@@ -81,6 +81,4 @@
       "z": -1.4
     }
   }
-}{
-
 }
