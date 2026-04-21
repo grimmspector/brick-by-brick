@@ -38,22 +38,22 @@ namespace brickbybrick.items
 
                 if (capi != null)
                 {
-                    modes[0].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    modes[0].TexturePremultipliedAlpha = false;
+                    modes[0].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
+                    //modes[0].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 1)
                 {
-                    modes[1].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
+                    modes[1].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
                     modes[1].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 2)
                 {
-                    modes[2].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
+                    modes[2].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
                     modes[2].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 3)
                 {
-                    modes[3].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
+                    modes[3].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
                     modes[3].TexturePremultipliedAlpha = false;
                 }
                 return modes;
@@ -77,12 +77,42 @@ namespace brickbybrick.items
                 {
                     new WorldInteraction()
                     {
-                        ActionLangCode = "heldhelp-till",
+                        ActionLangCode = "heldhelp-trowel",
                         MouseButton = EnumMouseButton.Right,
                         Itemstacks = stacks.ToArray()
                     }
                 };
             });
+        }
+
+        public override SkillItem[] GetToolModes(ItemSlot slot, IClientPlayer forPlayer, BlockSelection blockSel)
+        {
+            return toolModes;
+        }
+        public override int GetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel)
+        {
+            return Math.Min(toolModes.Length - 1, slot.Itemstack.Attributes.GetInt("toolMode"));
+        }
+
+        public override void SetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel, int toolMode)
+        {
+            slot.Itemstack.Attributes.SetInt("toolMode", toolMode);
+        }
+        private bool isTrowelable(Block block)
+        {
+            return block?.Attributes?["trowelable"].AsBool(false) == true;
+        }
+        public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
+        {
+            return new WorldInteraction[] {
+                new WorldInteraction()
+                {
+                    ActionLangCode = "Change tool mode",
+                    HotKeyCodes = new string[] { "toolmodeselect" },
+                    MouseButton = EnumMouseButton.None
+                }
+            };
+
         }
 
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
