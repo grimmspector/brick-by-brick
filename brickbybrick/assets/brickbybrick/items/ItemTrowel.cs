@@ -25,53 +25,50 @@ namespace brickbybrick.items
 
         public override void OnLoaded(ICoreAPI api)
         {
-            if (api is not ICoreClientAPI capi) return;
+            //if (api is not ICoreClientAPI capi) return;
+            //ICoreClientAPI capi = api as ICoreClientAPI;
             base.OnLoaded(api);
 
-            toolModes = ObjectCacheUtil.GetOrCreate(api, "trowelToolModes", () =>
-            {
-                modes = new SkillItem[4];
-                modes[0] = new SkillItem() { Code = new AssetLocation("build"), Name = Lang.Get("Build mode for building up any stone/brick block") };
-                modes[1] = new SkillItem() { Code = new AssetLocation("slab"), Name = Lang.Get("Slab placement mode for any stone/brick material") };
-                modes[2] = new SkillItem() { Code = new AssetLocation("stair"), Name = Lang.Get("Stair placement mode for any stone/brick material") };
-                modes[3] = new SkillItem() { Code = new AssetLocation("block"), Name = Lang.Get("Block placement mode for any stone/brick material") };
-
-                if (capi != null)
+            var capi = api as ICoreClientAPI;
+            toolModes = ObjectCacheUtil.GetOrCreate<SkillItem[]>(api, "trowelToolModes", () => [
+                new SkillItem {
+                    Code = new AssetLocation("build"),
+                    Name = Lang.Get("Build mode for building up any stone/brick block"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                },
+                new SkillItem()
                 {
-                    modes[0].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    //modes[0].TexturePremultipliedAlpha = false;
-                }
-                if (modes.Length > 1)
+                    Code = new AssetLocation("slab"),
+                    Name = Lang.Get("Slab placement mode for any stone/brick material"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                },
+                new SkillItem()
                 {
-                    modes[1].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    //modes[1].TexturePremultipliedAlpha = false;
-                }
-                if (modes.Length > 2)
+                    Code = new AssetLocation("stair"),
+                    Name = Lang.Get("Stair placement mode for any stone/brick material"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                },
+                new SkillItem()
                 {
-                    modes[2].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    //modes[2].TexturePremultipliedAlpha = false;
+                    Code = new AssetLocation("block"),
+                    Name = Lang.Get("Block placement mode for any stone/brick material"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
                 }
-                if (modes.Length > 3)
-                {
-                    modes[3].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    //modes[3].TexturePremultipliedAlpha = false;
-                }
-                return modes;
-            });
-
+            ]);
+            if (capi == null) return;
             interactions = ObjectCacheUtil.GetOrCreate(capi, "trowelInteractions", () =>
             {
-                List<ItemStack> stacks = new List<ItemStack>();
+                //List<ItemStack> stacks = new List<ItemStack>();
 
-                foreach (Block block in capi.World.Blocks)
-                {
-                    if (block.Code == null) continue;
+                //foreach (Block block in capi.World.Blocks)
+                //{
+                //    if (block.Code == null) continue;
 
-                    if (block.Code.PathStartsWith("soil"))
-                    {
-                        stacks.Add(new ItemStack(block));
-                    }
-                }
+                //    if (block.Code.PathStartsWith("soil"))
+                //    {
+                //        stacks.Add(new ItemStack(block));
+                //    }
+                //}
 
                 return new WorldInteraction[]
                 {
@@ -79,7 +76,7 @@ namespace brickbybrick.items
                     {
                         ActionLangCode = "heldhelp-trowel",
                         MouseButton = EnumMouseButton.Right,
-                        Itemstacks = stacks.ToArray()
+                        //Itemstacks = stacks.ToArray()
                     }
                 };
             });
@@ -104,6 +101,7 @@ namespace brickbybrick.items
         }
         public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
         {
+            base.GetHeldInteractionHelp(inSlot);
             return new WorldInteraction[] {
                 new WorldInteraction()
                 {
@@ -122,16 +120,21 @@ namespace brickbybrick.items
             byEntity.World.Api.Logger.Event("Trowel used!");
             if (blockSel == null) return;
             var player = (byEntity as EntityPlayer)?.Player;
+            var block = api.World.BlockAccessor.GetBlock(blockSel.Position);
+            byEntity.World.Api.Logger.Event("Block code: " + block.Code);
+            if (!isTrowelable(block)) return;
+            //if (!byEntity.World.Claims.TryAccess(player, blockSel.Position, EnumBlockAccessFlags.BuildOrBreak))
+            //      {
+            int toolMode = GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel);
+            byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
+            byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
+            byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
+            byEntity.World.Api.Logger.Event("Player: " + player?.PlayerName);
+            byEntity.World.Api.Logger.Event("Item: " + slot.Itemstack.Collectible.Code);
+            byEntity.World.Api.Logger.Event("Toolmode: " + toolMode);
 
-     if (!byEntity.World.Claims.TryAccess(player, blockSel.Position, EnumBlockAccessFlags.BuildOrBreak))
-           {
-                var block = api.World.BlockAccessor.GetBlock(blockSel.Position);
-                byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
-                byEntity.World.Api.Logger.Event("Block code: " + block.Code);
-                byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
-                byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
-                return;
-           }
+            //return;
+            //}
             byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
             handling = EnumHandHandling.PreventDefault;
             return;
@@ -140,17 +143,17 @@ namespace brickbybrick.items
         {
             base.OnHeldInteractStep(secondsUsed, slot, byEntity, blockSel, entitySel);
             byEntity.World.Api.Logger.Event("Trowel used continuously for " + secondsUsed + " seconds!");
-            if (secondsUsed > 1)
-            {
-                byEntity.World.Api.Logger.Event("Trowel used for more than 1 second!");
-                byEntity.World.Api.Logger.Event("Seconds used: " + secondsUsed);
-                byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
-                byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
-                byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
-                byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
-                byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
-                return false;
-            }
+            //if (secondsUsed > 1)
+            //{
+            //    byEntity.World.Api.Logger.Event("Trowel used for more than 1 second!");
+            //    byEntity.World.Api.Logger.Event("Seconds used: " + secondsUsed);
+            //    byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
+            //    byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
+            //    byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
+            //    byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
+            //    byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
+            //    return false;
+            //}
             return true;
         }
     }

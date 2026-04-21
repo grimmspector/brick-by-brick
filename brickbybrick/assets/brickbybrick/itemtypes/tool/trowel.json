@@ -24,8 +24,8 @@
 
   "Textures": {
     "material": { "base": "game:block/metal/ingot/{material}" },
-    "string": { "base": "game:item/tool/material/string" },
-    "handle": { "base": "game:item/tool/material/handle" }
+    "string": { "base": "game:item/resource/string" },
+    "handle": { "base": "game:item/tool/handle" }
   },
   "shape": { "base": "brickbybrick:shapes/item/tool/trowel" },
   "creativeinventory": {
