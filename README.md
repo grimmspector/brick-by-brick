@@ -29,6 +29,8 @@ Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 
 	[ ] Change brick and stone item textures except when holding a single brick (Always finish a build by placing the final brick. So satisfying!)
 	[ ] Change brick and stone ground-placement behaviours {stackability, pathmaking, block assembly}
 	[ ] Double mortar (temporary)
+	[ ] Add comments to all JSON files where appropriate
+	[ ] Add comments to all C# files where appropriate
 
 ### FUTURE PLANS
 	
