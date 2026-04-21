@@ -43,18 +43,18 @@ namespace brickbybrick.items
                 }
                 if (modes.Length > 1)
                 {
-                    modes[1].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    modes[1].TexturePremultipliedAlpha = false;
+                    modes[1].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
+                    //modes[1].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 2)
                 {
                     modes[2].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    modes[2].TexturePremultipliedAlpha = false;
+                    //modes[2].TexturePremultipliedAlpha = false;
                 }
                 if (modes.Length > 3)
                 {
-                    modes[3].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
-                    modes[3].TexturePremultipliedAlpha = false;
+                    modes[3].WithIcon(capi, capi.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb));
+                    //modes[3].TexturePremultipliedAlpha = false;
                 }
                 return modes;
             });
