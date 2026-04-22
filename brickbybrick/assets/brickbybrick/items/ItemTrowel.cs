@@ -58,17 +58,17 @@ namespace brickbybrick.items
             if (capi == null) return;
             interactions = ObjectCacheUtil.GetOrCreate(capi, "trowelInteractions", () =>
             {
-                //List<ItemStack> stacks = new List<ItemStack>();
+                List<ItemStack> stacks = new List<ItemStack>();
 
-                //foreach (Block block in capi.World.Blocks)
-                //{
-                //    if (block.Code == null) continue;
+                foreach (Block block in capi.World.Blocks)
+                {
+                    if (block.Code == null) continue;
 
-                //    if (block.Code.PathStartsWith("soil"))
-                //    {
-                //        stacks.Add(new ItemStack(block));
-                //    }
-                //}
+                    if (block.Code.PathStartsWith("brickbybrick:brickblock") || block.Code.PathStartsWith("cobbleblock"))
+                    {
+                        stacks.Add(new ItemStack(block));
+                    }
+                }
 
                 return new WorldInteraction[]
                 {
@@ -76,7 +76,7 @@ namespace brickbybrick.items
                     {
                         ActionLangCode = "heldhelp-trowel",
                         MouseButton = EnumMouseButton.Right,
-                        //Itemstacks = stacks.ToArray()
+                        Itemstacks = stacks.ToArray()
                     }
                 };
             });
@@ -129,6 +129,7 @@ namespace brickbybrick.items
             byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
             byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
             byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
+            byEntity.World.Api.Logger.Event("Block path:" + block.Code.Path);
             byEntity.World.Api.Logger.Event("Player: " + player?.PlayerName);
             byEntity.World.Api.Logger.Event("Item: " + slot.Itemstack.Collectible.Code);
             byEntity.World.Api.Logger.Event("Toolmode: " + toolMode);
@@ -143,8 +144,39 @@ namespace brickbybrick.items
         {
             base.OnHeldInteractStep(secondsUsed, slot, byEntity, blockSel, entitySel);
             byEntity.World.Api.Logger.Event("Trowel used continuously for " + secondsUsed + " seconds!");
+            BlockPos pos = blockSel.Position;
+            Block block = api.World.BlockAccessor.GetBlock(blockSel.Position);
+            //string[] parts = block.Code.Path.Split('-');
+            //int stage = Convert.ToInt32(parts[parts.Length - 1]);
+
+            //pull off the last chunk of our variant/part/whatever
+            //this assumes the end of the path is a number you can do math with, not a word. adjust accordingly
+            int lastPart;
+            int.TryParse(block.LastCodePart(0), out lastPart);
+            //you can put whatever or do whatever math here you want
+            int newPart = lastPart + 1;
+            byEntity.World.Api.Logger.Event("lastPart, newPart: " + lastPart + "," + newPart);
+            if (newPart <= 6 && secondsUsed >= 1) { 
+            
+            //this should take the block's existing path, cut off the last part, and stitch the new part on
+                AssetLocation newPath = block.CodeWithParts(newPart.ToString());
+                byEntity.World.Api.Logger.Event("newPath: " + newPath);
+            //here we ask the game to find a block corresponding to the new path and retrieve its numeric ID
+            int newBlockId = api.World.BlockAccessor.GetBlock(newPath).Id;
+            //tell the game to swap our existing block with the new one
+                api.World.BlockAccessor.ExchangeBlock(newBlockId, pos);
+                return false;
+            } 
+            else { return false; }
+
+            //byEntity.World.Api.Logger.Event("Block code without parts: " + prevBlock);
             //if (secondsUsed > 1)
             //{
+            //    if (!block.Code.PathStartsWith("brickblock")) return;
+            //    IPlayer? byPlayer = (byEntity as EntityPlayer)?.Player;
+            //    Block? masonry = byEntity.World.GetBlock(new AssetLocation(""));
+
+            //    byEntity.World.BlockAccessor.MarkBlockDirty(pos);
             //    byEntity.World.Api.Logger.Event("Trowel used for more than 1 second!");
             //    byEntity.World.Api.Logger.Event("Seconds used: " + secondsUsed);
             //    byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
@@ -153,7 +185,7 @@ namespace brickbybrick.items
             //    byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
             //    byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
             //    return false;
-            //}
+
             return true;
         }
     }
