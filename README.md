@@ -53,6 +53,7 @@ Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 
 	+ Modify brick/stone creation/drops and mechanics for a "realistic" mode where individual bricks/stones in the corrected textured blocks is built one-to-one from new/modified bricks/stones
 	+ Extend beyond stairs, slabs and blocks
 	+ Extravanilla brick bonds
+    + Lime Kiln to bulk-batch lime
 
 ### PRIORITIES
 
