@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Xml.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -16,12 +17,24 @@ namespace brickbybrick.items
 {
     internal class ItemTrowel : Item
     {
+        /* ------------------------
+                    TO-DO
+            + Rerwite with language file entries for all applicable strings using Lang.Get("key") and add said keys to en-us.json
+            + Refactor main sections of code
+            + Add sound effects
+            + Add particle effects
+            + Add proper client-side interaction help (currently just a placeholder)
+            + Add comments to all methods and major code pieces
+            + Cull unnecessary code sections, and optimize where possible
+            + See if we can safely remove the #nullable disable at the top after refactor
+           ------------------------ */
         //WorldInteraction[]? interactions;
         WorldInteraction[] interactions;
         //ProPickWorkSpace tws; //Fix later
         //SkillItem[]? toolModes;
         SkillItem[] toolModes;
         SkillItem[] modes;
+        const int CapacityPerTier = 14;
 
         public override void OnLoaded(ICoreAPI api)
         {
@@ -115,10 +128,20 @@ namespace brickbybrick.items
 
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
         {
-            base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent,ref handling);
+            base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent, ref handling);
 
+            if (!firstEvent) return;
             byEntity.World.Api.Logger.Event("Trowel used!");
             if (blockSel == null) return;
+            IWorldAccessor world = byEntity.World;
+
+            if (TryCollectFromContainer(world, blockSel.Position, slot.Itemstack)) { 
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
+            
+
             var player = (byEntity as EntityPlayer)?.Player;
             var block = api.World.BlockAccessor.GetBlock(blockSel.Position);
             byEntity.World.Api.Logger.Event("Block code: " + block.Code);
@@ -209,6 +232,187 @@ namespace brickbybrick.items
             // Check if the hand is not empty
             if (leftHandStack != null) return leftHandStack;
             return null;
+        }
+
+        // ------------------------
+        // CAPACITY
+        // ------------------------
+
+        /// <summary>
+        /// Returns max number of "liquidmortarportion" items this tool can hold
+        /// </summary>
+        public static int GetMaxCapacity(ItemStack stack)
+        {
+            int toolTier = stack.Collectible.ToolTier;
+            return toolTier * CapacityPerTier;
+        }
+
+        /// <summary>
+        /// Gets how many portions are currently stored in the item
+        /// </summary>
+        public static int GetStoredAmount(ItemStack stack)
+        {
+            return stack.Attributes.GetInt("mortarAmount", 0);
+        }
+
+        // Set stored amount of mortar, ensuring it doesn't exceed max capacity
+        public static void SetStoredAmount(ItemStack stack, int value)
+        {
+            stack.Attributes.SetInt("mortarAmount", value);
+            SyncDurability(stack);
+        }
+
+        // Return max "capacity"
+        public override int GetMaxDurability(ItemStack itemstack)
+        {
+            return GetMaxCapacity(itemstack);
+        }
+
+        // ------------------------
+        // DURABILITY SYNC (CRITICAL)
+        // ------------------------
+
+        public static void SyncDurability(ItemStack stack)
+        {
+            int current = GetStoredAmount(stack);
+            int max = GetMaxCapacity(stack);
+
+            // No capacity = no durability
+            if (max <= 0)
+            {
+                stack.Attributes.SetInt("durability", 0);
+                return;
+            }
+
+            // Engine-defined max durability (from JSON)
+            int jsonMaxDurability = stack.Collectible.GetMaxDurability(stack);
+
+            // --- SEGMENT LOGIC ---
+            // Use near 1:1 unless it exceeds visual resolution
+            int segments = max <= 60 ? max : 60;
+
+            float fillRatio = (float)current / max;
+
+            // Snap to segment step
+            int steppedSegment = (int)(fillRatio * segments);
+            float steppedRatio = (float)steppedSegment / segments;
+
+            // Convert to durability scale
+            int durability = (int)(steppedRatio * jsonMaxDurability);
+
+            // --- SAFE CLAMP ---
+            durability = GameMath.Clamp(durability, 0, jsonMaxDurability);
+
+            // Apply to item
+            stack.Attributes.SetInt("durability", durability);
+        }
+
+        // ------------------------
+        // LIQUID HANDLING
+        // ------------------------
+
+        /// <summary>
+        /// Attempts to add mortar portions into the item
+        /// Returns how many were actually added
+        /// </summary>
+        public static int AddLiquid(ItemStack stack, int amountToAdd)
+        {
+            int current = GetStoredAmount(stack);
+            int max = GetMaxCapacity(stack);
+
+            int spaceLeft = max - current;
+            int toAdd = Math.Min(spaceLeft, amountToAdd);
+
+            stack.Attributes.SetInt("mortarAmount", current + toAdd);
+
+            return toAdd;
+        }
+
+        /// <summary>
+        /// Ensures we ONLY accept "liquidmortarportion"
+        /// </summary>
+        public bool IsValidLiquid(ItemStack stack)
+        {
+            if (stack == null) return false;
+
+            return stack.Collectible.Code.Path == "liquidmortarportion";
+        }
+
+
+        // ------------------------
+        // CONTAINER INTERACTION
+        // ------------------------
+
+        /// <summary>
+        /// Attempts to pull mortar liquid from a block at the given position
+        /// Only works with containers holding "liquidmortarportion"
+        /// </summary>
+        public bool TryCollectFromContainer(IWorldAccessor world, BlockPos pos, ItemStack toolStack)
+        {
+            BlockEntity be = world.BlockAccessor.GetBlockEntity(pos);
+
+            if (be == null) return false;
+
+            // Try to access inventory (works for barrels, buckets, etc.)
+            var invProvider = be as IBlockEntityContainer;
+            if (invProvider == null) return false;
+
+            var inv = invProvider.Inventory;
+
+            for (int i = 0; i < inv.Count; i++)
+            {
+                ItemSlot slot = inv[i];
+                ItemStack content = slot.Itemstack;
+
+                if (!IsValidLiquid(content)) continue;
+
+                int available = content.StackSize;
+
+                // Try to add into our tool
+                int moved = AddLiquid(toolStack, available);
+
+                if (moved > 0)
+                {
+                    slot.TakeOut(moved);
+                    slot.MarkDirty();
+
+                    // Stop once full
+                    if (GetStoredAmount(toolStack) >= GetMaxCapacity(toolStack))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return true;
+        }
+
+        // ------------------------
+        // TOOLTIP
+        // ------------------------
+
+        // Add tooltip to show stored mortar
+        public override void GetHeldItemInfo(ItemSlot inSlot, StringBuilder dsc, IWorldAccessor world, bool withDebugInfo)
+        {
+            base.GetHeldItemInfo(inSlot, dsc, world, withDebugInfo);
+            
+            // Remove durability line
+            string durabilityText = Lang.Get("Durability");
+
+            var lines = dsc.ToString().Split('\n');
+            dsc.Clear();
+
+            foreach (var line in lines)
+            {
+                if (!line.Contains(durabilityText))
+                {
+                    dsc.AppendLine(line);
+                }
+            }
+
+            int stored = GetStoredAmount(inSlot.Itemstack);
+            int max = GetMaxCapacity(inSlot.Itemstack);
+
+            dsc.AppendLine($"Mortar: {stored} / {max}");
         }
     }
 }
