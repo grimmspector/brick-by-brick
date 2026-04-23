@@ -133,11 +133,13 @@ namespace brickbybrick.items
             byEntity.World.Api.Logger.Event("Player: " + player?.PlayerName);
             byEntity.World.Api.Logger.Event("Item: " + slot.Itemstack.Collectible.Code);
             byEntity.World.Api.Logger.Event("Toolmode: " + toolMode);
-
-            //return;
-            //}
-            byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
-            handling = EnumHandHandling.PreventDefault;
+            if (toolMode == 0)
+            {
+                //return;
+                //}
+                byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
+                handling = EnumHandHandling.PreventDefault;
+            }
             return;
         }
         public override bool OnHeldInteractStep(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)
@@ -146,18 +148,24 @@ namespace brickbybrick.items
             byEntity.World.Api.Logger.Event("Trowel used continuously for " + secondsUsed + " seconds!");
             BlockPos pos = blockSel.Position;
             Block block = api.World.BlockAccessor.GetBlock(blockSel.Position);
+            var player = (byEntity as EntityPlayer)?.Player;
             //string[] parts = block.Code.Path.Split('-');
             //int stage = Convert.ToInt32(parts[parts.Length - 1]);
-
+            if (!isTrowelable(block)) return false;
             //pull off the last chunk of our variant/part/whatever
             //this assumes the end of the path is a number you can do math with, not a word. adjust accordingly
             int lastPart;
             int.TryParse(block.LastCodePart(0), out lastPart);
             //you can put whatever or do whatever math here you want
             int newPart = lastPart + 1;
-            byEntity.World.Api.Logger.Event("lastPart, newPart: " + lastPart + "," + newPart);
+            string color = block.LastCodePart(3);
+            byEntity.World.Api.Logger.Event("Color: " + color);
+            byEntity.World.Api.Logger.Event("lastPart, newPart: " + lastPart + ", " + newPart);
             if (newPart <= 6 && secondsUsed >= 1) { 
-            
+                if (CheckLeftHand(player)?.Collectible.LastCodePart() != color || GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel) != 0) {
+                    byEntity.World.Api.Logger.Event("Color mismatch! Block, Hand: " + color + ", " + CheckLeftHand(player)?.Collectible.LastCodePart());
+                    return false; }
+                byEntity.World.Api.Logger.Event("Left hand item: " + CheckLeftHand(player)?.Collectible.Code);
             //this should take the block's existing path, cut off the last part, and stitch the new part on
                 AssetLocation newPath = block.CodeWithParts(newPart.ToString());
                 byEntity.World.Api.Logger.Event("newPath: " + newPath);
@@ -167,7 +175,7 @@ namespace brickbybrick.items
                 api.World.BlockAccessor.ExchangeBlock(newBlockId, pos);
                 return false;
             } 
-            else { return false; }
+            else { return true; }
 
             //byEntity.World.Api.Logger.Event("Block code without parts: " + prevBlock);
             //if (secondsUsed > 1)
@@ -187,6 +195,20 @@ namespace brickbybrick.items
             //    return false;
 
             return true;
+        }
+        public ItemStack CheckLeftHand(IPlayer player)
+        {
+            // Access the inventory manager
+            IPlayerInventoryManager invManager = player?.InventoryManager;
+
+            // Get the itemstack in the left hand (off-hand)
+            //ItemStack leftHandStack = invManager?.GetHotbarItemstack(14);
+            ItemStack leftHandStack = invManager.OffhandHotbarSlot?.Itemstack;
+            //InventoryManager.ActiveHotbarSlot;
+
+            // Check if the hand is not empty
+            if (leftHandStack != null) return leftHandStack;
+            return null;
         }
     }
 }

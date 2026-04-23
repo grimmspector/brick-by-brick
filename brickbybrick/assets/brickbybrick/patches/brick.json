@@ -1,0 +1,8 @@
+[
+  {
+    "file": "game:itemtypes/resource/burnedbrick",
+    "op": "add",
+    "path": "/storageFlags",
+    "value": 261
+  }
+]
