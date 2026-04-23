@@ -8,7 +8,7 @@
     },
     "waterTightContainerProps": {
       "containable": true,
-      "itemsPerLitre": 100,
+      "itemsPerLitre": 14,
       "texture": { "base": "game:block/liquid/waterportion" },
       "tintIndex": 2,
       "whenSpilled": {

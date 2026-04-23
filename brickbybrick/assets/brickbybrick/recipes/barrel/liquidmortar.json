@@ -1,0 +1,21 @@
+{
+  "code": "liquidmortar",
+
+  "ingredients": [
+    {
+      "type": "item",
+      "code": "game:mortar",
+      "quantity": 1
+    },
+    {
+      "type": "item",
+      "code": "game:waterportion",
+      "litres": 1,
+    }
+  ],
+  "output": {
+    "type": "item",
+    "code": "brickbybrick:liquidmortarportion",
+    "litres": 1
+  }
+}

@@ -1,6 +1,12 @@
 {
   "code": "liquidclayportion",
   "class": "ItemLiquidPortion",
+  "variantgroups": [
+    {
+      "code": "colour",
+      "states": [ "blue", "red", "fire" ]
+    }
+  ],
   "matterState": "liquid",
   "attributes": {
     "handbook": {
@@ -15,9 +21,9 @@
         "action": "DropContents",
         "stack": {
           "type": "item",
-          "code": "liquidclayportion"
+          "code": "liquidclayportion-{colour}"
         }
-      },
+      }
     }
   },
   "shape": { "base": "game:item/liquid" },
@@ -33,7 +39,7 @@
             "ucontents": [
               {
                 "type": "item",
-                "code": "brickbybrick:liquidclayportion",
+                "code": "brickbybrick:liquidclayportion-{colour}",
                 "makefull": true
               }
             ]
