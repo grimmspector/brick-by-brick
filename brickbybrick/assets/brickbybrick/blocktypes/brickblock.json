@@ -1,11 +1,7 @@
 {
-  "code": "brickblock", //test comment
+  "code": "brickcourse", //test comment
   "class": "brickbybrick.brickblock",
   "variantgroups": [
-    {
-      "code": "color",
-      "states": [ "fire", "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" ]
-    },
     {
       "code": "state",
       "states": [ "four", "eight" ]
@@ -13,6 +9,10 @@
     {
       "code": "type",
       "states": [ "header", "headero", "soldier", "soldiero", "running", "runningo", "runningl", "runningr" ]
+    },
+    {
+      "code": "color",
+      "states": [ "fire", "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" ]
     },
     {
       "code": "stage",
