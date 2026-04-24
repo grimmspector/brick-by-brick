@@ -127,9 +127,10 @@ namespace brickbybrick.items
             if (firstEvent)
             {
                 SetInteracted(slot.Itemstack, false);
+                slot.Itemstack.Attributes.SetBool("soundPlayed", false);
             }
-            byEntity.World.Api.Logger.Event("Trowel used!");
-            byEntity.World.Api.Logger.Event("Item: " + slot.Itemstack.Collectible.Code);
+            //byEntity.World.Api.Logger.Event("Trowel used!");
+            //byEntity.World.Api.Logger.Event("Item: " + slot.Itemstack.Collectible.Code);
 
             // Ensure we have a valid entity and world reference
             // (prevents null reference crashes when accessing world systems)
@@ -140,25 +141,25 @@ namespace brickbybrick.items
 
             // Get the targeted block safely
             Block block = byEntity.World.BlockAccessor.GetBlock(blockSel.Position);
-            byEntity.World.Api.Logger.Event("Block code: " + block.Code);
-            byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
-            byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
-            byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
-            byEntity.World.Api.Logger.Event("Block path:" + block.Code.Path);
+            //byEntity.World.Api.Logger.Event("Block code: " + block.Code);
+            //byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
+            //byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
+            //byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
+            //byEntity.World.Api.Logger.Event("Block path:" + block.Code.Path);
 
             // Retrieve player (needed for tool mode)
             IPlayer player = (byEntity as EntityPlayer)?.Player;
             if (player == null) return;
-            byEntity.World.Api.Logger.Event("Player: " + player?.PlayerName);
+            //byEntity.World.Api.Logger.Event("Player: " + player?.PlayerName);
 
             int toolMode = GetToolMode(slot, player, blockSel);
-            byEntity.World.Api.Logger.Event("Toolmode: " + toolMode);
+            //byEntity.World.Api.Logger.Event("Toolmode: " + toolMode);
 
             // Ensure the block is valid and can be interacted with by the trowel
             if (!IsTrowelable(block)) 
             {
                 // Default behavior: collect mortar from containers
-                TryCollectFromContainer(byEntity.World, blockSel.Position, slot.Itemstack);
+                TryCollectFromContainer(byEntity.World, blockSel.Position, slot);
                 handling = EnumHandHandling.PreventDefault;
                 return; 
             }
@@ -195,7 +196,7 @@ namespace brickbybrick.items
             if (blockSel == null) return;
             IWorldAccessor world = byEntity.World;
 
-            if (TryCollectFromContainer(world, blockSel.Position, slot.Itemstack))
+            if (TryCollectFromContainer(world, blockSel.Position, slot))
             {
                 handling = EnumHandHandling.PreventDefault;
                 return;
@@ -223,14 +224,14 @@ namespace brickbybrick.items
 
             int toolMode = GetToolMode(slot, player, blockSel);
 
-            byEntity.World.Api.Logger.Event($"Trowel used continuously for {secondsUsed} seconds!");
+            //byEntity.World.Api.Logger.Event($"Trowel used continuously for {secondsUsed} seconds!");
 
-            byEntity.World.Api.Logger.Event($"Tool mode: {toolMode}");
+            //byEntity.World.Api.Logger.Event($"Tool mode: {toolMode}");
 
             switch (toolMode)
             {
                 case 0:
-                    byEntity.World.Api.Logger.Event($"Handling case: {toolMode}");
+                    //byEntity.World.Api.Logger.Event($"Handling case: {toolMode}");
                     {
                         return HandleTrowelMode0(secondsUsed, slot, byEntity, player, block, pos);
                     }
@@ -271,17 +272,44 @@ namespace brickbybrick.items
             // Extract stage and color from block code
             int currentStage = GetBlockStage(block);
             int nextStage = currentStage + 1;
+            bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 7);
+            bool isMortarStage = (nextStage == 2 || nextStage == 4 || nextStage == 6);
             string color = GetBlockColor(block);
 
-            // DEBUG: inspect offhand state
-            byEntity.World.Api.Logger.Event("Block color: " + color);
-            byEntity.World.Api.Logger.Event("Offhand slot exists: " + (player.InventoryManager?.OffhandHotbarSlot != null));
-            byEntity.World.Api.Logger.Event("Offhand item: " + player.InventoryManager?.OffhandHotbarSlot?.Itemstack?.Collectible?.Code);
-            byEntity.World.Api.Logger.Event("Offhand stack size: " + player.InventoryManager?.OffhandHotbarSlot?.StackSize);
+            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
 
-            if (secondsUsed < 1f) return true;
-            byEntity.World.Api.Logger.Event($"Color: {color}");
-            byEntity.World.Api.Logger.Event($"Stage: {currentStage} -> {nextStage}");
+            // DEBUG: inspect offhand state
+            //byEntity.World.Api.Logger.Event("Block color: " + color);
+            //byEntity.World.Api.Logger.Event("Offhand slot exists: " + (player.InventoryManager?.OffhandHotbarSlot != null));
+            //byEntity.World.Api.Logger.Event("Offhand item: " + player.InventoryManager?.OffhandHotbarSlot?.Itemstack?.Collectible?.Code);
+            //byEntity.World.Api.Logger.Event("Offhand stack size: " + player.InventoryManager?.OffhandHotbarSlot?.StackSize);
+
+
+            // -------------------------
+            // PLAY ANIMATION AT START
+            // -------------------------
+            if (isMortarStage && secondsUsed < 2f)
+            {
+                byEntity.World.Api.Logger.Event("Playing trowel animation at stage: " + nextStage);
+                PlayTrowelAnimation(byEntity);
+            }
+
+            // -------------------------
+            // PLAY SOUND AT HALF TIME (1s)
+            // -------------------------
+
+            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
+            {
+                PlayStageSound(byEntity.World, pos, player, isBrickStage, isMortarStage);
+
+                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
+            }
+
+
+            if (secondsUsed < 2f) return true;
+            
+            //byEntity.World.Api.Logger.Event($"Color: {color}");
+            //byEntity.World.Api.Logger.Event($"Stage: {currentStage} -> {nextStage}");
 
             // Validate player conditions
             if (!HasMatchingMaterial(player, color, byEntity)) return false;
@@ -292,7 +320,7 @@ namespace brickbybrick.items
             // -------------------------
 
             // At stages 3, 5, and 7, consume one matching brick from offhand, enforcing offhand usage
-            if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+            if (isBrickStage)
             {
                 string requiredPath = $"burnedbrick-{color}";
 
@@ -342,26 +370,28 @@ namespace brickbybrick.items
             // -------------------------
 
             // Brick placement sounds (stages 2, 4, 6)
-            if (nextStage == 2 || nextStage == 4 || nextStage == 6)
-            {
-                PlayRandomSound(byEntity.World, pos, player, BrickSounds, 20f);
-            }
+            //if (nextStage == 2 || nextStage == 4 || nextStage == 6)
+            //{
+            //    PlayRandomSound(byEntity.World, pos, player, BrickSounds, 20f);
+            //}
 
             // Trowel action sounds (stages 3, 5, 7)
-            if (nextStage == 3 || nextStage == 5 || nextStage == 7)
-            {
-                PlayRandomSound(byEntity.World, pos, player, TrowelSounds, 12f);
-            }
+            //if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+            //{
+            //    PlayRandomSound(byEntity.World, pos, player, TrowelSounds, 12f);
+            //}
 
             // -------------------------
             // MORTAR CONSUMPTION (ALWAYS)
             // -------------------------
 
-            SetStoredAmount(slot.Itemstack, GetStoredAmount(slot.Itemstack) - 1);
+            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
 
             // Mark that we've interacted to prevent repeat triggers
             SetInteracted(slot.Itemstack, true);
 
+            // Stop animation after interaction completes
+            StopTrowelAnimation(byEntity);
             return true;
         }
 
@@ -435,11 +465,44 @@ namespace brickbybrick.items
             return stack.Attributes.GetInt("mortarAmount", 0);
         }
 
-        // Set stored amount of mortar, ensuring it doesn't exceed max capacity
-        public static void SetStoredAmount(ItemStack stack, int value)
+        /// <summary>
+        /// Sets the mortar amount, syncs durability, and updates UI.
+        /// This is the ONLY method that should ever modify stored mortar.
+        /// </summary>
+        private void SetStoredAmount(ItemSlot slot, int newAmount)
         {
-            stack.Attributes.SetInt("mortarAmount", value);
-            SyncDurability(stack);
+            ItemStack stack = slot?.Itemstack;
+            if (stack?.Attributes == null) return;
+
+            int max = GetMaxCapacity(stack);
+
+            // Clamp safely
+            newAmount = GameMath.Clamp(newAmount, 0, max);
+
+            // Store value
+            stack.Attributes.SetInt("mortarAmount", newAmount);
+
+            // --- Sync durability ---
+            int jsonMax = stack.Collectible.GetMaxDurability(stack);
+
+            if (jsonMax <= 1)
+            {
+                stack.Attributes.SetInt("durability", 1);
+            }
+            else
+            {
+                float ratio = (float)newAmount / max;
+
+                int durability = (int)(ratio * jsonMax);
+
+                // Prevent broken/hidden states
+                durability = GameMath.Clamp(durability, 1, jsonMax - 1);
+
+                stack.Attributes.SetInt("durability", durability);
+            }
+
+            // --- FORCE UI UPDATE ---
+            slot.MarkDirty();
         }
 
         // Return max "capacity"
@@ -449,70 +512,27 @@ namespace brickbybrick.items
         }
 
         // ------------------------
-        // DURABILITY SYNC (CRITICAL)
-        // ------------------------
-
-        public static void SyncDurability(ItemStack stack)
-        {
-            if (stack?.Attributes == null) return;
-
-            int current = GetStoredAmount(stack);
-            int max = GetMaxCapacity(stack);
-
-            if (max <= 0)
-            {
-                stack.Attributes.SetInt("durability", 1);
-                return;
-            }
-
-            int jsonMax = stack.Collectible.GetMaxDurability(stack);
-
-            // Clamp current safely
-            current = GameMath.Clamp(current, 0, max);
-
-            // Ratio (0 → 1)
-            float ratio = (float)current / max;
-
-            // Convert directly (no segmentation for now—debug first)
-            int durability = (int)(ratio * jsonMax);
-
-            // --- CRITICAL FIXES ---
-
-            // Prevent 0 (empty red/black bar bug)
-            if (durability <= 0)
-            {
-                durability = 1;
-            }
-
-            // Prevent full (bar disappears)
-            if (durability >= jsonMax)
-            {
-                durability = jsonMax - 1;
-            }
-
-            // Apply to item
-            stack.Attributes.SetInt("durability", durability);
-        }
-
-        // ------------------------
         // LIQUID HANDLING
         // ------------------------
 
         /// <summary>
-        /// Attempts to add mortar portions into the item
-        /// Returns how many were actually added
+        /// Adds mortar to the tool safely and returns amount actually added.
         /// </summary>
-        private static int AddLiquid(ItemStack stack, int amountToAdd)
+        private int AddLiquid(ItemSlot toolSlot, int amountToAdd)
         {
+            ItemStack stack = toolSlot.Itemstack;
+
             int current = GetStoredAmount(stack);
             int max = GetMaxCapacity(stack);
 
-            int spaceLeft = max - current;
-            int toAdd = Math.Min(spaceLeft, amountToAdd);
+            int space = max - current;
+            int moved = GameMath.Clamp(amountToAdd, 0, space);
 
-            stack.Attributes.SetInt("mortarAmount", current + toAdd);
+            if (moved <= 0) return 0;
 
-            return toAdd;
+            SetStoredAmount(toolSlot, current + moved);
+
+            return moved;
         }
 
         /// <summary>
@@ -534,17 +554,17 @@ namespace brickbybrick.items
         /// Attempts to pull mortar liquid from a block at the given position
         /// Only works with containers holding "liquidmortarportion"
         /// </summary>
-        private bool TryCollectFromContainer(IWorldAccessor world, BlockPos pos, ItemStack toolStack)
+        private bool TryCollectFromContainer(IWorldAccessor world, BlockPos pos, ItemSlot toolSlot)
         {
             BlockEntity be = world.BlockAccessor.GetBlockEntity(pos);
-
             if (be == null) return false;
 
-            // Try to access inventory (works for barrels, buckets, etc.)
             var invProvider = be as IBlockEntityContainer;
             if (invProvider == null) return false;
 
             var inv = invProvider.Inventory;
+
+            bool movedAny = false;
 
             for (int i = 0; i < inv.Count; i++)
             {
@@ -555,22 +575,24 @@ namespace brickbybrick.items
 
                 int available = content.StackSize;
 
-                // Try to add into our tool
-                int moved = AddLiquid(toolStack, available);
+                int moved = AddLiquid(toolSlot, available);
 
                 if (moved > 0)
                 {
                     slot.TakeOut(moved);
                     slot.MarkDirty();
 
-                    // Stop once full
-                    if (GetStoredAmount(toolStack) >= GetMaxCapacity(toolStack))
+                    movedAny = true;
+
+                    // Stop when full
+                    if (GetStoredAmount(toolSlot.Itemstack) >= GetMaxCapacity(toolSlot.Itemstack))
                     {
-                        return true;
+                        break;
                     }
                 }
             }
-            return true;
+
+            return movedAny;
         }
 
         // ------------------------
@@ -813,6 +835,80 @@ namespace brickbybrick.items
             }
 
             return null;
+        }
+
+        // -------------------------
+        // ANIMATION
+        // -------------------------
+
+        /// <summary>
+        /// Plays the trowel animation for the given entity.
+        /// </summary>
+        private void PlayTrowelAnimation(EntityAgent byEntity)
+        {
+            //if (byEntity.World.Side != EnumAppSide.Client) return;
+
+            var player = byEntity as EntityPlayer;
+            if (player == null) return;
+            byEntity.World.Api.Logger.Event("Attempting to play trowel animation for player: " + player.Player?.PlayerName);
+            var animManager = player.AnimManager;
+
+            if (animManager.IsAnimationActive("trowelspread")) return;
+            
+            byEntity.World.Api.Logger.Event("Starting trowel animation for player: " + player.Player?.PlayerName);
+
+            //if (!animManager.IsAnimationActive("use")) // built-in animation
+            //{
+            //    animManager.StartAnimation("use");
+            //}
+
+            animManager.StartAnimation(new AnimationMetaData()
+            {
+                Code = "trowelspread",
+                Animation = "trowelspread",
+                Weight = 10f,
+                EaseInSpeed = 10f,
+                EaseOutSpeed = 6f,
+                BlendMode = EnumAnimationBlendMode.Add,
+                ElementWeight = new Dictionary<string, float>()
+            {
+                { "RightArm", 1f }
+            }
+            });
+        }
+
+        /// <summary>
+        /// Stops the trowel spreading animation for the specified agent if executed on the client side.
+        /// </summary>
+        /// <remarks>This method has no effect when called on the server side or if the specified entity
+        /// is not a player.</remarks>
+        /// <param name="byEntity">The agent entity for which to stop the trowel animation. Must represent a player entity on the client side.</param>
+        private void StopTrowelAnimation(EntityAgent byEntity)
+        {
+            //if (byEntity.World.Side != EnumAppSide.Client) return;
+
+            //(byEntity as EntityPlayer)?.AnimManager?.StopAnimation("use");
+
+            (byEntity as EntityPlayer)?.AnimManager?.StopAnimation("trowelspread");
+        }
+
+        // -------------------------
+        // AUDIO
+        // -------------------------
+
+        /// <summary>
+        /// Plays the appropriate sound for the current stage.
+        /// </summary>
+        private void PlayStageSound(IWorldAccessor world, BlockPos pos, IPlayer player, bool isBrickStage, bool isMortarStage)
+        {
+            if (isBrickStage)
+            {
+                PlayRandomSound(world, pos, player, BrickSounds, 20f);
+            }
+            else if (isMortarStage)
+            {
+                PlayRandomSound(world, pos, player, TrowelSounds, 12f);
+            }
         }
     }
 }
