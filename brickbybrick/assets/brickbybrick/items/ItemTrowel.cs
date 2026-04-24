@@ -341,56 +341,17 @@ namespace brickbybrick.items
             // SOUND EFFECTS
             // -------------------------
 
-            if (byEntity.World.Side == EnumAppSide.Server)
+            // Brick placement sounds (stages 2, 4, 6)
+            if (nextStage == 2 || nextStage == 4 || nextStage == 6)
             {
-
-                // Brick placement sounds (stages 2, 4, 6)
-                if (nextStage == 2 || nextStage == 4 || nextStage == 6)
-                {
-                    PlayRandomSound(byEntity.World, pos, player, BrickSounds, 20f);
-                }
-
-                // Trowel action sounds (stages 3, 5, 7)
-                if (nextStage == 3 || nextStage == 5 || nextStage == 7)
-                {
-                    PlayRandomSound(byEntity.World, pos, player, TrowelSounds, 12f);
-                }
+                PlayRandomSound(byEntity.World, pos, player, BrickSounds, 20f);
             }
 
-            // -------------------------
-            // SOUND SYNC (SERVER → CLIENTS)
-            // -------------------------
-
-            //if (byEntity.World.Side == EnumAppSide.Server)
-            //{
-            //    int soundType = -1;
-
-            //    if (nextStage == 2 || nextStage == 4 || nextStage == 6)
-            //    {
-            //        soundType = 0; // brick
-            //    }
-            //    else if (nextStage == 3 || nextStage == 5 || nextStage == 7)
-            //    {
-            //        soundType = 1; // trowel
-            //    }
-
-            //    if (soundType != -1)
-            //    {
-            //        var packet = new TrowelSoundPacket()
-            //        {
-            //            X = pos.X,
-            //            Y = pos.Y,
-            //            Z = pos.Z,
-            //            SoundType = soundType
-            //        };
-
-            //        // Send to all nearby players (efficient + correct)
-            //        (byEntity.World.Api as ICoreServerAPI)?
-            //            .Network
-            //            .GetChannel("trowelsound")
-            //            .BroadcastPacket(packet);
-            //    }
-            //}
+            // Trowel action sounds (stages 3, 5, 7)
+            if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+            {
+                PlayRandomSound(byEntity.World, pos, player, TrowelSounds, 12f);
+            }
 
             // -------------------------
             // MORTAR CONSUMPTION (ALWAYS)
@@ -674,22 +635,18 @@ namespace brickbybrick.items
         /// </summary>
         private void PlayRandomSound(IWorldAccessor world, BlockPos pos, IPlayer player, string[] sounds, float range)
         {
-            if (player == null || world == null ||  sounds == null || sounds.Length == 0) return;
+            if (world == null ||  sounds == null || sounds.Length == 0) return;
  
             var rand = world.Rand;
 
             int index = rand.Next(sounds.Length);
 
-            //var sound = new AssetLocation("brickbybrick", $"{sounds[index]}");
-            var sound = new AssetLocation("game", "block/ceramicplace");
-            world.Api.Logger.Event($"Playing sound: {sound} at position {pos} with range {range}");
+            var sound = new AssetLocation("brickbybrick", $"sounds/{sounds[index]}");
+            //world.Api.Logger.Event($"Playing sound: {sound} at position {pos} with range {range}");
 
             // Subtle variation
             float pitch = 0.95f + (float)rand.NextDouble() * 0.1f;  // pitch 0.95 to 1.05
             float volume = 0.9f + (float)rand.NextDouble() * 0.2f;  // volume 0.9 to 1.1
-
-            volume = 1f;
-            range = 32f;
 
             world.PlaySoundAt(
                 sound,
@@ -697,9 +654,9 @@ namespace brickbybrick.items
                 pos.Y + 0.5,
                 pos.Z + 0.5,
                 player,
-                volume,
-                pitch,
-                range
+                true,
+                range,
+                volume
             );
         }
 
