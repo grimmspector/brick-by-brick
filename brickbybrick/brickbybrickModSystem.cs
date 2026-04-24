@@ -7,7 +7,6 @@ using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using static brickbybrick.items.ItemTrowel;
-using ProtoBuf;
 
 namespace brickbybrick
 {
