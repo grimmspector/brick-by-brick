@@ -8,6 +8,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.GameContent;
 
@@ -28,13 +29,28 @@ namespace brickbybrick.items
             + Cull unnecessary code sections, and optimize where possible
             + See if we can safely remove the #nullable disable at the top after refactor
            ------------------------ */
-        //WorldInteraction[]? interactions;
+
         WorldInteraction[] interactions;
         //ProPickWorkSpace tws; //Fix later
-        //SkillItem[]? toolModes;
+
         SkillItem[] toolModes;
         SkillItem[] modes;
         const int CapacityPerTier = 14;
+
+        private static readonly string[] BrickSounds =
+        {
+            "brick-1",
+            "brick-2",
+            "brick-3",
+            "brick-4"
+        };
+
+        private static readonly string[] TrowelSounds =
+        {
+            "trowel-1",
+            "trowel-2",
+            "trowel-3"
+        };
 
         public override void OnLoaded(ICoreAPI api)
         {
@@ -95,164 +111,346 @@ namespace brickbybrick.items
             });
         }
 
-        public override SkillItem[] GetToolModes(ItemSlot slot, IClientPlayer forPlayer, BlockSelection blockSel)
-        {
-            return toolModes;
-        }
-        public override int GetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel)
-        {
-            return Math.Min(toolModes.Length - 1, slot.Itemstack.Attributes.GetInt("toolMode"));
-        }
-
-        public override void SetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel, int toolMode)
-        {
-            slot.Itemstack.Attributes.SetInt("toolMode", toolMode);
-        }
-        private bool isTrowelable(Block block)
-        {
-            return block?.Attributes?["trowelable"].AsBool(false) == true;
-        }
-        public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
-        {
-            base.GetHeldInteractionHelp(inSlot);
-            return new WorldInteraction[] {
-                new WorldInteraction()
-                {
-                    ActionLangCode = "Change tool mode",
-                    HotKeyCodes = new string[] { "toolmodeselect" },
-                    MouseButton = EnumMouseButton.None
-                }
-            };
-
-        }
+        // -------------------------
+        // INTERACTION ENTRY POINT
+        // -------------------------
 
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
         {
             base.OnHeldInteractStart(slot, byEntity, blockSel, entitySel, firstEvent, ref handling);
+            // -------------------------
+            // EARLY EXIT CONDITIONS
+            // -------------------------
 
+            // Ensure this logic only runs once at the start of the interaction
             if (!firstEvent) return;
-            byEntity.World.Api.Logger.Event("Trowel used!");
-            if (blockSel == null) return;
-            IWorldAccessor world = byEntity.World;
-
-            if (TryCollectFromContainer(world, blockSel.Position, slot.Itemstack)) { 
-                handling = EnumHandHandling.PreventDefault;
-                return;
+            if (firstEvent)
+            {
+                SetInteracted(slot.Itemstack, false);
             }
+            byEntity.World.Api.Logger.Event("Trowel used!");
+            byEntity.World.Api.Logger.Event("Item: " + slot.Itemstack.Collectible.Code);
 
-            
+            // Ensure we have a valid entity and world reference
+            // (prevents null reference crashes when accessing world systems)
+            if (byEntity?.World == null) return;
 
-            var player = (byEntity as EntityPlayer)?.Player;
-            var block = api.World.BlockAccessor.GetBlock(blockSel.Position);
+            // Ensure a block is actually being targeted
+            if (blockSel == null) return;
+
+            // Get the targeted block safely
+            Block block = byEntity.World.BlockAccessor.GetBlock(blockSel.Position);
             byEntity.World.Api.Logger.Event("Block code: " + block.Code);
-            if (!isTrowelable(block)) return;
-            //if (!byEntity.World.Claims.TryAccess(player, blockSel.Position, EnumBlockAccessFlags.BuildOrBreak))
-            //      {
-            int toolMode = GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel);
             byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
             byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
             byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
             byEntity.World.Api.Logger.Event("Block path:" + block.Code.Path);
+
+            // Retrieve player (needed for tool mode)
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            if (player == null) return;
             byEntity.World.Api.Logger.Event("Player: " + player?.PlayerName);
-            byEntity.World.Api.Logger.Event("Item: " + slot.Itemstack.Collectible.Code);
+
+            int toolMode = GetToolMode(slot, player, blockSel);
             byEntity.World.Api.Logger.Event("Toolmode: " + toolMode);
-            if (toolMode == 0)
+
+            // Ensure the block is valid and can be interacted with by the trowel
+            if (!IsTrowelable(block)) 
             {
-                //return;
-                //}
-                byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
+                // Default behavior: collect mortar from containers
+                TryCollectFromContainer(byEntity.World, blockSel.Position, slot.Itemstack);
                 handling = EnumHandHandling.PreventDefault;
+                return; 
             }
+
+            // -------------------------
+            // TOOL MODE SWITCH
+            // -------------------------
+
+            switch (toolMode)
+            {
+                case 0:
+                    // Prevent default interaction behavior (e.g. placing block)
+                    handling = EnumHandHandling.PreventDefault;
+                    return;
+
+                case 1:
+                    // Placeholder for future tool mode behavior
+                    return;
+
+                case 2:
+                    // Placeholder for future tool mode behavior
+                    return;
+
+                case 3:
+                    // Placeholder for future tool mode behavior
+                    return;
+
+                default:
+                    return;
+            }
+
+            if (!firstEvent) return;
+
+            if (blockSel == null) return;
+            IWorldAccessor world = byEntity.World;
+
+            if (TryCollectFromContainer(world, blockSel.Position, slot.Itemstack))
+            {
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
             return;
         }
         public override bool OnHeldInteractStep(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)
         {
             base.OnHeldInteractStep(secondsUsed, slot, byEntity, blockSel, entitySel);
-            byEntity.World.Api.Logger.Event("Trowel used continuously for " + secondsUsed + " seconds!");
+            if (byEntity?.World == null || blockSel == null) return false;
+
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            if (player == null) return false;
+
             BlockPos pos = blockSel.Position;
-            Block block = api.World.BlockAccessor.GetBlock(blockSel.Position);
-            var player = (byEntity as EntityPlayer)?.Player;
-            AssetLocation newPath = null;
-            //string[] parts = block.Code.Path.Split('-');
-            //int stage = Convert.ToInt32(parts[parts.Length - 1]);
-            if (!isTrowelable(block)) return false;
-            //pull off the last chunk of our variant/part/whatever
-            //this assumes the end of the path is a number you can do math with, not a word. adjust accordingly
-            int lastPart;
-            int.TryParse(block.LastCodePart(0), out lastPart);
-            //you can put whatever or do whatever math here you want
-            int newPart = lastPart + 1;
-            string color = block.LastCodePart(1);
-            byEntity.World.Api.Logger.Event("Color: " + color);
-            byEntity.World.Api.Logger.Event("lastPart, newPart: " + lastPart + ", " + newPart);
-            if (newPart <= 6 && secondsUsed >= 1) {
-                if (CheckLeftHand(player)?.Collectible.LastCodePart() != color) {
-                    byEntity.World.Api.Logger.Event("Color mismatch! Block, Hand: " + color + ", " + CheckLeftHand(player)?.Collectible.LastCodePart());
-                    return false; }
-                if (GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel) != 0)
-                {
-                    byEntity.World.Api.Logger.Event("Tool mode mismatch! Current mode: " + GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel));
-                    return false;
-                }
-                if (GetStoredAmount(slot.Itemstack) <= 0) {
-                    byEntity.World.Api.Logger.Event("Not enough mortar in trowel!");
-                    return false;
-                }
-                byEntity.World.Api.Logger.Event("Left hand item: " + CheckLeftHand(player)?.Collectible.Code);
-                //this should take the block's existing path, cut off the last part, and stitch the new part on
-                newPath = block.CodeWithParts(newPart.ToString());
-                byEntity.World.Api.Logger.Event("newPath: " + newPath);
-            } else if (newPart == 7 && secondsUsed >= 1)
+            Block block = byEntity.World.BlockAccessor.GetBlock(pos);
+            if (block == null) return false;
+
+            // If NOT a trowelable block, do not handle this interaction
+            if (!IsTrowelable(block))
             {
-                if (color == "fire") { newPath = new AssetLocation("game:claybricks-good-fire"); }
-                else { newPath = block.CodeWithoutParts(1); }
+                return false; // let default behavior (pickup) happen
             }
-                byEntity.World.Api.Logger.Event("newPath: " + newPath);
-            //here we ask the game to find a block corresponding to the new path and retrieve its numeric ID
+
+            int toolMode = GetToolMode(slot, player, blockSel);
+
+            byEntity.World.Api.Logger.Event($"Trowel used continuously for {secondsUsed} seconds!");
+
+            byEntity.World.Api.Logger.Event($"Tool mode: {toolMode}");
+
+            switch (toolMode)
+            {
+                case 0:
+                    byEntity.World.Api.Logger.Event($"Handling case: {toolMode}");
+                    {
+                        return HandleTrowelMode0(secondsUsed, slot, byEntity, player, block, pos);
+                    }
+                case 1:
+                    // Placeholder for future functionality
+                    return false;
+
+                case 2:
+                    // Placeholder for future functionality
+                    return false;
+
+                case 3:
+                    // Placeholder for future functionality
+                    return false;
+
+                default:
+                    return false;
+            }
+        }
+
+        // -------------------------
+        // MODE 0 LOGIC
+        // -------------------------
+
+        /// <summary>
+        /// Handles the primary trowel behavior:
+        /// advancing block stages using mortar if conditions are met.
+        /// </summary>
+        private bool HandleTrowelMode0(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, Block block, BlockPos pos)
+        {
+
+            // Ensure the block is valid and can be interacted with by the trowel
+            if (!IsTrowelable(block)) return false;
+            
+            // Prevent multiple triggers during same hold
+            if (HasInteracted(slot.Itemstack)) return false;
+            
+            // Extract stage and color from block code
+            int currentStage = GetBlockStage(block);
+            int nextStage = currentStage + 1;
+            string color = GetBlockColor(block);
+
+            // DEBUG: inspect offhand state
+            byEntity.World.Api.Logger.Event("Block color: " + color);
+            byEntity.World.Api.Logger.Event("Offhand slot exists: " + (player.InventoryManager?.OffhandHotbarSlot != null));
+            byEntity.World.Api.Logger.Event("Offhand item: " + player.InventoryManager?.OffhandHotbarSlot?.Itemstack?.Collectible?.Code);
+            byEntity.World.Api.Logger.Event("Offhand stack size: " + player.InventoryManager?.OffhandHotbarSlot?.StackSize);
+
+            if (secondsUsed < 1f) return true;
+            byEntity.World.Api.Logger.Event($"Color: {color}");
+            byEntity.World.Api.Logger.Event($"Stage: {currentStage} -> {nextStage}");
+
+            // Validate player conditions
+            if (!HasMatchingMaterial(player, color, byEntity)) return false;
+            if (!HasEnoughMortar(slot, byEntity)) return false;
+
+            // -------------------------
+            // BRICK CONSUMPTION LOGIC
+            // -------------------------
+
+            // At stages 3, 5, and 7, consume one matching brick from offhand, enforcing offhand usage
+            if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+            {
+                string requiredPath = $"burnedbrick-{color}";
+
+                if (!TryGetOffhandStack(player, out ItemSlot offhandSlot, out ItemStack offhandStack))
+                {
+                    byEntity.World.Api.Logger.Event("No item in offhand!");
+                    return false;
+                }
+
+                if (offhandStack.Collectible?.Code?.Path != requiredPath)
+                {
+                    byEntity.World.Api.Logger.Event($"Color mismatch! Required: {requiredPath}, Found: {offhandStack.Collectible?.Code?.Path}");
+                    return false;
+                }
+
+                // Consume brick
+                offhandSlot.TakeOut(1);
+                offhandSlot.MarkDirty();
+
+                //byEntity.World.Api.Logger.Event("Consumed 1 brick from offhand");
+            }
+
+            // -------------------------
+            // BLOCK TRANSFORMATION
+            // -------------------------
+
+            // Determine next block
+            AssetLocation newPath = ResolveNextBlock(block, nextStage, color);
             if (newPath == null)
             {
-                byEntity.World.Api.Logger.Warning("newPath is null, skipping block exchange");
-                return true;
+                //byEntity.World.Api.Logger.Warning("newPath is null, skipping");
+                return false;
             }
-            int newBlockId = api.World.BlockAccessor.GetBlock(newPath).Id;
-            //tell the game to swap our existing block with the new one
-            api.World.BlockAccessor.ExchangeBlock(newBlockId, pos);
-            SetStoredAmount(slot.Itemstack, GetStoredAmount(slot.Itemstack) - 1);
-            return false;
-                         
 
-            //byEntity.World.Api.Logger.Event("Block code without parts: " + prevBlock);
-            //if (secondsUsed > 1)
+            Block newBlock = byEntity.World.BlockAccessor.GetBlock(newPath);
+            if (newBlock == null)
+            {
+                //byEntity.World.Api.Logger.Warning($"Block not found: {newPath}");
+                return false;
+            }
+
+            // Apply transformation
+            byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
+
+            // -------------------------
+            // SOUND EFFECTS
+            // -------------------------
+
+            if (byEntity.World.Side == EnumAppSide.Server)
+            {
+
+                // Brick placement sounds (stages 2, 4, 6)
+                if (nextStage == 2 || nextStage == 4 || nextStage == 6)
+                {
+                    PlayRandomSound(byEntity.World, pos, player, BrickSounds, 20f);
+                }
+
+                // Trowel action sounds (stages 3, 5, 7)
+                if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+                {
+                    PlayRandomSound(byEntity.World, pos, player, TrowelSounds, 12f);
+                }
+            }
+
+            // -------------------------
+            // SOUND SYNC (SERVER → CLIENTS)
+            // -------------------------
+
+            //if (byEntity.World.Side == EnumAppSide.Server)
             //{
-            //    if (!block.Code.PathStartsWith("brickblock")) return;
-            //    IPlayer? byPlayer = (byEntity as EntityPlayer)?.Player;
-            //    Block? masonry = byEntity.World.GetBlock(new AssetLocation(""));
+            //    int soundType = -1;
 
-            //    byEntity.World.BlockAccessor.MarkBlockDirty(pos);
-            //    byEntity.World.Api.Logger.Event("Trowel used for more than 1 second!");
-            //    byEntity.World.Api.Logger.Event("Seconds used: " + secondsUsed);
-            //    byEntity.World.Api.Logger.Event("Block selected: " + blockSel.Block.Code);
-            //    byEntity.World.Api.Logger.Event("Block position: " + blockSel.Position);
-            //    byEntity.World.Api.Logger.Event("Block face: " + blockSel.Face);
-            //    byEntity.World.Api.Logger.Event("Block selection hit position: " + blockSel.HitPosition);
-            //    byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
-            //    return false;
+            //    if (nextStage == 2 || nextStage == 4 || nextStage == 6)
+            //    {
+            //        soundType = 0; // brick
+            //    }
+            //    else if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+            //    {
+            //        soundType = 1; // trowel
+            //    }
+
+            //    if (soundType != -1)
+            //    {
+            //        var packet = new TrowelSoundPacket()
+            //        {
+            //            X = pos.X,
+            //            Y = pos.Y,
+            //            Z = pos.Z,
+            //            SoundType = soundType
+            //        };
+
+            //        // Send to all nearby players (efficient + correct)
+            //        (byEntity.World.Api as ICoreServerAPI)?
+            //            .Network
+            //            .GetChannel("trowelsound")
+            //            .BroadcastPacket(packet);
+            //    }
+            //}
+
+            // -------------------------
+            // MORTAR CONSUMPTION (ALWAYS)
+            // -------------------------
+
+            SetStoredAmount(slot.Itemstack, GetStoredAmount(slot.Itemstack) - 1);
+
+            // Mark that we've interacted to prevent repeat triggers
+            SetInteracted(slot.Itemstack, true);
 
             return true;
         }
-        public ItemStack CheckLeftHand(IPlayer player)
+
+        /// <summary>
+        /// Attempts to find and optionally consume items from the player's offhand
+        /// that match a given condition.
+        /// </summary>
+        /// <param name="player">The player</param>
+        /// <param name="matcher">Function to match valid items</param>
+        /// <param name="quantity">Amount to consume (default 1)</param>
+        /// <param name="consume">Whether to actually remove the item</param>
+        /// <param name="slot">Returned slot if successful</param>
+        /// <param name="stack">Returned stack if successful</param>
+        /// <returns>True if a matching item exists (and was consumed if requested)</returns>
+        private bool TryConsumeFromOffhand(
+            IPlayer player,
+            System.Func<ItemStack, bool> matcher,
+            int quantity,
+            bool consume,
+            out ItemSlot slot,
+            out ItemStack stack)
         {
-            // Access the inventory manager
-            IPlayerInventoryManager invManager = player?.InventoryManager;
+            slot = null;
+            stack = null;
 
-            // Get the itemstack in the left hand (off-hand)
-            //ItemStack leftHandStack = invManager?.GetHotbarItemstack(14);
-            ItemStack leftHandStack = invManager.OffhandHotbarSlot?.Itemstack;
-            //InventoryManager.ActiveHotbarSlot;
+            var inv = player?.InventoryManager?.GetOwnInventory("offhand");
 
-            // Check if the hand is not empty
-            if (leftHandStack != null) return leftHandStack;
-            return null;
+            if (inv == null || inv.Count == 0) return false;
+
+            ItemSlot candidateSlot = inv[0];
+            ItemStack candidateStack = candidateSlot?.Itemstack;
+
+            if (candidateStack == null) return false;
+
+            if (!matcher(candidateStack)) return false;
+
+            // Ensure enough quantity if consuming
+            if (consume && candidateSlot.StackSize < quantity) return false;
+
+            // Perform consumption
+            if (consume)
+            {
+                candidateSlot.TakeOut(quantity);
+                candidateSlot.MarkDirty();
+            }
+
+            slot = candidateSlot;
+            stack = candidateStack;
+
+            return true;
         }
 
         // ------------------------
@@ -295,34 +493,41 @@ namespace brickbybrick.items
 
         public static void SyncDurability(ItemStack stack)
         {
+            if (stack?.Attributes == null) return;
+
             int current = GetStoredAmount(stack);
             int max = GetMaxCapacity(stack);
 
-            // No capacity = no durability
             if (max <= 0)
             {
-                stack.Attributes.SetInt("durability", 0);
+                stack.Attributes.SetInt("durability", 1);
                 return;
             }
 
-            // Engine-defined max durability (from JSON)
-            int jsonMaxDurability = stack.Collectible.GetMaxDurability(stack);
+            int jsonMax = stack.Collectible.GetMaxDurability(stack);
 
-            // --- SEGMENT LOGIC ---
-            // Use near 1:1 unless it exceeds visual resolution
-            int segments = max <= 60 ? max : 60;
+            // Clamp current safely
+            current = GameMath.Clamp(current, 0, max);
 
-            float fillRatio = (float)current / max;
+            // Ratio (0 → 1)
+            float ratio = (float)current / max;
 
-            // Snap to segment step
-            int steppedSegment = (int)(fillRatio * segments);
-            float steppedRatio = (float)steppedSegment / segments;
+            // Convert directly (no segmentation for now—debug first)
+            int durability = (int)(ratio * jsonMax);
 
-            // Convert to durability scale
-            int durability = (int)(steppedRatio * jsonMaxDurability);
+            // --- CRITICAL FIXES ---
 
-            // --- SAFE CLAMP ---
-            durability = GameMath.Clamp(durability, 0, jsonMaxDurability);
+            // Prevent 0 (empty red/black bar bug)
+            if (durability <= 0)
+            {
+                durability = 1;
+            }
+
+            // Prevent full (bar disappears)
+            if (durability >= jsonMax)
+            {
+                durability = jsonMax - 1;
+            }
 
             // Apply to item
             stack.Attributes.SetInt("durability", durability);
@@ -336,7 +541,7 @@ namespace brickbybrick.items
         /// Attempts to add mortar portions into the item
         /// Returns how many were actually added
         /// </summary>
-        public static int AddLiquid(ItemStack stack, int amountToAdd)
+        private static int AddLiquid(ItemStack stack, int amountToAdd)
         {
             int current = GetStoredAmount(stack);
             int max = GetMaxCapacity(stack);
@@ -352,11 +557,11 @@ namespace brickbybrick.items
         /// <summary>
         /// Ensures we ONLY accept "liquidmortarportion"
         /// </summary>
-        public bool IsValidLiquid(ItemStack stack)
+        private bool IsValidLiquid(ItemStack stack)
         {
             if (stack == null) return false;
 
-            return stack.Collectible.Code.Path == "liquidmortarportion";
+            return stack?.Collectible?.Code?.Path == "liquidmortarportion";
         }
 
 
@@ -368,7 +573,7 @@ namespace brickbybrick.items
         /// Attempts to pull mortar liquid from a block at the given position
         /// Only works with containers holding "liquidmortarportion"
         /// </summary>
-        public bool TryCollectFromContainer(IWorldAccessor world, BlockPos pos, ItemStack toolStack)
+        private bool TryCollectFromContainer(IWorldAccessor world, BlockPos pos, ItemStack toolStack)
         {
             BlockEntity be = world.BlockAccessor.GetBlockEntity(pos);
 
@@ -415,7 +620,7 @@ namespace brickbybrick.items
         public override void GetHeldItemInfo(ItemSlot inSlot, StringBuilder dsc, IWorldAccessor world, bool withDebugInfo)
         {
             base.GetHeldItemInfo(inSlot, dsc, world, withDebugInfo);
-            
+
             // Remove durability line
             string durabilityText = Lang.Get("Durability");
 
@@ -434,6 +639,223 @@ namespace brickbybrick.items
             int max = GetMaxCapacity(inSlot.Itemstack);
 
             dsc.AppendLine($"Mortar: {stored} / {max}");
+
+            // -------------------------
+            // EMPTY TOOLTIP HINT
+            // -------------------------
+
+            if (stored == 0)
+            {
+                dsc.AppendLine();
+                dsc.AppendLine("Right-click a bucket to fill");
+            }
+        }
+
+        // -------------------------
+        // VALIDATION HELPERS
+        // -------------------------
+
+        public override SkillItem[] GetToolModes(ItemSlot slot, IClientPlayer forPlayer, BlockSelection blockSel)
+        {
+            return toolModes;
+        }
+        public override int GetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel)
+        {
+            return Math.Min(toolModes.Length - 1, slot.Itemstack.Attributes.GetInt("toolMode"));
+        }
+
+        public override void SetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel, int toolMode)
+        {
+            slot.Itemstack.Attributes.SetInt("toolMode", toolMode);
+        }
+
+        /// <summary>
+        /// Plays a random sound from the given list at the entity's position, with a variation in pitch and volume for natural effect. Only runs on client side.
+        /// </summary>
+        private void PlayRandomSound(IWorldAccessor world, BlockPos pos, IPlayer player, string[] sounds, float range)
+        {
+            if (player == null || world == null ||  sounds == null || sounds.Length == 0) return;
+ 
+            var rand = world.Rand;
+
+            int index = rand.Next(sounds.Length);
+
+            //var sound = new AssetLocation("brickbybrick", $"{sounds[index]}");
+            var sound = new AssetLocation("game", "block/ceramicplace");
+            world.Api.Logger.Event($"Playing sound: {sound} at position {pos} with range {range}");
+
+            // Subtle variation
+            float pitch = 0.95f + (float)rand.NextDouble() * 0.1f;  // pitch 0.95 to 1.05
+            float volume = 0.9f + (float)rand.NextDouble() * 0.2f;  // volume 0.9 to 1.1
+
+            volume = 1f;
+            range = 32f;
+
+            world.PlaySoundAt(
+                sound,
+                pos.X + 0.5,    // center of block
+                pos.Y + 0.5,
+                pos.Z + 0.5,
+                player,
+                volume,
+                pitch,
+                range
+            );
+        }
+
+        /// <summary>
+        /// Attempts to retrieve the player's offhand slot and stack safely.
+        /// Uses OffhandHotbarSlot (correct API usage).
+        /// </summary>
+        private bool TryGetOffhandStack(IPlayer player, out ItemSlot slot, out ItemStack stack)
+        {
+            slot = player?.InventoryManager?.OffhandHotbarSlot;
+            stack = slot?.Itemstack;
+
+            return stack != null;
+        }
+
+        /// <summary>
+        /// Returns true if the block can be modified by the trowel.
+        /// </summary>
+        private bool IsTrowelable(Block block)
+        {
+            return block?.Attributes?["trowelable"].AsBool(false) == true;
+        }
+        public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
+        {
+            base.GetHeldInteractionHelp(inSlot);
+            return new WorldInteraction[] {
+                new WorldInteraction()
+                {
+                    ActionLangCode = "Change tool mode",
+                    HotKeyCodes = new string[] { "toolmodeselect" },
+                    MouseButton = EnumMouseButton.None
+                }
+            };
+
+        }
+        /// <summary>
+        /// Extracts the numeric stage from the block code.
+        /// </summary>
+        private int GetBlockStage(Block block)
+        {
+            if (block == null) return 0;
+
+            int stage;
+            return int.TryParse(block.LastCodePart(0), out stage) ? stage : 0;
+        }
+
+        /// <summary>
+        /// Extracts the color variant from the block code.
+        /// </summary>
+        private string GetBlockColor(Block block)
+        {
+            return block?.LastCodePart(1);
+        }
+
+        /// <summary>
+        /// Attempts to extract a "color" identifier from an itemstack.
+        /// Supports both path-based and variant-based items.
+        /// </summary>
+        private string GetItemColor(ItemStack stack)
+        {
+            if (stack?.Collectible?.Code == null) return null;
+
+            // --- Variant-based (preferred) ---
+            if (stack.Collectible.Variant != null && stack.Collectible.Variant.ContainsKey("color"))
+            {
+                return stack.Collectible.Variant["color"];
+            }
+
+            // --- Fallback: path-based ---
+            string path = stack.Collectible.Code.Path;
+
+            if (string.IsNullOrEmpty(path)) return null;
+
+            string[] parts = path.Split('-');
+
+            return parts.Length > 1 ? parts[parts.Length - 1] : null;
+        }
+
+        /// <summary>
+        /// Ensures the player is holding the correct material in the off-hand.
+        /// </summary>
+        private bool HasMatchingMaterial(IPlayer player, string color, EntityAgent byEntity)
+        {
+            string requiredPath = $"burnedbrick-{color}";
+
+            bool success = TryGetOffhandStack(player, out _, out ItemStack stack)
+                           && stack.Collectible?.Code?.Path == requiredPath;
+
+            if (!success)
+            {
+                string held = stack?.Collectible?.Code?.Path;
+                byEntity.World.Api.Logger.Event($"Color mismatch! Required: {requiredPath}, Found: {held}");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Ensures the tool has enough stored mortar to perform the action.
+        /// </summary>
+        private bool HasEnoughMortar(ItemSlot slot, EntityAgent byEntity)
+        {
+            if (GetStoredAmount(slot.Itemstack) <= 0)
+            {
+                byEntity.World.Api.Logger.Event("Not enough mortar in trowel!");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Checks to see if the interaction is complete
+        /// </summary>
+        private bool HasInteracted(ItemStack stack)
+        {
+            return stack.Attributes.GetBool("didInteract", false);
+        }
+
+        /// <summary>
+        /// Sets the interaction based on the caller, used to prevent multiple calls to the same interaction logic within one interaction session.
+        /// </summary>
+        private void SetInteracted(ItemStack stack, bool value)
+        {
+            stack.Attributes.SetBool("didInteract", value);
+        }
+
+
+        // -------------------------
+        // BLOCK RESOLUTION
+        // -------------------------
+
+        /// <summary>
+        /// Determines the next block state based on stage progression.
+        /// </summary>
+        private AssetLocation ResolveNextBlock(Block block, int nextStage, string color)
+        {
+            if (block == null) return null;
+
+            if (nextStage <= 6)
+            {
+                return block.CodeWithParts(nextStage.ToString());
+            }
+
+            if (nextStage == 7)
+            {
+                if (color == "fire")
+                {
+                    return new AssetLocation("game:claybricks-good-fire");
+                }
+
+                return block.CodeWithoutParts(1);
+            }
+
+            return null;
         }
     }
 }
