@@ -172,6 +172,7 @@ namespace brickbybrick.items
             BlockPos pos = blockSel.Position;
             Block block = api.World.BlockAccessor.GetBlock(blockSel.Position);
             var player = (byEntity as EntityPlayer)?.Player;
+            AssetLocation newPath = null;
             //string[] parts = block.Code.Path.Split('-');
             //int stage = Convert.ToInt32(parts[parts.Length - 1]);
             if (!isTrowelable(block)) return false;
@@ -181,24 +182,44 @@ namespace brickbybrick.items
             int.TryParse(block.LastCodePart(0), out lastPart);
             //you can put whatever or do whatever math here you want
             int newPart = lastPart + 1;
-            string color = block.LastCodePart(3);
+            string color = block.LastCodePart(1);
             byEntity.World.Api.Logger.Event("Color: " + color);
             byEntity.World.Api.Logger.Event("lastPart, newPart: " + lastPart + ", " + newPart);
-            if (newPart <= 6 && secondsUsed >= 1) { 
-                if (CheckLeftHand(player)?.Collectible.LastCodePart() != color || GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel) != 0) {
+            if (newPart <= 6 && secondsUsed >= 1) {
+                if (CheckLeftHand(player)?.Collectible.LastCodePart() != color) {
                     byEntity.World.Api.Logger.Event("Color mismatch! Block, Hand: " + color + ", " + CheckLeftHand(player)?.Collectible.LastCodePart());
                     return false; }
+                if (GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel) != 0)
+                {
+                    byEntity.World.Api.Logger.Event("Tool mode mismatch! Current mode: " + GetToolMode(slot, (byEntity as EntityPlayer).Player, blockSel));
+                    return false;
+                }
+                if (GetStoredAmount(slot.Itemstack) <= 0) {
+                    byEntity.World.Api.Logger.Event("Not enough mortar in trowel!");
+                    return false;
+                }
                 byEntity.World.Api.Logger.Event("Left hand item: " + CheckLeftHand(player)?.Collectible.Code);
-            //this should take the block's existing path, cut off the last part, and stitch the new part on
-                AssetLocation newPath = block.CodeWithParts(newPart.ToString());
+                //this should take the block's existing path, cut off the last part, and stitch the new part on
+                newPath = block.CodeWithParts(newPart.ToString());
+                byEntity.World.Api.Logger.Event("newPath: " + newPath);
+            } else if (newPart == 7 && secondsUsed >= 1)
+            {
+                if (color == "fire") { newPath = new AssetLocation("game:claybricks-good-fire"); }
+                else { newPath = block.CodeWithoutParts(1); }
+            }
                 byEntity.World.Api.Logger.Event("newPath: " + newPath);
             //here we ask the game to find a block corresponding to the new path and retrieve its numeric ID
+            if (newPath == null)
+            {
+                byEntity.World.Api.Logger.Warning("newPath is null, skipping block exchange");
+                return true;
+            }
             int newBlockId = api.World.BlockAccessor.GetBlock(newPath).Id;
             //tell the game to swap our existing block with the new one
-                api.World.BlockAccessor.ExchangeBlock(newBlockId, pos);
-                return false;
-            } 
-            else { return true; }
+            api.World.BlockAccessor.ExchangeBlock(newBlockId, pos);
+            SetStoredAmount(slot.Itemstack, GetStoredAmount(slot.Itemstack) - 1);
+            return false;
+                         
 
             //byEntity.World.Api.Logger.Event("Block code without parts: " + prevBlock);
             //if (secondsUsed > 1)
