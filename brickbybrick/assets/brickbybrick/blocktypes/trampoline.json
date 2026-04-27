@@ -2,7 +2,7 @@
   "code": "trampoline",
   "class": "brickbybrick.trampoline",
   "blockmaterial": "wood",
-  "creativeinventory": { "general": [ "*" ] },
+  "creativeinventory": { "general": [ "*" ], "brickbybrick": [ "*" ] },
   "textures": {
     "all": { "base": "block/trampoline" }
   },

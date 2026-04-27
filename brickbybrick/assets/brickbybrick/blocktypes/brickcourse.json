@@ -1,5 +1,5 @@
 {
-  "code": "brickcourse", //test comment
+  "code": "brickcourse",
   "class": "brickbybrick.brickblock",
   "variantgroups": [
     {
@@ -12,22 +12,31 @@
     },
     {
       "code": "color",
-      "states": [ "fire", "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" ]
+      "states": [ "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" ]
     },
     {
       "code": "stage",
       "states": [ "1", "2", "3", "4", "5", "6" ]
     }
   ],
+  "skipVariants": [
+    "brickcourse-eight-*-clinker-*",
+    "brickcourse-four-runningo-clinker-*",
+    "brickcourse-four-runningr-clinker-*",
+    "brickcourse-four-runningl-clinker-*",
+    "brickcourse-four-soldier-clinker-*",
+    "brickcourse-four-soldiero-clinker-*",
+    "brickcourse-four-header-clinker-*",
+    "brickcourse-four-headero-clinker-*"
+  ],
   "creativeinventory": {
-    "general": [ "*" ],
-    "construction": [ "*" ],
+    "construction": [ "*-1" ],
     "brickbybrick": [ "*" ]
   },
   "attributes": {
     "trowelable": true
   },  
-"sideopaque": { "all": false },
+"sideopaque": { "all": true },
 //"shape": { "base": "game:block/basic/cube" },
 "shapebytype": { "*": { "base": "brickbybrick:shapes/block/brick/{type}/brickblock-{stage}" } },
 //"drawtype": "cube",
