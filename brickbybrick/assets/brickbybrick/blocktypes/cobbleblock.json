@@ -1,5 +1,5 @@
 {
-  "code": "cobbleblock", //test comment
+  "code": "cobbleblock",
   "class": "brickbybrick.cobbleblock",
   "variantgroups": [
     {
@@ -20,14 +20,16 @@
     }
   },
   "creativeinventory": {
-    "general": [ "*" ],
-    "construction": [ "*" ],
+    "construction": [ "*-1" ],
     "brickbybrick": [ "*" ]
   },
   //"shape": { "base": "game:block/basic/cube" },
   "shape": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1" },
   //"drawtype": "cube",
   "blockmaterial": "Stone",
+  "sideopaque": {
+    "all": true
+  },
   "textures": {
     "material": { "base": "game:block/stone/cobblestone/{rock}*" }
   },

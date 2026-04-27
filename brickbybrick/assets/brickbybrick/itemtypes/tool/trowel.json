@@ -32,7 +32,8 @@
   "creativeinventory": {
     "general": [ "*" ],
     "items": [ "*" ],
-    "tools": [ "*" ]
+    "tools": [ "*" ],
+    "brickbybrick": [ "*" ]
   },
   "tooltierbytype": {
     "*-copper": 2,

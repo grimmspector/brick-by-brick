@@ -1,6 +1,6 @@
 {
     "code": "trowelhead",
-    "creativeinventory": { "general": ["*"], "items": ["*"] },
+    "creativeinventory": { "general": ["*"], "items": ["*"], "brickbybrick": ["*"] },
 
     "variantgroups": [
         {"code": "metal", 

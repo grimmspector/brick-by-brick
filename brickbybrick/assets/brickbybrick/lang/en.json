@@ -3,7 +3,7 @@
 {
 	"block-trampoline": "Trampoline",
 	"item-thornsblade": "Thorns Blade",
-	"heldhelp-trowel": "Build",
+	"heldhelp-trowel": "Build brick block",
 	"item-trowel-copper": "Copper masonry trowel",
 	"game:tabname-brickbybrick": "Brick-by-Brick"
 }
