@@ -1,0 +1,144 @@
+[
+  {
+    "file": "game:shapes/entity/humanoid/seraph-faceless.json",
+    "op": "add",
+    "path": "/animations/-",
+    "value": {
+      "name": "TrowelMortarSpread",
+      "code": "trowelmortarspread",
+      "animationLength": 2.0,
+      "quantityframes": 41,
+      "onActivityStopped": "EaseOut",
+      "onAnimationEnd": "Hold",
+      "keyframes": [
+        {
+          "frame": 0,
+          "elements": {
+            "UpperTorso": { "rotationX": -16.0, "rotationY": -5.0, "rotationZ": 6.0 },
+            "UpperArmR": { "rotationX": -10.0, "rotationY": -26.0, "rotationZ": 28.0 },
+            "LowerArmR": { "rotationX": -28.0, "rotationY": 0.0, "rotationZ": -54.0 }
+          }
+        },
+        {
+          "frame": 5,
+          "elements": {
+            "UpperTorso": { "rotationX": -18.0, "rotationY": -15.0, "rotationZ": 7.0 },
+            "UpperArmR": { "rotationX": -14.0, "rotationY": -44.0, "rotationZ": 54.0 },
+            "LowerArmR": { "rotationX": -32.0, "rotationY": 0.0, "rotationZ": -74.0 }
+          }
+        },
+        {
+          "frame": 10,
+          "elements": {
+            "UpperTorso": { "rotationX": -15.0, "rotationY": -6.0, "rotationZ": 6.0 },
+            "UpperArmR": { "rotationX": -10.0, "rotationY": -20.0, "rotationZ": 36.0 },
+            "LowerArmR": { "rotationX": -28.0, "rotationY": 0.0, "rotationZ": -58.0 }
+          }
+        },
+        {
+          "frame": 16,
+          "elements": {
+            "UpperTorso": { "rotationX": -17.0, "rotationY": 12.0, "rotationZ": 7.0 },
+            "UpperArmR": { "rotationX": -12.0, "rotationY": 36.0, "rotationZ": 6.0 },
+            "LowerArmR": { "rotationX": -26.0, "rotationY": 0.0, "rotationZ": -34.0 }
+          }
+        },
+        {
+          "frame": 21,
+          "elements": {
+            "UpperTorso": { "rotationX": -15.0, "rotationY": 5.0, "rotationZ": 6.0 },
+            "UpperArmR": { "rotationX": -10.0, "rotationY": 10.0, "rotationZ": 22.0 },
+            "LowerArmR": { "rotationX": -26.0, "rotationY": 0.0, "rotationZ": -42.0 }
+          }
+        },
+        {
+          "frame": 27,
+          "elements": {
+            "UpperTorso": { "rotationX": -18.0, "rotationY": -16.0, "rotationZ": 7.0 },
+            "UpperArmR": { "rotationX": -14.0, "rotationY": -42.0, "rotationZ": 50.0 },
+            "LowerArmR": { "rotationX": -32.0, "rotationY": 0.0, "rotationZ": -72.0 }
+          }
+        },
+        {
+          "frame": 33,
+          "elements": {
+            "UpperTorso": { "rotationX": -16.0, "rotationY": 14.0, "rotationZ": 7.0 },
+            "UpperArmR": { "rotationX": -12.0, "rotationY": 40.0, "rotationZ": 2.0 },
+            "LowerArmR": { "rotationX": -28.0, "rotationY": 0.0, "rotationZ": -32.0 }
+          }
+        },
+        {
+          "frame": 40,
+          "elements": {
+            "UpperTorso": { "rotationX": -16.0, "rotationY": -5.0, "rotationZ": 6.0 },
+            "UpperArmR": { "rotationX": -10.0, "rotationY": -26.0, "rotationZ": 28.0 },
+            "LowerArmR": { "rotationX": -28.0, "rotationY": 0.0, "rotationZ": -54.0 }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "file": "game:shapes/entity/humanoid/seraph-faceless.json",
+    "op": "add",
+    "path": "/animations/-",
+    "value": {
+      "name": "TrowelBrickPlace",
+      "code": "trowelbrickplace",
+      "animationLength": 2.0,
+      "quantityframes": 41,
+      "onActivityStopped": "EaseOut",
+      "onAnimationEnd": "Hold",
+      "keyframes": [
+        {
+          "frame": 0,
+          "elements": {
+            "UpperTorso": { "rotationX": -2.0, "rotationY": 0.0, "rotationZ": 2.0 },
+            "UpperArmL": { "rotationX": -12.0, "rotationY": 6.0, "rotationZ": -26.0 },
+            "LowerArmL": { "rotationX": 8.0, "rotationY": 0.0, "rotationZ": -26.0 }
+          }
+        },
+        {
+          "frame": 8,
+          "elements": {
+            "UpperTorso": { "rotationX": -5.0, "rotationY": 3.0, "rotationZ": 3.0 },
+            "UpperArmL": { "rotationX": -34.0, "rotationY": 12.0, "rotationZ": -52.0 },
+            "LowerArmL": { "rotationX": 6.0, "rotationY": 0.0, "rotationZ": -44.0 }
+          }
+        },
+        {
+          "frame": 16,
+          "elements": {
+            "UpperTorso": { "rotationX": -8.0, "rotationY": 6.0, "rotationZ": 4.0 },
+            "UpperArmL": { "rotationX": -62.0, "rotationY": 18.0, "rotationZ": -92.0 },
+            "LowerArmL": { "rotationX": 4.0, "rotationY": 0.0, "rotationZ": -62.0 }
+          }
+        },
+        {
+          "frame": 24,
+          "elements": {
+            "UpperTorso": { "rotationX": -6.0, "rotationY": 3.0, "rotationZ": 4.0 },
+            "UpperArmL": { "rotationX": -74.0, "rotationY": 10.0, "rotationZ": -110.0 },
+            "LowerArmL": { "rotationX": 2.0, "rotationY": 0.0, "rotationZ": -36.0 }
+          }
+        },
+        {
+          "frame": 32,
+          "elements": {
+            "UpperTorso": { "rotationX": -4.0, "rotationY": 1.0, "rotationZ": 3.0 },
+            "UpperArmL": { "rotationX": -48.0, "rotationY": 6.0, "rotationZ": -72.0 },
+            "LowerArmL": { "rotationX": 4.0, "rotationY": 0.0, "rotationZ": -48.0 }
+          }
+        },
+        {
+          "frame": 40,
+          "elements": {
+            "UpperTorso": { "rotationX": -2.0, "rotationY": 0.0, "rotationZ": 2.0 },
+            "UpperArmL": { "rotationX": -12.0, "rotationY": 6.0, "rotationZ": -26.0 },
+            "LowerArmL": { "rotationX": 8.0, "rotationY": 0.0, "rotationZ": -26.0 }
+          }
+        }
+      ]
+    }
+  }
+]

@@ -10,8 +10,8 @@
 	},
 	"textures": {
 		"material": "game:block/metal/ingot/iron",
-		"handle": "game:item/tool/material/handle",
-		"string" : "game:item/tool/material/string"
+		"handle": "game:item/tool/handle",
+		"string" : "game:item/resource/string"
 	},
 	"elements": [
 		{

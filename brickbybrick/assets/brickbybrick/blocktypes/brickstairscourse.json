@@ -52,7 +52,7 @@
   "resistance": 4,
   "lightAbsorption": 99,
   "sideopaque": {
-    "all": true
+    "all": false
   },
   "texturesByType": {
     "brickstairscourse-four-*-*-*-*": {
