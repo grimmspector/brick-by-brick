@@ -9,9 +9,107 @@
                 "build",
                 "-c",
                 "Debug",
-                "${workspaceFolder}/brick_by_brick/brick_by_brick.csproj"
+                "${workspaceFolder}/brickbybrick/brickbybrick.csproj"
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "watch client log",
+            "command": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+            "type": "process",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/.vscode/watch-vs-log.ps1",
+                "-LogPath",
+                "%APPDATA%\\VintagestoryData\\Logs\\client-main.log",
+                "-Name",
+                "client",
+                "-StopPattern",
+                "Exiting game now|Exiting current game to main menu"
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "vintagestory-client-log",
+                "pattern": [
+                    {
+                        "regexp": ".^"
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Now watching Vintage Story client-main.log",
+                    "endsPattern": "Vintage Story client log watcher ready"
+                }
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "vintagestory-log"
+            },
+            "runOptions": {
+                "instanceLimit": 1
+            }
+        },
+        {
+            "label": "watch server log",
+            "command": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+            "type": "process",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/.vscode/watch-vs-log.ps1",
+                "-LogPath",
+                "%APPDATA%\\VintagestoryData\\Logs\\server-main.log",
+                "-Name",
+                "server",
+                "-StopPattern",
+                "Stopped the server!"
+            ],
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "vintagestory-server-log",
+                "pattern": [
+                    {
+                        "regexp": ".^"
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Now watching Vintage Story server-main.log",
+                    "endsPattern": "Vintage Story server log watcher ready"
+                }
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "group": "vintagestory-log"
+            },
+            "runOptions": {
+                "instanceLimit": 1
+            }
+        },
+        {
+            "label": "build + watch client log",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "build",
+                "watch client log"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "build + watch server log",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "build",
+                "watch server log"
+            ],
+            "problemMatcher": []
         },
         {
             "label": "package",

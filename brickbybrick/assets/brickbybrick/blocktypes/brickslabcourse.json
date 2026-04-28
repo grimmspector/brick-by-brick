@@ -1,6 +1,14 @@
 {
   "code": "brickslabcourse",
   "class": "Block",
+  "behaviors": [
+    {
+      "name": "WrenchOrientable",
+      "properties": {
+        "baseCode": "brickslabcourse-{state}-{color}-*-{stage}"
+      }
+    }
+  ],
   "variantgroups": [
     {
       "code": "state",
@@ -16,13 +24,13 @@
     },
     {
       "code": "stage",
-      "states": [ "1", "2", "3", "4" ]
+      "states": [ "1", "2", "3" ]
     }
   ],
   "attributes": {
     "trowelable": true,
     "handbook": {
-      "groupBy": [ "brickslabcourse-four-*-down-4" ]
+      "groupBy": [ "brickslabcourse-four-*-down-3" ]
     }
   },
   "creativeinventory": {
@@ -30,10 +38,24 @@
     "brickbybrick": [ "*" ]
   },
   "shapeByType": {
-    "*-*-*-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1" },
-    "*-*-*-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2" },
-    "*-*-*-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3" },
-    "*-*-*-4": { "base": "game:block/basic/slab/slab-{rot}" }
+    "*-*-down-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1" },
+    "*-*-up-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateX": 180 },
+    "*-*-north-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateX": 90 },
+    "*-*-south-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateX": 270 },
+    "*-*-east-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateZ": 90 },
+    "*-*-west-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateZ": 270 },
+    "*-*-down-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2" },
+    "*-*-up-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateX": 180 },
+    "*-*-north-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateX": 90 },
+    "*-*-south-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateX": 270 },
+    "*-*-east-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateZ": 90 },
+    "*-*-west-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateZ": 270 },
+    "*-*-down-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3" },
+    "*-*-up-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateX": 180 },
+    "*-*-north-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateX": 90 },
+    "*-*-south-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateX": 270 },
+    "*-*-east-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateZ": 90 },
+    "*-*-west-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateZ": 270 }
   },
   "blockmaterial": "Ceramic",
   "replaceable": 140,
@@ -104,6 +126,10 @@
   "heldTpIdleAnimation": "holdbothhandslarge",
   "heldRightReadyAnimation": "heldblockready",
   "heldTpUseAnimation": "twohandplaceblock",
+  "guiTransform": {
+    "translation": { "x": 0, "y": 2, "z": 0 },
+    "origin": { "x": 0.5, "y": 0.25, "z": 0.5 }
+  },
   "tpHandTransform": {
     "translation": {
       "x": -1.49,

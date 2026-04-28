@@ -1,6 +1,14 @@
 {
   "code": "brickstairscourse",
   "class": "Block",
+  "behaviors": [
+    {
+      "name": "WrenchOrientable",
+      "properties": {
+        "baseCode": "brickstairscourse-{state}-{color}-*-*-{stage}"
+      }
+    }
+  ],
   "variantgroups": [
     {
       "code": "state",
@@ -20,33 +28,20 @@
     },
     {
       "code": "stage",
-      "states": [ "1", "2", "3", "4", "5" ]
+      "states": [ "1", "2", "3", "4" ]
     }
   ],
   "attributes": {
     "trowelable": true,
     "handbook": {
-      "groupBy": [ "brickstairscourse-four-*-up-north-5" ]
+      "groupBy": [ "brickstairscourse-four-*-up-north-4" ]
     }
   },
   "creativeinventory": {
     "construction": [ "*-1" ],
     "brickbybrick": [ "*" ]
   },
-  "shapeByType": {
-    "*-*-*-*-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1" },
-    "*-*-*-*-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2" },
-    "*-*-*-*-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3" },
-    "*-*-*-*-4": { "base": "brickbybrick:shapes/block/brick/running/brickblock-4" },
-    "*-*-up-north-5": { "base": "game:block/basic/stairs/normal", "rotateY": 0 },
-    "*-*-up-west-5": { "base": "game:block/basic/stairs/normal", "rotateY": 90 },
-    "*-*-up-south-5": { "base": "game:block/basic/stairs/normal", "rotateY": 180 },
-    "*-*-up-east-5": { "base": "game:block/basic/stairs/normal", "rotateY": 270 },
-    "*-*-down-north-5": { "base": "game:block/basic/stairs/flipped", "rotateY": 0 },
-    "*-*-down-west-5": { "base": "game:block/basic/stairs/flipped", "rotateY": 90 },
-    "*-*-down-south-5": { "base": "game:block/basic/stairs/flipped", "rotateY": 180 },
-    "*-*-down-east-5": { "base": "game:block/basic/stairs/flipped", "rotateY": 270 }
-  },
+  "shapeByType": {},
   "blockmaterial": "Ceramic",
   "replaceable": 140,
   "resistance": 4,

@@ -15,16 +15,19 @@
             "osx": {
                 "program": "${env:VINTAGE_STORY}/Vintagestory"
             },
-            "preLaunchTask": "build",
+            "preLaunchTask": "build + watch client log",
             "args": [
                 // "--playStyle" , "preset-surviveandbuild",
                 // "--openWorld" , "modding test world",
                 "--tracelog",
                 "--addModPath",
-                "${workspaceFolder}/brick_by_brick/bin/Debug/Mods",
+                "${workspaceFolder}/brickbybrick/bin/Debug/Mods",
                 "--addOrigin",
-                "${workspaceFolder}/brick_by_brick/assets"
+                "${workspaceFolder}/brickbybrick/assets"
             ],
+            "env": {
+                "VAO_DEBUG_DISPOSE": "1"
+            },
             "console": "internalConsole",
             "stopAtEntry": false
         },
@@ -39,13 +42,13 @@
             "osx": {
                 "program": "${env:VINTAGE_STORY}/VintagestoryServer"
             },
-            "preLaunchTask": "build",
+            "preLaunchTask": "build + watch server log",
             "args": [
                 "--tracelog",
                 "--addModPath",
-                "${workspaceFolder}/brick_by_brick/bin/Debug/Mods",
+                "${workspaceFolder}/brickbybrick/bin/Debug/Mods",
                  "--addOrigin",
-                 "${workspaceFolder}/brick_by_brick/assets"
+                 "${workspaceFolder}/brickbybrick/assets"
             ],
             "console": "internalConsole",
             "stopAtEntry": false
