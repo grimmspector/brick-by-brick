@@ -145,6 +145,15 @@ namespace brickbybrick.items
             SetInteracted(slot.Itemstack, false);
             slot.Itemstack.Attributes.SetBool("soundPlayed", false);
 
+            // Refill from mortar containers immediately before any build mode
+            // handling so buckets and similar targets always win over placement.
+            if (TryCollectFromContainer(world, pos, slot))
+            {
+                SetInteracted(slot.Itemstack, true);
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
             // -------------------------
             // DETERMINE STAGE + MODE
             // -------------------------
@@ -163,20 +172,20 @@ namespace brickbybrick.items
 
             int toolMode = GetToolMode(slot, byPlayer, blockSel);
 
-            UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
-
             if (toolMode == 1 || toolMode == 3)
             {
+                UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
                 handling = EnumHandHandling.PreventDefault;
                 return;
             }
 
             if (!IsTrowelable(block))
             {
-                TryCollectFromContainer(world, pos, slot);
                 handling = EnumHandHandling.PreventDefault;
                 return;
             }
+
+            UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
 
             switch (toolMode)
             {
@@ -927,10 +936,10 @@ namespace brickbybrick.items
         private Block ResolveMode3PlacementBlock(IWorldAccessor world, EntityAgent byEntity, string color)
         {
             // Use the entity's current yaw to choose between the two straight
-            // running-bond variants. North/south uses "running" and east/west
-            // uses "runningo" so the visible brick faces align with the player.
+            // running-bond variants. North/south uses "runningo" and east/west
+            // uses "running" so the visible brick faces align with the player.
             BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
-            string type = facing.IsAxisWE ? "runningo" : "running";
+            string type = facing.IsAxisWE ? "running" : "runningo";
             AssetLocation blockCode = new AssetLocation("brickbybrick", $"brickcourse-four-{type}-{color}-1");
 
             Block placeBlock = world.BlockAccessor.GetBlock(blockCode);
@@ -964,14 +973,14 @@ namespace brickbybrick.items
 
             if (!TryGetOffhandStack(player, out slot, out stack))
             {
-                byEntity.World.Api.Logger.Event("[TROWEL] Block mode requires a burned brick in the offhand");
+                NotifyPlayerDebug(player, byEntity.World, "[TROWEL] Hold a burned brick in your offhand to place with the trowel.");
                 return false;
             }
 
             string path = stack.Collectible?.Code?.Path;
             if (string.IsNullOrEmpty(path) || !path.StartsWith("burnedbrick-"))
             {
-                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Incompatible offhand item for block mode: {stack?.Collectible?.Code}");
+                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Hold a burned brick in your offhand to place with the trowel. Found: {stack?.Collectible?.Code}");
                 return false;
             }
 
@@ -1177,14 +1186,16 @@ namespace brickbybrick.items
         private bool HasMatchingMaterial(IPlayer player, string color, EntityAgent byEntity)
         {
             string requiredPath = $"burnedbrick-{color}";
-
-            bool success = TryGetOffhandStack(player, out _, out ItemStack stack)
-                           && stack.Collectible?.Code?.Path == requiredPath;
-
-            if (!success)
+            if (!TryGetOffhandStack(player, out _, out ItemStack stack))
             {
-                string held = stack?.Collectible?.Code?.Path;
-                byEntity.World.Api.Logger.Event($"Color mismatch! Required: {requiredPath}, Found: {held}");
+                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Hold {requiredPath} in your offhand to continue this build stage.");
+                return false;
+            }
+
+            string held = stack.Collectible?.Code?.Path;
+            if (held != requiredPath)
+            {
+                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Wrong brick color in offhand. Need {requiredPath}, found {held ?? "nothing"}.");
                 return false;
             }
 
