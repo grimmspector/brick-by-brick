@@ -143,30 +143,72 @@
   },
   "*-four-runningo-*": {
     "material": {
-      "base": "game:block/clay/brick/four/runningo/cream1",
+      "base": "game:block/clay/brick/four/running/cream1",
       "overlays": [
-        "game:block/clay/brick/four/runningo/{color}1"
+        "game:block/clay/brick/four/running/{color}1"
       ],
       "alternates": [
         {
-          "base": "game:block/clay/brick/four/runningo/cream2",
-          "overlays": [ "game:block/clay/brick/four/runningo/{color}1" ]
+          "base": "game:block/clay/brick/four/running/cream2",
+          "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+        },
+        {
+          "base": "game:block/clay/brick/four/running/cream3",
+          "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+        },
+        {
+          "base": "game:block/clay/brick/four/running/cream4",
+          "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+        },
+        {
+          "base": "game:block/clay/brick/four/running/cream5",
+          "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
         }
       ]
+    },
+    "material2": {
+      "base": "game:block/clay/brick/four/header/cream1",
+      "overlays": [
+        "game:block/clay/brick/four/header/{color}1"
+      ],
+      "alternates": [
+        {
+          "base": "game:block/clay/brick/four/header/cream2",
+          "overlays": [ "game:block/clay/brick/four/header/{color}1" ]
+        }
+      ]
+    },
+    "colour": {
+      "base": "game:block/clay/brickpile/burned/{color}-brick1"
     }
   },
   "*-eight-runningo-*": {
     "material": {
-      "base": "game:block/clay/brick/eight/runningo/cream1",
+      "base": "game:block/clay/brick/eight/running/cream1",
       "overlays": [
-        "game:block/clay/brick/eight/runningo/{color}1"
+        "game:block/clay/brick/eight/running/{color}1"
       ],
       "alternates": [
         {
-          "base": "game:block/clay/brick/eight/runningo/cream2",
-          "overlays": [ "game:block/clay/brick/eight/runningo/{color}1" ]
+          "base": "game:block/clay/brick/eight/running/cream2",
+          "overlays": [ "game:block/clay/brick/eight/running/{color}1" ]
         }
       ]
+    },
+    "material2": {
+      "base": "game:block/clay/brick/four/header/cream1",
+      "overlays": [
+        "game:block/clay/brick/four/header/{color}1"
+      ],
+      "alternates": [
+        {
+          "base": "game:block/clay/brick/four/header/cream2",
+          "overlays": [ "game:block/clay/brick/four/header/{color}1" ]
+        }
+      ]
+    },
+    "colour": {
+      "base": "game:block/clay/brickpile/burned/{color}-brick1"
     }
   },
   "*-four-runningr-*": {

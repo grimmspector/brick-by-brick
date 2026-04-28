@@ -12,5 +12,6 @@
         ]
     ],
     "name": "trowel",
+    "code": "trowelhead-{metal}",
     "output": {"type": "item", "code": "trowelhead-{metal}"}
 }
