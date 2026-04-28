@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -54,6 +54,9 @@ namespace brickbybrick.items
             "trowel-2",
             "trowel-3"
         };
+
+        private const string MortarUseAnimationCode = "trowelmortarspread";
+        private const string BrickUseAnimationCode = "trowelbrickplace";
 
         public override void OnLoaded(ICoreAPI api)
         {
@@ -160,6 +163,8 @@ namespace brickbybrick.items
 
             int toolMode = GetToolMode(slot, byPlayer, blockSel);
 
+            UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
+
             if (toolMode == 1 || toolMode == 3)
             {
                 handling = EnumHandHandling.PreventDefault;
@@ -236,12 +241,20 @@ namespace brickbybrick.items
 
             if (byEntity?.World == null) return;
 
+            StopTrowelUseAnimations(byEntity);
+
             var attrs = slot.Itemstack.Attributes;
 
             attrs.SetBool("didInteract", false);
 
             // DEBUG
             byEntity.World.Api.Logger.Event($"[TROWEL] Interaction stopped");
+        }
+
+        public override bool OnHeldInteractCancel(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, EnumItemUseCancelReason cancelReason)
+        {
+            StopTrowelUseAnimations(byEntity);
+            return base.OnHeldInteractCancel(secondsUsed, slot, byEntity, blockSel, entitySel, cancelReason);
         }
 
         //public override void OnBeforeRender(ICoreClientAPI capi, ItemStack itemstack, EnumItemRenderTarget target, ref ItemRenderInfo renderinfo)
@@ -984,6 +997,96 @@ namespace brickbybrick.items
             {
                 clientPlayer.ShowChatNotification(message);
             }
+        }
+
+        /// <summary>
+        /// Starts the appropriate staged-use animation for the current trowel
+        /// action, or stops any trowel animations when none should play.
+        /// </summary>
+        private void UpdateTrowelUseAnimation(ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
+        {
+            string animationCode = ResolveTrowelUseAnimationCode(slot, byEntity, player, blockSel);
+
+            if (animationCode == null)
+            {
+                StopTrowelUseAnimations(byEntity);
+                return;
+            }
+
+            StartTrowelUseAnimation(byEntity, animationCode);
+        }
+
+        /// <summary>
+        /// Resolves which custom animation should play for the current
+        /// interaction based on tool mode and construction stage.
+        /// </summary>
+        private string ResolveTrowelUseAnimationCode(ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
+        {
+            if (slot?.Itemstack == null || byEntity?.World == null || player == null || blockSel == null) return null;
+
+            int toolMode = GetToolMode(slot, player, blockSel);
+            Block selectedBlock = byEntity.World.BlockAccessor.GetBlock(blockSel.Position);
+
+            switch (toolMode)
+            {
+                case 0:
+                    if (!IsTrowelable(selectedBlock)) return null;
+
+                    int nextStage = GetBlockStage(selectedBlock) + 1;
+
+                    if (nextStage == 2 || nextStage == 4 || nextStage == 6)
+                    {
+                        return MortarUseAnimationCode;
+                    }
+
+                    if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+                    {
+                        return BrickUseAnimationCode;
+                    }
+
+                    return null;
+
+                case 1:
+                    return IsStagedSlabBlock(selectedBlock) ? null : BrickUseAnimationCode;
+
+                case 3:
+                    return BrickUseAnimationCode;
+
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Starts a custom third-person trowel animation on the interacting
+        /// entity. The matching code and animation names are identical.
+        /// </summary>
+        private void StartTrowelUseAnimation(EntityAgent byEntity, string animationCode)
+        {
+            if (byEntity?.AnimManager == null || string.IsNullOrEmpty(animationCode)) return;
+
+            byEntity.AnimManager.TryStartAnimation(new AnimationMetaData
+            {
+                Code = animationCode,
+                Animation = animationCode,
+                AnimationSpeed = 1f,
+                EaseInSpeed = 6f,
+                EaseOutSpeed = 6f,
+                Weight = 8f,
+                WeightCapFactor = 0.75f,
+                BlendMode = EnumAnimationBlendMode.AddAverage
+            });
+        }
+
+        /// <summary>
+        /// Stops all custom trowel use animations that may be active.
+        /// </summary>
+        private void StopTrowelUseAnimations(EntityAgent byEntity)
+        {
+            if (byEntity?.AnimManager == null) return;
+
+            byEntity.AnimManager.StopAnimation(MortarUseAnimationCode);
+            byEntity.AnimManager.StopAnimation(BrickUseAnimationCode);
         }
 
         /// <summary>

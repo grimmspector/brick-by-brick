@@ -28,7 +28,7 @@
   //"drawtype": "cube",
   "blockmaterial": "Stone",
   "sideopaque": {
-    "all": true
+    "all": false
   },
   "textures": {
     "material": { "base": "game:block/stone/cobblestone/{rock}*" }

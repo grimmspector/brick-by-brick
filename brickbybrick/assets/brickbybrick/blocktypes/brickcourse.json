@@ -36,7 +36,7 @@
   "attributes": {
     "trowelable": true
   },  
-"sideopaque": { "all": true },
+"sideopaque": { "all": false },
 //"shape": { "base": "game:block/basic/cube" },
 "shapebytype": { "*": { "base": "brickbybrick:shapes/block/brick/{type}/brickblock-{stage}" } },
 //"drawtype": "cube",
