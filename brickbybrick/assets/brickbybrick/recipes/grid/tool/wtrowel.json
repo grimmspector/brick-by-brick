@@ -1,0 +1,21 @@
+{
+    "ingredientpattern": "H,S",
+    "ingredients": {
+        "H": {
+            "type": "item",
+            "code": "trowelhead-*",
+            "name": "metal"
+        },
+        "S": {
+            "type": "item",
+            "code": "game:stick"
+        }
+    },
+    "width": 1,
+    "height": 2,
+    "output": {
+        "type": "item",
+        "code": "trowel-{metal}",
+        "quantity": 1
+    }
+}
