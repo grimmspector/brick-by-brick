@@ -66,12 +66,6 @@
   },
   "texturesByType": {
     "brickslabcourse-four-*-*-*": {
-      "all": {
-        "base": "game:block/clay/brick/four/soldier/cream1",
-        "overlays": [
-          "game:block/clay/brick/four/soldier/{color}1"
-        ]
-      },
       "material": {
         "base": "game:block/clay/brick/four/running/cream1",
         "overlays": [

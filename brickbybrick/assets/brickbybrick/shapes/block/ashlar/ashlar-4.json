@@ -1,0 +1,56 @@
+{
+	"editor": {
+		"collapsedPaths": "",
+		"allAngles": false,
+		"entityTextureMode": false
+	},
+	"textureWidth": 16,
+	"textureHeight": 16,
+	"textureSizes": {
+	},
+	"textures": {
+	},
+	"elements": [
+		{
+			"name": "bricks",
+			"from": [ 0.0, 0.0, 0.0 ],
+			"to": [ 16.0, 8.0, 16.0 ],
+			"rotationOrigin": [ 0.0, 0.0, 0.1 ],
+			"faces": {
+				"north": { "texture": "#null", "uv": [ 0.0, 8.0, 16.0, 16.0 ] },
+				"east": { "texture": "#null", "uv": [ 0.0, 8.0, 16.0, 16.0 ] },
+				"south": { "texture": "#null", "uv": [ 0.0, 8.0, 16.0, 16.0 ] },
+				"west": { "texture": "#null", "uv": [ 0.0, 8.0, 16.0, 16.0 ] },
+				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 16.0 ] },
+				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 16.0 ] }
+			}
+		},
+		{
+			"name": "mortar2",
+			"from": [ 2.0, 8.0, 4.0 ],
+			"to": [ 14.0, 8.2, 12.0 ],
+			"rotationOrigin": [ 2.0, 8.0, 4.0 ],
+			"faces": {
+				"north": { "texture": "#null", "uv": [ 0.0, 0.0, 12.0, 0.5 ] },
+				"east": { "texture": "#null", "uv": [ 0.0, 0.0, 8.0, 0.5 ] },
+				"south": { "texture": "#null", "uv": [ 0.0, 0.0, 12.0, 0.5 ] },
+				"west": { "texture": "#null", "uv": [ 0.0, 0.0, 8.0, 0.5 ] },
+				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 12.0, 8.0 ] },
+				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 12.0, 3.0 ], "autoUv": false, "enabled": false }
+			}
+		},
+		{
+			"name": "brick3",
+			"from": [ 0.1, 8.0, 0.1 ],
+			"to": [ 7.9, 16.4, 15.9 ],
+			"rotationOrigin": [ 0.1, 8.0, 0.1 ],
+			"faces": {
+				"north": { "texture": "#null", "uv": [ 0.0, 0.0, 7.5, 8.0 ] },
+				"east": { "texture": "#null", "uv": [ 0.0, 8.0, 15.5, 16.0 ] },
+				"south": { "texture": "#null", "uv": [ 0.0, 0.0, 7.5, 8.0 ] },
+				"west": { "texture": "#null", "uv": [ 0.0, 8.0, 15.5, 16.0 ] },
+				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 7.5, 15.5 ] },
+				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 7.5, 15.5 ], "autoUv": false, "enabled": false }
+			}
+		}
+	]}

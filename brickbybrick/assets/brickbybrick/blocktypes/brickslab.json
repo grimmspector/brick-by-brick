@@ -46,7 +46,10 @@
     "*": { "base": "game:block/basic/slab/slab-{rot}" }
   },
   "textures": {
-    "horizontals": { "base": "game:block/clay/brickslab/{type}side" },
+    "north": { "base": "game:block/clay/brick/four/{type}1" },
+    "south": { "base": "game:block/clay/brick/four/{type}1" },
+    "east": { "base": "game:block/clay/brickslab/{type}side" },
+    "west": { "base": "game:block/clay/brickslab/{type}side" },
     "up": { "base": "game:block/clay/brickslab/{type}top" },
     "down": { "base": "game:block/clay/brickslab/{type}top" },
     "snowcover": { "base": "game:block/liquid/snow/normal1" }
