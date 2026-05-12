@@ -1,15 +1,15 @@
 {
-    "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
-    "type": "Code",
-    "modid": "brickbybrick",
-    "name": "Brick-by-Brick",
+  "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+  "type": "Code",
+  "modid": "brickbybrick",
+  "name": "Brick-by-Brick",
   "authors": [
     "Grimm Spector",
     "Ultrcombraun"
   ],
-    "description": "A mod to add immersive mechanics for buildilng stone, brick and similar block types with trowels and individual pieces.",
-    "version": "0.1.0",
-    "dependencies": {
-        "game": "1.22.0"
-    }
+  "description": "A mod to add immersive mechanics for buildilng stone, brick and similar block types with trowels and individual pieces. Compatible with all Vintage Story 1.22.x versions.",
+  "version": "0.1.0",
+  "dependencies": {
+    "game": "1.22.0"
+  }
 }

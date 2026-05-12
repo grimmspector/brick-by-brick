@@ -68,25 +68,25 @@ namespace brickbybrick.items
             toolModes = ObjectCacheUtil.GetOrCreate<SkillItem[]>(api, "trowelToolModes", () => [
                 new SkillItem {
                     Code = new AssetLocation("build"),
-                    Name = Lang.Get("Build mode for building up any stone/brick block"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-build"),
                     Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
                 },
                 new SkillItem()
                 {
                     Code = new AssetLocation("slab"),
-                    Name = Lang.Get("Slab placement mode for any stone/brick material"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-slab"),
                     Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
                 },
                 new SkillItem()
                 {
                     Code = new AssetLocation("stair"),
-                    Name = Lang.Get("Stair placement mode for any stone/brick material"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-stair"),
                     Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
                 },
                 new SkillItem()
                 {
                     Code = new AssetLocation("block"),
-                    Name = Lang.Get("Block placement mode for any stone/brick material"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-block"),
                     Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
                 }
             ]);
@@ -293,7 +293,7 @@ namespace brickbybrick.items
             Block placeBlock = byEntity.World.BlockAccessor.GetBlock(blockCode);
             if (placeBlock == null)
             {
-                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Could not resolve stair block {blockCode}");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-could-not-resolve-stair", blockCode));
                 return false;
             }
 
@@ -356,7 +356,7 @@ namespace brickbybrick.items
             Block placeBlock = byEntity.World.BlockAccessor.GetBlock(blockCode);
             if (placeBlock == null)
             {
-                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Could not resolve slab block {blockCode}");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-could-not-resolve-slab", blockCode));
                 return false;
             }
 
@@ -444,13 +444,13 @@ namespace brickbybrick.items
 
                 if (!TryGetOffhandStack(player, out ItemSlot offhandSlot, out ItemStack offhandStack))
                 {
-                    NotifyPlayerDebug(player, byEntity.World, "[TROWEL] Hold a matching burned brick in your offhand to continue.");
+                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-matching-brick"));
                     return false;
                 }
 
                 if (offhandStack.Collectible?.Code?.Path != requiredPath)
                 {
-                    NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Wrong brick color in offhand. Need {requiredPath}, found {offhandStack.Collectible?.Code?.Path}.");
+                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredPath, offhandStack.Collectible?.Code?.Path));
                     return false;
                 }
 
@@ -782,7 +782,7 @@ namespace brickbybrick.items
             int stored = GetStoredAmount(inSlot.Itemstack);
             int max = GetMaxCapacity(inSlot.Itemstack);
 
-            dsc.AppendLine($"Mortar: {stored} / {max}");
+            dsc.AppendLine(Lang.Get("brickbybrick:tooltip-trowel-mortar", stored, max));
 
             // -------------------------
             // EMPTY TOOLTIP HINT
@@ -791,7 +791,7 @@ namespace brickbybrick.items
             if (stored == 0)
             {
                 dsc.AppendLine();
-                dsc.AppendLine("Right-click a bucket to fill");
+                dsc.AppendLine(Lang.Get("brickbybrick:tooltip-trowel-refill"));
             }
         }
 
@@ -925,21 +925,21 @@ namespace brickbybrick.items
 
             if (!TryGetOffhandStack(player, out slot, out stack))
             {
-                NotifyPlayerDebug(player, byEntity.World, "[TROWEL] Hold a burned brick in your offhand to place with the trowel.");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-burned-brick"));
                 return false;
             }
 
             string path = stack.Collectible?.Code?.Path;
             if (string.IsNullOrEmpty(path) || !path.StartsWith("burnedbrick-"))
             {
-                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Hold a burned brick in your offhand to place with the trowel. Found: {stack?.Collectible?.Code}");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-burned-brick-found", stack?.Collectible?.Code));
                 return false;
             }
 
             color = GetItemColor(stack);
             if (string.IsNullOrEmpty(color))
             {
-                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Could not determine brick color from offhand item: {stack?.Collectible?.Code}");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-could-not-read-brick-color", stack?.Collectible?.Code));
                 return false;
             }
 
@@ -1156,14 +1156,14 @@ namespace brickbybrick.items
             string requiredPath = $"burnedbrick-{color}";
             if (!TryGetOffhandStack(player, out _, out ItemStack stack))
             {
-                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Hold {requiredPath} in your offhand to continue this build stage.");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-required-brick", requiredPath));
                 return false;
             }
 
             string held = stack.Collectible?.Code?.Path;
             if (held != requiredPath)
             {
-                NotifyPlayerDebug(player, byEntity.World, $"[TROWEL] Wrong brick color in offhand. Need {requiredPath}, found {held ?? "nothing"}.");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredPath, held ?? Lang.Get("brickbybrick:notice-trowel-nothing")));
                 return false;
             }
 
@@ -1178,7 +1178,7 @@ namespace brickbybrick.items
             if (GetStoredAmount(slot.Itemstack) <= 0)
             {
                 IPlayer player = (byEntity as EntityPlayer)?.Player;
-                NotifyPlayerDebug(player, byEntity.World, "[TROWEL] No mortar left in the trowel. Refill it before building.");
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-no-mortar"));
                 return false;
             }
 

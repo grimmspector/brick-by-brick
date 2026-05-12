@@ -4,7 +4,9 @@
   "variantgroups": [
     {
       "code": "type",
-      "states": [ "fire" ]
+      "states": [
+        "fire"
+      ]
     },
     {
       "loadFromProperties": "abstract/verticalorientation"
@@ -14,10 +16,18 @@
     },
     {
       "code": "cover",
-      "states": [ "free", "snow" ]
+      "states": [
+        "free",
+        "snow"
+      ]
     }
   ],
-  "skipVariants": [ "*-down-north-snow", "*-down-east-snow", "*-down-south-snow", "*-down-west-snow" ],
+  "skipVariants": [
+    "*-down-north-snow",
+    "*-down-east-snow",
+    "*-down-south-snow",
+    "*-down-west-snow"
+  ],
   "behaviors": [
     {
       "name": "WrenchOrientable",
@@ -30,48 +40,150 @@
     "canChisel": true,
     "chiselShapeFromCollisionBox": true,
     "handbook": {
-      "groupBy": [ "brickstairs-*-up-north-free" ]
+      "groupBy": [
+        "brickstairs-*-up-north-free"
+      ]
     },
     "liquidBarrierOnSidesByType": {
-      "*-up-north-*": [ 1.0, 0.5, 0.5, 0.5 ],
-      "*-up-south-*": [ 0.5, 0.5, 1.0, 0.5 ],
-      "*-up-west-*": [ 0.5, 0.5, 0.5, 1.0 ],
-      "*-up-east-*": [ 0.5, 1.0, 0.5, 0.5 ]
+      "*-up-north-*": [
+        1.0,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "*-up-south-*": [
+        0.5,
+        0.5,
+        1.0,
+        0.5
+      ],
+      "*-up-west-*": [
+        0.5,
+        0.5,
+        0.5,
+        1.0
+      ],
+      "*-up-east-*": [
+        0.5,
+        1.0,
+        0.5,
+        0.5
+      ]
     }
   },
   "shapebytype": {
-    "*-up-north-free": { "base": "game:block/basic/stairs/normal", "rotateY": 0 },
-    "*-up-west-free": { "base": "game:block/basic/stairs/normal", "rotateY": 90 },
-    "*-up-south-free": { "base": "game:block/basic/stairs/normal", "rotateY": 180 },
-    "*-up-east-free": { "base": "game:block/basic/stairs/normal", "rotateY": 270 },
-    "*-up-north-snow": { "base": "game:block/basic/stairs/snow-normal", "rotateY": 0 },
-    "*-up-west-snow": { "base": "game:block/basic/stairs/snow-normal", "rotateY": 90 },
-    "*-up-south-snow": { "base": "game:block/basic/stairs/snow-normal", "rotateY": 180 },
-    "*-up-east-snow": { "base": "game:block/basic/stairs/snow-normal", "rotateY": 270 },
-    "*-down-north-free": { "base": "game:block/basic/stairs/flipped", "rotateY": 0 },
-    "*-down-west-free": { "base": "game:block/basic/stairs/flipped", "rotateY": 90 },
-    "*-down-south-free": { "base": "game:block/basic/stairs/flipped", "rotateY": 180 },
-    "*-down-east-free": { "base": "game:block/basic/stairs/flipped", "rotateY": 270 }
+    "*-up-north-free": {
+      "base": "game:block/basic/stairs/normal",
+      "rotateY": 0
+    },
+    "*-up-west-free": {
+      "base": "game:block/basic/stairs/normal",
+      "rotateY": 90
+    },
+    "*-up-south-free": {
+      "base": "game:block/basic/stairs/normal",
+      "rotateY": 180
+    },
+    "*-up-east-free": {
+      "base": "game:block/basic/stairs/normal",
+      "rotateY": 270
+    },
+    "*-up-north-snow": {
+      "base": "game:block/basic/stairs/snow-normal",
+      "rotateY": 0
+    },
+    "*-up-west-snow": {
+      "base": "game:block/basic/stairs/snow-normal",
+      "rotateY": 90
+    },
+    "*-up-south-snow": {
+      "base": "game:block/basic/stairs/snow-normal",
+      "rotateY": 180
+    },
+    "*-up-east-snow": {
+      "base": "game:block/basic/stairs/snow-normal",
+      "rotateY": 270
+    },
+    "*-down-north-free": {
+      "base": "game:block/basic/stairs/flipped",
+      "rotateY": 0
+    },
+    "*-down-west-free": {
+      "base": "game:block/basic/stairs/flipped",
+      "rotateY": 90
+    },
+    "*-down-south-free": {
+      "base": "game:block/basic/stairs/flipped",
+      "rotateY": 180
+    },
+    "*-down-east-free": {
+      "base": "game:block/basic/stairs/flipped",
+      "rotateY": 270
+    }
   },
   "textures": {
-    "all": { "base": "game:block/clay/brick/four/soldier/fire1" },
-    "north": { "base": "game:block/clay/brick/four/running/fire1" },
-    "west": { "base": "game:block/clay/brick/four/running/fire1" },
-    "east": { "base": "game:block/clay/brick/four/running/fire1" },
-    "snowcover": { "base": "game:block/liquid/snow/normal1" }
+    "all": {
+      "base": "game:block/clay/brick/four/soldier/fire1"
+    },
+    "north": {
+      "base": "game:block/clay/brick/four/running/fire1"
+    },
+    "west": {
+      "base": "game:block/clay/brick/four/running/fire1"
+    },
+    "east": {
+      "base": "game:block/clay/brick/four/running/fire1"
+    },
+    "snowcover": {
+      "base": "game:block/liquid/snow/normal1"
+    }
   },
   "creativeinventory": {
-    "brickbybrick": [ "*-up-north-free" ]
+    "brickbybrick": [
+      "*-up-north-free"
+    ]
   },
   "sideSolidOpaqueAoByType": {
-    "*-up-north-*": { "all": false, "down": true, "north": true },
-    "*-up-west-*": { "all": false, "down": true, "west": true },
-    "*-up-south-*": { "all": false, "down": true, "south": true },
-    "*-up-east-*": { "all": false, "down": true, "east": true },
-    "*-down-north-free": { "all": false, "up": true, "north": true },
-    "*-down-south-free": { "all": false, "up": true, "south": true },
-    "*-down-west-free": { "all": false, "up": true, "west": true },
-    "*-down-east-free": { "all": false, "up": true, "east": true }
+    "*-up-north-*": {
+      "all": false,
+      "down": true,
+      "north": true
+    },
+    "*-up-west-*": {
+      "all": false,
+      "down": true,
+      "west": true
+    },
+    "*-up-south-*": {
+      "all": false,
+      "down": true,
+      "south": true
+    },
+    "*-up-east-*": {
+      "all": false,
+      "down": true,
+      "east": true
+    },
+    "*-down-north-free": {
+      "all": false,
+      "up": true,
+      "north": true
+    },
+    "*-down-south-free": {
+      "all": false,
+      "up": true,
+      "south": true
+    },
+    "*-down-west-free": {
+      "all": false,
+      "up": true,
+      "west": true
+    },
+    "*-down-east-free": {
+      "all": false,
+      "up": true,
+      "east": true
+    }
   },
   "faceCullModeByType": {
     "*-snow": "NeverCull",
@@ -87,9 +199,21 @@
   },
   "collisionSelectionBoxesByType": {
     "*-down-*": [
-      { "x1": 0, "y1": 0.5, "z1": 0, "x2": 1, "y2": 1, "z2": 1 },
       {
-        "x1": 0, "y1": 0, "z1": 0.5, "x2": 1, "y2": 0.5, "z2": 1,
+        "x1": 0,
+        "y1": 0.5,
+        "z1": 0,
+        "x2": 1,
+        "y2": 1,
+        "z2": 1
+      },
+      {
+        "x1": 0,
+        "y1": 0,
+        "z1": 0.5,
+        "x2": 1,
+        "y2": 0.5,
+        "z2": 1,
         "rotateYByType": {
           "*-north-*": 180,
           "*-east-*": 90,
@@ -99,9 +223,21 @@
       }
     ],
     "*-up-*": [
-      { "x1": 0, "y1": 0, "z1": 0, "x2": 1, "y2": 0.5, "z2": 1 },
       {
-        "x1": 0, "y1": 0.5, "z1": 0.5, "x2": 1, "y2": 1, "z2": 1,
+        "x1": 0,
+        "y1": 0,
+        "z1": 0,
+        "x2": 1,
+        "y2": 0.5,
+        "z2": 1
+      },
+      {
+        "x1": 0,
+        "y1": 0.5,
+        "z1": 0.5,
+        "x2": 1,
+        "y2": 1,
+        "z2": 1,
         "rotateYByType": {
           "*-north-*": 180,
           "*-east-*": 90,
@@ -115,8 +251,16 @@
   "heldRightReadyAnimation": "heldblockready",
   "heldTpUseAnimation": "twohandplaceblock",
   "tpHandTransform": {
-    "translation": { "x": -1.23, "y": -0.91, "z": -0.8 },
-    "rotation": { "x": -2, "y": 25, "z": -78 },
+    "translation": {
+      "x": -1.23,
+      "y": -0.91,
+      "z": -0.8
+    },
+    "rotation": {
+      "x": -2,
+      "y": 25,
+      "z": -78
+    },
     "scale": 0.4
   }
 }

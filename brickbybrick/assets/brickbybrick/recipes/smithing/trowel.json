@@ -1,17 +1,31 @@
 {
-    "ingredient": {"type": "item", "code": "game:ingot-*", "name": "metal",
-     "allowedVariants": [ "copper", "tinbronze", "bismuthbronze", "blackbronze", "iron", "meteoriciron", "steel"] 
-    },
-    "pattern": [
-        [
-            "___###__",
-            "_#####__",
-            "########",
-            "_#####__",
-            "___###__"
-        ]
-    ],
-    "name": "trowel",
-    "code": "trowelhead-{metal}",
-    "output": {"type": "item", "code": "trowelhead-{metal}"}
+  "ingredient": {
+    "type": "item",
+    "code": "game:ingot-*",
+    "name": "metal",
+    "allowedVariants": [
+      "copper",
+      "tinbronze",
+      "bismuthbronze",
+      "blackbronze",
+      "iron",
+      "meteoriciron",
+      "steel"
+    ]
+  },
+  "pattern": [
+    [
+      "___###__",
+      "_#####__",
+      "########",
+      "_#####__",
+      "___###__"
+    ]
+  ],
+  "name": "trowel",
+  "code": "trowelhead-{metal}",
+  "output": {
+    "type": "item",
+    "code": "trowelhead-{metal}"
+  }
 }

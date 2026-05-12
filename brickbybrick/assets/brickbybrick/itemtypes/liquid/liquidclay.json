@@ -4,7 +4,11 @@
   "variantgroups": [
     {
       "code": "colour",
-      "states": [ "blue", "red", "fire" ]
+      "states": [
+        "blue",
+        "red",
+        "fire"
+      ]
     }
   ],
   "matterState": "liquid",
@@ -15,7 +19,9 @@
     "waterTightContainerProps": {
       "containable": true,
       "itemsPerLitre": 100,
-      "texture": { "base": "game:block/liquid/waterportion" },
+      "texture": {
+        "base": "game:block/liquid/waterportion"
+      },
       "tintIndex": 2,
       "whenSpilled": {
         "action": "DropContents",
@@ -26,11 +32,19 @@
       }
     }
   },
-  "shape": { "base": "game:item/liquid" },
-  "texture": { "base": "game:block/liquid/waterportion" },
+  "shape": {
+    "base": "game:item/liquid"
+  },
+  "texture": {
+    "base": "game:block/liquid/waterportion"
+  },
   "creativeinventoryStacks": [
     {
-      "tabs": [ "general", "liquids", "brickbybrick" ],
+      "tabs": [
+        "general",
+        "liquids",
+        "brickbybrick"
+      ],
       "stacks": [
         {
           "type": "block",

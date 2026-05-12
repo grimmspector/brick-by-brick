@@ -12,11 +12,21 @@
   "variantgroups": [
     {
       "code": "state",
-      "states": [ "four" ]
+      "states": [
+        "four"
+      ]
     },
     {
       "code": "color",
-      "states": [ "black", "brown", "cream", "gray", "orange", "red", "tan" ]
+      "states": [
+        "black",
+        "brown",
+        "cream",
+        "gray",
+        "orange",
+        "red",
+        "tan"
+      ]
     },
     {
       "code": "verticalorientation",
@@ -28,18 +38,29 @@
     },
     {
       "code": "stage",
-      "states": [ "1", "2", "3", "4" ]
+      "states": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
     }
   ],
   "attributes": {
     "trowelable": true,
     "handbook": {
-      "groupBy": [ "brickstairscourse-four-*-up-north-4" ]
+      "groupBy": [
+        "brickstairscourse-four-*-up-north-4"
+      ]
     }
   },
   "creativeinventory": {
-    "construction": [ "*-1" ],
-    "brickbybrick": [ "*" ]
+    "construction": [
+      "*-1"
+    ],
+    "brickbybrick": [
+      "*"
+    ]
   },
   "shapeByType": {},
   "blockmaterial": "Ceramic",
