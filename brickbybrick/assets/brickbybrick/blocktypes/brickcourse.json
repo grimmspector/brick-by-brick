@@ -71,6 +71,26 @@
   "sideopaque": {
     "all": false
   },
+  "sideSolidOpaqueAoByType": {
+    "*-1": {
+      "all": false
+    },
+    "*-2": {
+      "all": false
+    },
+    "*-3": {
+      "all": false
+    },
+    "*-4": {
+      "all": false
+    },
+    "*-5": {
+      "all": false
+    },
+    "*-6": {
+      "all": false
+    }
+  },
   "collisionboxesByType": {
     "*-1": [
       {
