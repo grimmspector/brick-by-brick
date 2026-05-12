@@ -1,48 +1,59 @@
 {
   "code": "preparedbricks",
-
   //"class": "brickbybrick.preparedbricks",
-
   "maxstacksize": 64,
-
   //"attributes": {},
-
   //"behaviours": [
-    //{
-      //"name": "GroundStoreable",
-      //"properties": {
-        //"layout": "stacking",
-        //"placeRemoveSound": "game:sounds/block/ceramicplace",
-        //"stackingmodel": "block/pile",
-        //"modelItemsToStackSizeRatio": 8,
-        //"upsolid": true,
-        //"stackingCapacity": 4,
-        //"transferQuantity": 1,
-        //"collisionBox": {}
-        //"cbScaleYByLayer: 
-     //}
-    //}
+  //{
+  //"name": "GroundStoreable",
+  //"properties": {
+  //"layout": "stacking",
+  //"placeRemoveSound": "game:sounds/block/ceramicplace",
+  //"stackingmodel": "block/pile",
+  //"modelItemsToStackSizeRatio": 8,
+  //"upsolid": true,
+  //"stackingCapacity": 4,
+  //"transferQuantity": 1,
+  //"collisionBox": {}
+  //"cbScaleYByLayer:
+  //}
+  //}
   //],
-
   "creativeinventory": {
-    "general": [ "*" ],
-    "items": [ "*" ],
-    "brickbybrick": [ "*" ]
+    "general": [
+      "*"
+    ],
+    "items": [
+      "*"
+    ],
+    "brickbybrick": [
+      "*"
+    ]
   },
-
   "variantgroups": [
     {
       "code": "material",
-      "states": [ "fire", "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" ]
+      "states": [
+        "fire",
+        "black",
+        "brown",
+        "cream",
+        "gray",
+        "orange",
+        "red",
+        "tan",
+        "clinker"
+      ]
     }
   ],
-
-  "shape": { "base": "shapes/item/preparedbricks" },
-
-  "textures": {
-    "material": { "base": "game:block/clay/brickpile/burned/{material}-brick1" }
+  "shape": {
+    "base": "shapes/item/preparedbricks"
   },
-
+  "textures": {
+    "material": {
+      "base": "game:block/clay/brickpile/burned/{material}-brick1"
+    }
+  },
   "heldTpIdleAnimation": "holdbothhandslarge",
   "heldTpUseAnimation": "twohandplaceblock"
 }

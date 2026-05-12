@@ -8,30 +8,49 @@
     },
     {
       "code": "stage",
-      "states": [ "1", "2", "3" ]
+      "states": [
+        "1",
+        "2",
+        "3"
+      ]
     }
   ],
-  "skipVariants": [ "*-obsidian*", "*-halite*", "*-scoria*", "*-tuff" ],
+  "skipVariants": [
+    "*-obsidian*",
+    "*-halite*",
+    "*-scoria*",
+    "*-tuff"
+  ],
   "attributes": {
     "mapColorCode": "settlement",
     "trowelable": true,
     "handbook": {
-      "groupBy": [ "cobblestone-*" ]
+      "groupBy": [
+        "cobblestone-*"
+      ]
     }
   },
   "creativeinventory": {
-    "construction": [ "*-1" ],
-    "brickbybrick": [ "*" ]
+    "construction": [
+      "*-1"
+    ],
+    "brickbybrick": [
+      "*"
+    ]
   },
   //"shape": { "base": "game:block/basic/cube" },
-  "shape": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1" },
+  "shape": {
+    "base": "brickbybrick:shapes/block/brick/running/brickblock-1"
+  },
   //"drawtype": "cube",
   "blockmaterial": "Stone",
   "sideopaque": {
     "all": false
   },
   "textures": {
-    "material": { "base": "game:block/stone/cobblestone/{rock}*" }
+    "material": {
+      "base": "game:block/stone/cobblestone/{rock}*"
+    }
   },
   "replaceable": 140,
   "fertility": 0,

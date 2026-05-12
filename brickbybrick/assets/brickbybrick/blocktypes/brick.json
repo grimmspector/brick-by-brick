@@ -4,20 +4,28 @@
   "variantgroups": [
     {
       "code": "state",
-      "states": [ "good" ]
+      "states": [
+        "good"
+      ]
     },
     {
       "code": "color",
-      "states": [ "fire" ]
+      "states": [
+        "fire"
+      ]
     }
   ],
   "attributes": {
     "handbook": {
-      "groupBy": [ "brickblock-*" ]
+      "groupBy": [
+        "brickblock-*"
+      ]
     }
   },
   "creativeinventory": {
-    "brickbybrick": [ "*" ]
+    "brickbybrick": [
+      "*"
+    ]
   },
   "shapeByType": {
     "*": {

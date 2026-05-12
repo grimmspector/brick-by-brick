@@ -677,3 +677,4 @@ fabric.properties
 # Local tool/runtime folders created during Codex and dotnet work
 .dotnetcli/
 .codex-cache/
+.ref-repos/
