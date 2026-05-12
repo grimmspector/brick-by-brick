@@ -42,6 +42,12 @@
     "handbook": {
       "groupBy": [
         "brickstairs-*-up-north-free"
+      ],
+      "extraSections": [
+        {
+          "title": "handbook-finishedmasonry-title",
+          "text": "handbook-finishedmasonry-text"
+        }
       ]
     },
     "liquidBarrierOnSidesByType": {

@@ -1,5 +1,15 @@
 {
   "code": "trowelhead",
+  "attributes": {
+    "handbook": {
+      "extraSections": [
+        {
+          "title": "handbook-trowelhead-title",
+          "text": "handbook-trowelhead-text"
+        }
+      ]
+    }
+  },
   "creativeinventory": {
     "general": [
       "*"

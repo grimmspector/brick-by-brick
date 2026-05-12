@@ -16,6 +16,16 @@
   "heldTpHitAnimation": "knifestab",
   "maxstacksize": 1,
   "durability": 100,
+  "attributes": {
+    "handbook": {
+      "extraSections": [
+        {
+          "title": "handbook-brickbybrickmasonry-title",
+          "text": "handbook-brickbybrickmasonry-text"
+        }
+      ]
+    }
+  },
   "variantgroups": [
     {
       "code": "material",
