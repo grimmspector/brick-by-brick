@@ -14,7 +14,13 @@
   "matterState": "liquid",
   "attributes": {
     "handbook": {
-      "ignoreCreativeInvStacks": true
+      "ignoreCreativeInvStacks": true,
+      "extraSections": [
+        {
+          "title": "handbook-liquidclay-title",
+          "text": "handbook-liquidclay-text"
+        }
+      ]
     },
     "waterTightContainerProps": {
       "containable": true,

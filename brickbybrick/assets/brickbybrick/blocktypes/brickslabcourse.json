@@ -53,6 +53,12 @@
     "handbook": {
       "groupBy": [
         "brickslabcourse-four-*-down-3"
+      ],
+      "extraSections": [
+        {
+          "title": "handbook-constructioncourse-title",
+          "text": "handbook-constructioncourse-text"
+        }
       ]
     }
   },

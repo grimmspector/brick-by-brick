@@ -560,7 +560,7 @@ namespace brickbybrick.items
         /// <summary>
         /// Attempts to find and optionally consume items from the player's offhand
         /// that match a given condition. This generic helper is kept for
-        /// future placement recipes that may need materials beyond burned brick.
+        /// future placement recipes that may need materials beyond fired brick.
         /// </summary>
         /// <param name="player">The player</param>
         /// <param name="matcher">Function to match valid items</param>

@@ -19,6 +19,12 @@
     "handbook": {
       "groupBy": [
         "brickblock-*"
+      ],
+      "extraSections": [
+        {
+          "title": "handbook-finishedmasonry-title",
+          "text": "handbook-finishedmasonry-text"
+        }
       ]
     }
   },

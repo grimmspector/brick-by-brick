@@ -51,6 +51,12 @@
     "handbook": {
       "groupBy": [
         "brickstairscourse-four-*-up-north-4"
+      ],
+      "extraSections": [
+        {
+          "title": "handbook-constructioncourse-title",
+          "text": "handbook-constructioncourse-text"
+        }
       ]
     }
   },

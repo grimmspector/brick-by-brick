@@ -27,6 +27,12 @@
     "handbook": {
       "groupBy": [
         "cobblestone-*"
+      ],
+      "extraSections": [
+        {
+          "title": "handbook-constructioncourse-title",
+          "text": "handbook-constructioncourse-text"
+        }
       ]
     }
   },
