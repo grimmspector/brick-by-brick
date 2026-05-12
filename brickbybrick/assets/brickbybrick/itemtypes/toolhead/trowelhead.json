@@ -1,29 +1,72 @@
 {
-    "code": "trowelhead",
-    "creativeinventory": { "general": ["*"], "items": ["*"], "brickbybrick": ["*"] },
-
-    "variantgroups": [
-        {"code": "metal", 
-        "states": ["copper", "tinbronze", "bismuthbronze", "blackbronze", "iron", "meteoriciron", "steel"] 
+  "code": "trowelhead",
+  "attributes": {
+    "handbook": {
+      "extraSections": [
+        {
+          "title": "handbook-trowelhead-title",
+          "text": "handbook-trowelhead-text"
         }
+      ]
+    }
+  },
+  "creativeinventory": {
+    "general": [
+      "*"
     ],
-
-    "shape": { "base":  "shapes/item/tool/trowelhead" },
-
-    "textures": {
-        "material": { "base": "game:block/metal/ingot/{metal}"}
+    "items": [
+      "*"
+    ],
+    "brickbybrick": [
+      "*"
+    ]
+  },
+  "variantgroups": [
+    {
+      "code": "metal",
+      "states": [
+        "copper",
+        "tinbronze",
+        "bismuthbronze",
+        "blackbronze",
+        "iron",
+        "meteoriciron",
+        "steel"
+      ]
+    }
+  ],
+  "shape": {
+    "base": "shapes/item/tool/trowelhead"
+  },
+  "textures": {
+    "material": {
+      "base": "game:block/metal/ingot/{metal}"
+    }
+  },
+  "guiTransform": {
+    "translation": {
+      "x": 0,
+      "y": -2,
+      "z": 0
     },
-
-    "guiTransform": {
-		"translation": { "x": 0, "y": -2, "z": 0 },
-		"rotation": { "x": -90, "y": 45, "z": 29 },
-		"scale": 2.22
-	},
-
-	"tpHandTransform": {
-		"translation": { "x": -1.4, "y": -1.15, "z": -0.6 },
-		"rotation": { "x": 180, "y": 30, "z": 18 },
-		"scale": 0.56
-	}
-
+    "rotation": {
+      "x": -90,
+      "y": 45,
+      "z": 29
+    },
+    "scale": 2.22
+  },
+  "tpHandTransform": {
+    "translation": {
+      "x": -1.4,
+      "y": -1.15,
+      "z": -0.6
+    },
+    "rotation": {
+      "x": 180,
+      "y": 30,
+      "z": 18
+    },
+    "scale": 0.56
+  }
 }

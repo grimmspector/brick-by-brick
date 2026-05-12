@@ -12,50 +12,134 @@
   "variantgroups": [
     {
       "code": "state",
-      "states": [ "four" ]
+      "states": [
+        "four"
+      ]
     },
     {
       "code": "color",
-      "states": [ "black", "brown", "cream", "gray", "orange", "red", "tan" ]
+      "states": [
+        "black",
+        "brown",
+        "cream",
+        "gray",
+        "orange",
+        "red",
+        "tan"
+      ]
     },
     {
       "code": "rot",
-      "states": [ "north", "east", "south", "west", "up", "down" ]
+      "states": [
+        "north",
+        "east",
+        "south",
+        "west",
+        "up",
+        "down"
+      ]
     },
     {
       "code": "stage",
-      "states": [ "1", "2", "3" ]
+      "states": [
+        "1",
+        "2",
+        "3"
+      ]
     }
   ],
   "attributes": {
     "trowelable": true,
     "handbook": {
-      "groupBy": [ "brickslabcourse-four-*-down-3" ]
+      "groupBy": [
+        "brickslabcourse-four-*-down-3"
+      ],
+      "extraSections": [
+        {
+          "title": "handbook-constructioncourse-title",
+          "text": "handbook-constructioncourse-text"
+        }
+      ]
     }
   },
   "creativeinventory": {
-    "construction": [ "*-1" ],
-    "brickbybrick": [ "*" ]
+    "construction": [
+      "*-1"
+    ],
+    "brickbybrick": [
+      "*"
+    ]
   },
   "shapeByType": {
-    "*-*-down-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1" },
-    "*-*-up-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateX": 180 },
-    "*-*-north-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateX": 90 },
-    "*-*-south-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateX": 270 },
-    "*-*-east-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateZ": 90 },
-    "*-*-west-1": { "base": "brickbybrick:shapes/block/brick/running/brickblock-1", "rotateZ": 270 },
-    "*-*-down-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2" },
-    "*-*-up-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateX": 180 },
-    "*-*-north-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateX": 90 },
-    "*-*-south-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateX": 270 },
-    "*-*-east-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateZ": 90 },
-    "*-*-west-2": { "base": "brickbybrick:shapes/block/brick/running/brickblock-2", "rotateZ": 270 },
-    "*-*-down-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3" },
-    "*-*-up-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateX": 180 },
-    "*-*-north-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateX": 90 },
-    "*-*-south-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateX": 270 },
-    "*-*-east-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateZ": 90 },
-    "*-*-west-3": { "base": "brickbybrick:shapes/block/brick/running/brickblock-3", "rotateZ": 270 }
+    "*-*-down-1": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-1"
+    },
+    "*-*-up-1": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-1",
+      "rotateX": 180
+    },
+    "*-*-north-1": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-1",
+      "rotateX": 90
+    },
+    "*-*-south-1": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-1",
+      "rotateX": 270
+    },
+    "*-*-east-1": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-1",
+      "rotateZ": 90
+    },
+    "*-*-west-1": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-1",
+      "rotateZ": 270
+    },
+    "*-*-down-2": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-2"
+    },
+    "*-*-up-2": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-2",
+      "rotateX": 180
+    },
+    "*-*-north-2": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-2",
+      "rotateX": 90
+    },
+    "*-*-south-2": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-2",
+      "rotateX": 270
+    },
+    "*-*-east-2": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-2",
+      "rotateZ": 90
+    },
+    "*-*-west-2": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-2",
+      "rotateZ": 270
+    },
+    "*-*-down-3": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-3"
+    },
+    "*-*-up-3": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-3",
+      "rotateX": 180
+    },
+    "*-*-north-3": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-3",
+      "rotateX": 90
+    },
+    "*-*-south-3": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-3",
+      "rotateX": 270
+    },
+    "*-*-east-3": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-3",
+      "rotateZ": 90
+    },
+    "*-*-west-3": {
+      "base": "brickbybrick:shapes/block/brick/running/brickblock-3",
+      "rotateZ": 270
+    }
   },
   "blockmaterial": "Ceramic",
   "replaceable": 140,
@@ -63,6 +147,11 @@
   "lightAbsorption": 99,
   "sideopaque": {
     "all": false
+  },
+  "sideSolidOpaqueAoByType": {
+    "*": {
+      "all": false
+    }
   },
   "texturesByType": {
     "brickslabcourse-four-*-*-*": {
@@ -74,19 +163,27 @@
         "alternates": [
           {
             "base": "game:block/clay/brick/four/running/cream2",
-            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+            "overlays": [
+              "game:block/clay/brick/four/running/{color}1"
+            ]
           },
           {
             "base": "game:block/clay/brick/four/running/cream3",
-            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+            "overlays": [
+              "game:block/clay/brick/four/running/{color}1"
+            ]
           },
           {
             "base": "game:block/clay/brick/four/running/cream4",
-            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+            "overlays": [
+              "game:block/clay/brick/four/running/{color}1"
+            ]
           },
           {
             "base": "game:block/clay/brick/four/running/cream5",
-            "overlays": [ "game:block/clay/brick/four/running/{color}1" ]
+            "overlays": [
+              "game:block/clay/brick/four/running/{color}1"
+            ]
           }
         ]
       },
@@ -98,7 +195,9 @@
         "alternates": [
           {
             "base": "game:block/clay/brick/four/header/cream2",
-            "overlays": [ "game:block/clay/brick/four/header/{color}1" ]
+            "overlays": [
+              "game:block/clay/brick/four/header/{color}1"
+            ]
           }
         ]
       },
@@ -121,8 +220,16 @@
   "heldRightReadyAnimation": "heldblockready",
   "heldTpUseAnimation": "twohandplaceblock",
   "guiTransform": {
-    "translation": { "x": 0, "y": 2, "z": 0 },
-    "origin": { "x": 0.5, "y": 0.25, "z": 0.5 }
+    "translation": {
+      "x": 0,
+      "y": 2,
+      "z": 0
+    },
+    "origin": {
+      "x": 0.5,
+      "y": 0.25,
+      "z": 0.5
+    }
   },
   "tpHandTransform": {
     "translation": {

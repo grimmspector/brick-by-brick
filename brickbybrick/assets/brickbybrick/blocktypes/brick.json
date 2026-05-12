@@ -4,20 +4,34 @@
   "variantgroups": [
     {
       "code": "state",
-      "states": [ "good" ]
+      "states": [
+        "good"
+      ]
     },
     {
       "code": "color",
-      "states": [ "fire" ]
+      "states": [
+        "fire"
+      ]
     }
   ],
   "attributes": {
     "handbook": {
-      "groupBy": [ "brickblock-*" ]
+      "groupBy": [
+        "brickblock-*"
+      ],
+      "extraSections": [
+        {
+          "title": "handbook-finishedmasonry-title",
+          "text": "handbook-finishedmasonry-text"
+        }
+      ]
     }
   },
   "creativeinventory": {
-    "brickbybrick": [ "*" ]
+    "brickbybrick": [
+      "*"
+    ]
   },
   "shapeByType": {
     "*": {
