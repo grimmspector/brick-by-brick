@@ -142,6 +142,11 @@
   "sideopaque": {
     "all": false
   },
+  "sideSolidOpaqueAoByType": {
+    "*": {
+      "all": false
+    }
+  },
   "texturesByType": {
     "brickslabcourse-four-*-*-*": {
       "all": {
