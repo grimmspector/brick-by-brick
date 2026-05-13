@@ -32,6 +32,7 @@ namespace brickbybrick.items
            ------------------------ */
 
         WorldInteraction[] interactions;
+        WorldInteraction[] placementInteractions;
 
         SkillItem[] toolModes;
         const int CapacityPerTier = 16;
@@ -106,6 +107,34 @@ namespace brickbybrick.items
                     if (block.Attributes["trowelable"].AsBool(false))
                     {
                         stacks.Add(new ItemStack(block));
+                    }
+                }
+
+                return new WorldInteraction[]
+                {
+                    new WorldInteraction()
+                    {
+                        ActionLangCode = "heldhelp-trowel",
+                        MouseButton = EnumMouseButton.Right,
+                        Itemstacks = stacks.ToArray()
+                    }
+                };
+            });
+
+            // Placement modes consume fired bricks directly, so their held
+            // help should preview the compatible brick items instead.
+            placementInteractions = ObjectCacheUtil.GetOrCreate(capi, "trowelPlacementInteractions", () =>
+            {
+                List<ItemStack> stacks = new List<ItemStack>();
+
+                foreach (Item item in capi.World.Items)
+                {
+                    string path = item?.Code?.Path;
+                    if (string.IsNullOrEmpty(path)) continue;
+
+                    if (path.StartsWith("burnedbrick-", StringComparison.Ordinal))
+                    {
+                        stacks.Add(new ItemStack(item));
                     }
                 }
 
@@ -1074,9 +1103,18 @@ namespace brickbybrick.items
 
             return true;
         }
+
+        /// <summary>
+        /// Returns held help for the active mode, using construction stages for
+        /// build mode and fired bricks for placement modes.
+        /// </summary>
         public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
         {
             base.GetHeldInteractionHelp(inSlot);
+            int maxToolMode = toolModes == null ? 0 : Math.Max(0, toolModes.Length - 1);
+            int toolMode = inSlot?.Itemstack == null ? 0 : Math.Min(maxToolMode, inSlot.Itemstack.Attributes.GetInt("toolMode"));
+            WorldInteraction[] activeInteractions = toolMode == 0 ? interactions : placementInteractions;
+
             WorldInteraction modeInteraction = new WorldInteraction()
             {
                 ActionLangCode = "Change tool mode",
@@ -1084,9 +1122,9 @@ namespace brickbybrick.items
                 MouseButton = EnumMouseButton.None
             };
 
-            return interactions == null
+            return activeInteractions == null
                 ? new WorldInteraction[] { modeInteraction }
-                : interactions.Append(modeInteraction);
+                : activeInteractions.Append(modeInteraction);
 
         }
         /// <summary>
