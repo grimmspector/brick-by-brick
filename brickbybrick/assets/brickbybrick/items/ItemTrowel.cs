@@ -34,7 +34,7 @@ namespace brickbybrick.items
         WorldInteraction[] interactions;
 
         SkillItem[] toolModes;
-        const int CapacityPerTier = 14;
+        const int CapacityPerTier = 16;
 
         // -----------------
         // AUDIO FILES
@@ -401,8 +401,8 @@ namespace brickbybrick.items
             // advance needs. Mortar is used for every successful advance.
             int currentStage = GetBlockStage(block);
             int nextStage = currentStage + 1;
-            bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 7);
-            bool isMortarStage = (nextStage == 2 || nextStage == 4 || nextStage == 6);
+            bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 8);
+            bool isMortarStage = (nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7);
             string color = GetBlockColor(block);
 
             bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
@@ -429,15 +429,15 @@ namespace brickbybrick.items
                 return false;
             }
 
-            // Validate player conditions
-            if (!HasMatchingMaterial(player, color, byEntity)) return false;
+            // Validate only the resources needed by this stage.
+            if (isBrickStage && !HasMatchingMaterial(player, color, byEntity)) return false;
             if (!HasEnoughMortar(slot, byEntity)) return false;
 
             // -------------------------
             // BRICK CONSUMPTION LOGIC
             // -------------------------
 
-            // At stages 3, 5, and 7, consume one matching brick from offhand, enforcing offhand usage
+            // At brick stages, consume one matching brick from offhand.
             if (isBrickStage)
             {
                 string requiredPath = $"burnedbrick-{color}";
@@ -473,6 +473,13 @@ namespace brickbybrick.items
             // ExchangeBlock preserves the position while swapping to the next
             // construction stage or final vanilla block.
             byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
+
+            // Full brick blocks occupy the entire space, so remove any water
+            // that was sharing the construction course's fluid layer.
+            if (IsCompletingFullBrickBlock(block, nextStage))
+            {
+                byEntity.World.BlockAccessor.SetBlock(0, pos, BlockLayersAccess.Fluid);
+            }
 
             // -------------------------
             // MORTAR CONSUMPTION (ALWAYS)
@@ -995,12 +1002,12 @@ namespace brickbybrick.items
 
                     int nextStage = GetBlockStage(selectedBlock) + 1;
 
-                    if (nextStage == 2 || nextStage == 4 || nextStage == 6)
+                    if (nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7)
                     {
                         return MortarUseAnimationCode;
                     }
 
-                    if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+                    if (nextStage == 3 || nextStage == 5 || nextStage == 8)
                     {
                         return BrickUseAnimationCode;
                     }
@@ -1258,12 +1265,12 @@ namespace brickbybrick.items
                 return null;
             }
 
-            if (nextStage <= 6)
+            if (nextStage <= 7)
             {
                 return block.CodeWithParts(nextStage.ToString());
             }
 
-            if (nextStage == 7)
+            if (nextStage == 8)
             {
                 // Fire brick uses a custom finished block, while other colors
                 // can drop the stage suffix from the course code.
@@ -1292,6 +1299,17 @@ namespace brickbybrick.items
         private bool IsStagedStairBlock(Block block)
         {
             return block?.Code?.PathStartsWith("brickstairscourse") == true;
+        }
+
+        /// <summary>
+        /// Returns true when a regular brick course is becoming a full block.
+        /// Slab and stair completions keep any fluid-layer handling separate.
+        /// </summary>
+        private bool IsCompletingFullBrickBlock(Block block, int nextStage)
+        {
+            if (block?.Code?.PathStartsWith("brickcourse") != true) return false;
+
+            return nextStage == 8;
         }
 
         /// <summary>
