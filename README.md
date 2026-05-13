@@ -13,7 +13,7 @@ Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 
 		[x] Add metal trowel liquid mortar functionality
 		[ ] Add primitive wooden trowel liquid mortar functionality
 		[x] Add liquid mortar barrel recipe(s)
-		[ ] Add liquid clay barrel recipe(s)
+		[x] Add liquid clay barrel recipe(s)
 		[x] Add bucket & barrel as sources for trowels to pick up liquid mortar and clay
 		[x] Add liquid items {clay, mortar, refactory mortar}
 	[ ] Add sequential construction of assemblable brick & stone blocks in-world {slabs, stairs, blocks}
@@ -44,6 +44,7 @@ Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 
 	+ Compatability with modded classes that change ingredient ratios for refractory bricks
 	+ Immersive stone shapes when putting dry stone and cobblestone together to match the noisemap of different textures
 	+ Curing time for mortar on placed brickblocks that allows them to be retrievable or deconstructed (with mortar loss)
+	+ Wet final masonry blocks that dry into normal blocks over time; wet blocks cannot be broken to pick up, but can be dismantled for parts
 	+ Artist to make nice visuals for the DB page 
 	+ Language localization
 	+ Sledgehammer tool for breaking placed bricks
