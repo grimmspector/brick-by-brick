@@ -12,14 +12,14 @@
     {
       "code": "type",
       "states": [
-        "header",
-        "headero",
-        "soldier",
-        "soldiero",
-        "running",
-        "runningo",
-        "runningl",
-        "runningr"
+        //"header",
+        //"headero",
+        //"soldier",
+        //"soldiero",
+        "running"
+        //"runningo",
+        //"runningl",
+        //"runningr"
       ]
     },
     {
@@ -43,7 +43,8 @@
         "3",
         "4",
         "5",
-        "6"
+        "6",
+        "7"
       ]
     }
   ],
@@ -246,6 +247,23 @@
             ]
           }
         ]
+      },
+      "material2": {
+        "base": "game:block/clay/brick/eight/header/cream1",
+        "overlays": [
+          "game:block/clay/brick/four/header/{color}1"
+        ],
+        "alternates": [
+          {
+            "base": "game:block/clay/brick/eight/header/cream1",
+            "overlays": [
+              "game:block/clay/brick/eight/header/{color}1"
+            ]
+          }
+        ]
+      },
+      "colour": {
+        "base": "game:block/clay/brickpile/burned/{color}-brick1"
       }
     },
     "*-four-running-clinker": {

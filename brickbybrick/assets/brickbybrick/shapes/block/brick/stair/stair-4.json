@@ -8,6 +8,10 @@
 	"textureSizes": {
 	},
 	"textures": {
+		"mortar": "game:block/wood/barrel/mortar",
+		"material": "game:block/clay/brick/four/running",
+		"colour": "game:block/clay/brickpile/burned",
+		"material2": "game:block/clay/brick/four/header"
 	},
 	"elements": [
 		{
@@ -16,12 +20,12 @@
 			"to": [ 16.0, 8.0, 16.0 ],
 			"rotationOrigin": [ -1.0, 0.0, 0.0 ],
 			"faces": {
-				"north": { "texture": "#null", "uv": [ 0.0, 12.0, 16.0, 20.0 ] },
-				"east": { "texture": "#null", "uv": [ 0.0, 0.0, 8.0, 16.0 ], "rotation": 90, "windMode": [-1,-1,-1,-1] },
-				"south": { "texture": "#null", "uv": [ 0.0, 12.0, 16.0, 20.0 ], "windMode": [-1,-1,-1,-1] },
-				"west": { "texture": "#null", "uv": [ 0.0, 0.0, 8.0, 16.0 ], "rotation": 90, "windMode": [-1,-1,-1,-1] },
-				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 16.0 ], "windMode": [-1,-1,-1,-1] },
-				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 16.0, 16.0 ], "enabled": false }
+				"north": { "texture": "#material2", "uv": [ 0.0, 12.0, 16.0, 20.0 ] },
+				"east": { "texture": "#material", "uv": [ 0.0, 0.0, 8.0, 16.0 ], "rotation": 90, "windMode": [-1,-1,-1,-1] },
+				"south": { "texture": "#material2", "uv": [ 0.0, 12.0, 16.0, 20.0 ], "windMode": [-1,-1,-1,-1] },
+				"west": { "texture": "#material", "uv": [ 0.0, 0.0, 8.0, 16.0 ], "rotation": 90, "windMode": [-1,-1,-1,-1] },
+				"up": { "texture": "#material", "uv": [ 0.0, 0.0, 16.0, 16.0 ], "windMode": [-1,-1,-1,-1] },
+				"down": { "texture": "#material", "uv": [ 0.0, 0.0, 16.0, 16.0 ], "enabled": false }
 			}
 		},
 		{
@@ -44,12 +48,12 @@
 					"to": [ 11.0, 0.7, 7.5 ],
 					"rotationOrigin": [ 1.0, 0.4, 0.5 ],
 					"faces": {
-						"north": { "texture": "#null", "uv": [ 0.0, 0.0, 10.0, 0.5 ] },
-						"east": { "texture": "#null", "uv": [ 0.0, 0.0, 7.0, 0.5 ] },
-						"south": { "texture": "#null", "uv": [ 0.0, 0.0, 10.0, 0.5 ] },
-						"west": { "texture": "#null", "uv": [ 0.0, 0.0, 7.0, 0.5 ] },
-						"up": { "texture": "#null", "uv": [ 0.0, 0.0, 10.0, 7.0 ] },
-						"down": { "texture": "#null", "uv": [ 0.0, 0.0, 10.0, 7.0 ], "enabled": false }
+						"north": { "texture": "#mortar", "uv": [ 0.0, 0.0, 10.0, 0.5 ] },
+						"east": { "texture": "#mortar", "uv": [ 0.0, 0.0, 7.0, 0.5 ] },
+						"south": { "texture": "#mortar", "uv": [ 0.0, 0.0, 10.0, 0.5 ] },
+						"west": { "texture": "#mortar", "uv": [ 0.0, 0.0, 7.0, 0.5 ] },
+						"up": { "texture": "#mortar", "uv": [ 0.0, 0.0, 10.0, 7.0 ] },
+						"down": { "texture": "#mortar", "uv": [ 0.0, 0.0, 10.0, 7.0 ], "enabled": false }
 					}
 				}
 			]
