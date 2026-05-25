@@ -13,7 +13,8 @@
     {
       "code": "state",
       "states": [
-        "four"
+        "four",
+        "eight"
       ]
     },
     {
@@ -29,22 +30,18 @@
       ]
     },
     {
+      "code": "stage",
+      "states": [ "1", "2", "3", "4", "5" ]
+    },
+    {
       "code": "verticalorientation",
       "loadFromProperties": "abstract/verticalorientation"
     },
     {
       "code": "horizontalorientation",
       "loadFromProperties": "abstract/horizontalorientation"
-    },
-    {
-      "code": "stage",
-      "states": [
-        "1",
-        "2",
-        "3",
-        "4"
-      ]
     }
+
   ],
   "attributes": {
     "trowelable": true,
@@ -68,7 +65,9 @@
       "*"
     ]
   },
-  "shapeByType": {},
+  "shapeByType": {
+    "*": { "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}" }
+  },
   "blockmaterial": "Ceramic",
   "replaceable": 140,
   "resistance": 4,
@@ -78,40 +77,33 @@
   },
   "texturesByType": {
     "brickstairscourse-four-*-*-*-*": {
-      "all": {
+      "material": {
         "base": "game:block/clay/brick/four/soldier/cream1",
         "overlays": [
           "game:block/clay/brick/four/soldier/{color}1"
-        ]
-      },
-      "north": {
-        "base": "game:block/clay/brick/four/running/cream1",
-        "overlays": [
-          "game:block/clay/brick/four/running/{color}1"
-        ]
-      },
-      "west": {
-        "base": "game:block/clay/brick/four/running/cream1",
-        "overlays": [
-          "game:block/clay/brick/four/running/{color}1"
-        ]
-      },
-      "east": {
-        "base": "game:block/clay/brick/four/running/cream1",
-        "overlays": [
-          "game:block/clay/brick/four/running/{color}1"
-        ]
-      },
-      "material": {
-        "base": "game:block/clay/brick/four/running/cream1",
-        "overlays": [
-          "game:block/clay/brick/four/running/{color}1"
         ]
       },
       "material2": {
         "base": "game:block/clay/brick/four/header/cream1",
         "overlays": [
           "game:block/clay/brick/four/header/{color}1"
+        ]
+      },
+      "colour": {
+        "base": "game:block/clay/brickpile/burned/{color}-brick1"
+      }
+    },
+    "brickstairscourse-eight-*-*-*-*": {
+      "material": {
+        "base": "game:block/clay/brick/eight/soldier/cream1",
+        "overlays": [
+          "game:block/clay/brick/eight/soldier/{color}1"
+        ]
+      },
+      "material2": {
+        "base": "game:block/clay/brick/eight/header/cream1",
+        "overlays": [
+          "game:block/clay/brick/eight/header/{color}1"
         ]
       },
       "colour": {
