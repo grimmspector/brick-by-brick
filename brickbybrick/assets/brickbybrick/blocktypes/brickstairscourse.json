@@ -55,6 +55,14 @@
           "text": "handbook-constructioncourse-text"
         }
       ]
+    },
+    "liquidBarrierOnSidesByType": {
+      "*": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
     }
   },
   "creativeinventory": {
