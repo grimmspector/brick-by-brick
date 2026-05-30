@@ -32,9 +32,10 @@ namespace brickbybrick.items
            ------------------------ */
 
         WorldInteraction[] interactions;
+        WorldInteraction[] placementInteractions;
 
         SkillItem[] toolModes;
-        const int CapacityPerTier = 14;
+        const int CapacityPerTier = 16;
 
         // -----------------
         // AUDIO FILES
@@ -106,6 +107,34 @@ namespace brickbybrick.items
                     if (block.Attributes["trowelable"].AsBool(false))
                     {
                         stacks.Add(new ItemStack(block));
+                    }
+                }
+
+                return new WorldInteraction[]
+                {
+                    new WorldInteraction()
+                    {
+                        ActionLangCode = "heldhelp-trowel",
+                        MouseButton = EnumMouseButton.Right,
+                        Itemstacks = stacks.ToArray()
+                    }
+                };
+            });
+
+            // Placement modes consume fired bricks directly, so their held
+            // help should preview the compatible brick items instead.
+            placementInteractions = ObjectCacheUtil.GetOrCreate(capi, "trowelPlacementInteractions", () =>
+            {
+                List<ItemStack> stacks = new List<ItemStack>();
+
+                foreach (Item item in capi.World.Items)
+                {
+                    string path = item?.Code?.Path;
+                    if (string.IsNullOrEmpty(path)) continue;
+
+                    if (path.StartsWith("burnedbrick-", StringComparison.Ordinal))
+                    {
+                        stacks.Add(new ItemStack(item));
                     }
                 }
 
@@ -401,8 +430,8 @@ namespace brickbybrick.items
             // advance needs. Mortar is used for every successful advance.
             int currentStage = GetBlockStage(block);
             int nextStage = currentStage + 1;
-            bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 7);
-            bool isMortarStage = (nextStage == 2 || nextStage == 4 || nextStage == 6);
+            bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 8);
+            bool isMortarStage = (nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7);
             string color = GetBlockColor(block);
 
             bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
@@ -429,15 +458,15 @@ namespace brickbybrick.items
                 return false;
             }
 
-            // Validate player conditions
-            if (!HasMatchingMaterial(player, color, byEntity)) return false;
+            // Validate only the resources needed by this stage.
+            if (isBrickStage && !HasMatchingMaterial(player, color, byEntity)) return false;
             if (!HasEnoughMortar(slot, byEntity)) return false;
 
             // -------------------------
             // BRICK CONSUMPTION LOGIC
             // -------------------------
 
-            // At stages 3, 5, and 7, consume one matching brick from offhand, enforcing offhand usage
+            // At brick stages, consume one matching brick from offhand.
             if (isBrickStage)
             {
                 string requiredPath = $"burnedbrick-{color}";
@@ -473,6 +502,13 @@ namespace brickbybrick.items
             // ExchangeBlock preserves the position while swapping to the next
             // construction stage or final vanilla block.
             byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
+
+            // Full brick blocks occupy the entire space, so remove any water
+            // that was sharing the construction course's fluid layer.
+            if (IsCompletingFullBrickBlock(block, nextStage))
+            {
+                byEntity.World.BlockAccessor.SetBlock(0, pos, BlockLayersAccess.Fluid);
+            }
 
             // -------------------------
             // MORTAR CONSUMPTION (ALWAYS)
@@ -995,12 +1031,12 @@ namespace brickbybrick.items
 
                     int nextStage = GetBlockStage(selectedBlock) + 1;
 
-                    if (nextStage == 2 || nextStage == 4 || nextStage == 6)
+                    if (nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7)
                     {
                         return MortarUseAnimationCode;
                     }
 
-                    if (nextStage == 3 || nextStage == 5 || nextStage == 7)
+                    if (nextStage == 3 || nextStage == 5 || nextStage == 8)
                     {
                         return BrickUseAnimationCode;
                     }
@@ -1067,9 +1103,18 @@ namespace brickbybrick.items
 
             return true;
         }
+
+        /// <summary>
+        /// Returns held help for the active mode, using construction stages for
+        /// build mode and fired bricks for placement modes.
+        /// </summary>
         public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
         {
             base.GetHeldInteractionHelp(inSlot);
+            int maxToolMode = toolModes == null ? 0 : Math.Max(0, toolModes.Length - 1);
+            int toolMode = inSlot?.Itemstack == null ? 0 : Math.Min(maxToolMode, inSlot.Itemstack.Attributes.GetInt("toolMode"));
+            WorldInteraction[] activeInteractions = toolMode == 0 ? interactions : placementInteractions;
+
             WorldInteraction modeInteraction = new WorldInteraction()
             {
                 ActionLangCode = "Change tool mode",
@@ -1077,9 +1122,9 @@ namespace brickbybrick.items
                 MouseButton = EnumMouseButton.None
             };
 
-            return interactions == null
+            return activeInteractions == null
                 ? new WorldInteraction[] { modeInteraction }
-                : interactions.Append(modeInteraction);
+                : activeInteractions.Append(modeInteraction);
 
         }
         /// <summary>
@@ -1258,12 +1303,12 @@ namespace brickbybrick.items
                 return null;
             }
 
-            if (nextStage <= 6)
+            if (nextStage <= 7)
             {
                 return block.CodeWithParts(nextStage.ToString());
             }
 
-            if (nextStage == 7)
+            if (nextStage == 8)
             {
                 // Fire brick uses a custom finished block, while other colors
                 // can drop the stage suffix from the course code.
@@ -1292,6 +1337,17 @@ namespace brickbybrick.items
         private bool IsStagedStairBlock(Block block)
         {
             return block?.Code?.PathStartsWith("brickstairscourse") == true;
+        }
+
+        /// <summary>
+        /// Returns true when a regular brick course is becoming a full block.
+        /// Slab and stair completions keep any fluid-layer handling separate.
+        /// </summary>
+        private bool IsCompletingFullBrickBlock(Block block, int nextStage)
+        {
+            if (block?.Code?.PathStartsWith("brickcourse") != true) return false;
+
+            return nextStage == 8;
         }
 
         /// <summary>
