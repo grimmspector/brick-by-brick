@@ -74,7 +74,154 @@
     ]
   },
   "shapeByType": {
+<<<<<<< Updated upstream
     "*": { "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}" }
+=======
+    "*-*-up-north-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateY": 0
+    },
+    "*-*-up-west-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateY": 90
+    },
+    "*-*-up-south-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateY": 180
+    },
+    "*-*-up-east-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateY": 270
+    },
+    "*-*-down-north-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateX": 180,
+      "rotateY": 180
+    },
+    "*-*-down-west-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateX": 180,
+      "rotateY": 270
+    },
+    "*-*-down-south-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateX": 180,
+      "rotateY": 0
+    },
+    "*-*-down-east-1": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-1",
+      "rotateX": 180,
+      "rotateY": 90
+    },
+    "*-*-up-north-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateY": 0
+    },
+    "*-*-up-west-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateY": 90
+    },
+    "*-*-up-south-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateY": 180
+    },
+    "*-*-up-east-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateY": 270
+    },
+    "*-*-down-north-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateX": 180,
+      "rotateY": 180
+    },
+    "*-*-down-west-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateX": 180,
+      "rotateY": 270
+    },
+    "*-*-down-south-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateX": 180,
+      "rotateY": 0
+    },
+    "*-*-down-east-2": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-2",
+      "rotateX": 180,
+      "rotateY": 90
+    },
+    "*-*-up-north-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateY": 0
+    },
+    "*-*-up-west-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateY": 90
+    },
+    "*-*-up-south-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateY": 180
+    },
+    "*-*-up-east-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateY": 270
+    },
+    "*-*-down-north-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateX": 180,
+      "rotateY": 180
+    },
+    "*-*-down-west-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateX": 180,
+      "rotateY": 270
+    },
+    "*-*-down-south-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateX": 180,
+      "rotateY": 0
+    },
+    "*-*-down-east-3": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-3",
+      "rotateX": 180,
+      "rotateY": 90
+    },
+    "*-*-up-north-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateY": 0
+    },
+    "*-*-up-west-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateY": 90
+    },
+    "*-*-up-south-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateY": 180
+    },
+    "*-*-up-east-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateY": 270
+    },
+    "*-*-down-north-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateX": 180,
+      "rotateY": 180
+    },
+    "*-*-down-west-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateX": 180,
+      "rotateY": 270
+    },
+    "*-*-down-south-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateX": 180,
+      "rotateY": 0
+    },
+    "*-*-down-east-4": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-4",
+      "rotateX": 180,
+      "rotateY": 90
+    }
+>>>>>>> Stashed changes
   },
   "blockmaterial": "Ceramic",
   "replaceable": 140,
@@ -82,6 +229,88 @@
   "lightAbsorption": 99,
   "sideopaque": {
     "all": false
+  },
+  "collisionSelectionBoxesByType": {
+    "*-down-*-1": [
+      {
+        "x1": 0,
+        "y1": 0.75,
+        "z1": 0,
+        "x2": 1,
+        "y2": 1,
+        "z2": 1
+      }
+    ],
+    "*-down-*-2": [
+      {
+        "x1": 0,
+        "y1": 0.75,
+        "z1": 0,
+        "x2": 1,
+        "y2": 1,
+        "z2": 1
+      }
+    ],
+    "*-down-*-3": [
+      {
+        "x1": 0,
+        "y1": 0.5,
+        "z1": 0,
+        "x2": 1,
+        "y2": 1,
+        "z2": 1
+      }
+    ],
+    "*-down-*-4": [
+      {
+        "x1": 0,
+        "y1": 0.5,
+        "z1": 0,
+        "x2": 1,
+        "y2": 1,
+        "z2": 1
+      }
+    ],
+    "*-up-*-1": [
+      {
+        "x1": 0,
+        "y1": 0,
+        "z1": 0,
+        "x2": 1,
+        "y2": 0.25,
+        "z2": 1
+      }
+    ],
+    "*-up-*-2": [
+      {
+        "x1": 0,
+        "y1": 0,
+        "z1": 0,
+        "x2": 1,
+        "y2": 0.25,
+        "z2": 1
+      }
+    ],
+    "*-up-*-3": [
+      {
+        "x1": 0,
+        "y1": 0,
+        "z1": 0,
+        "x2": 1,
+        "y2": 0.5,
+        "z2": 1
+      }
+    ],
+    "*-up-*-4": [
+      {
+        "x1": 0,
+        "y1": 0,
+        "z1": 0,
+        "x2": 1,
+        "y2": 0.5,
+        "z2": 1
+      }
+    ]
   },
   "texturesByType": {
     "brickstairscourse-four-*-*-*-*": {
