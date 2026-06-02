@@ -7,29 +7,36 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- Resolve Vintage Story from an explicit path, the repo-local mirror, then the normal environment. -->
+    <VintageStoryMirrorDir>$(MSBuildThisFileDirectory)..\.local\vintagestory</VintageStoryMirrorDir>
+    <VintageStoryDir Condition="'$(VintageStoryDir)' == '' And Exists('$(VintageStoryMirrorDir)\VintagestoryAPI.dll')">$(VintageStoryMirrorDir)</VintageStoryDir>
+    <VintageStoryDir Condition="'$(VintageStoryDir)' == '' And '$(VINTAGE_STORY)' != ''">$(VINTAGE_STORY)</VintageStoryDir>
+  </PropertyGroup>
+
   <ItemGroup>
     <Reference Include="VintagestoryAPI">
-      <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
+      <HintPath>$(VintageStoryDir)\VintagestoryAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="VSSurvivalMod">
-      <HintPath>$(VINTAGE_STORY)/Mods/VSSurvivalMod.dll</HintPath>
+      <HintPath>$(VintageStoryDir)\Mods\VSSurvivalMod.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="VSEssentials">
-      <HintPath>$(VINTAGE_STORY)/Mods/VSEssentials.dll</HintPath>
+      <HintPath>$(VintageStoryDir)\Mods\VSEssentials.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="VSCreativeMod">
-      <HintPath>$(VINTAGE_STORY)/Mods/VSCreativeMod.dll</HintPath>
+      <HintPath>$(VintageStoryDir)\Mods\VSCreativeMod.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>$(VINTAGE_STORY)/Lib/0Harmony.dll</HintPath>
+      <HintPath>$(VintageStoryDir)\Lib\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="VintagestoryLib">
-      <HintPath>$(VINTAGE_STORY)/VintagestoryLib.dll</HintPath>
+      <HintPath>$(VintageStoryDir)\VintagestoryLib.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
