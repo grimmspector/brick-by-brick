@@ -74,9 +74,8 @@
     ]
   },
   "shapeByType": {
-<<<<<<< Updated upstream
-    "*": { "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}" }
-=======
+//Updated upstream
+    "*": { "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}" },
     "*-*-up-north-1": {
       "base": "brickbybrick:shapes/block/brick/stair/stair-1",
       "rotateY": 0
@@ -221,7 +220,7 @@
       "rotateX": 180,
       "rotateY": 90
     }
->>>>>>> Stashed changes
+//Stashed changes
   },
   "blockmaterial": "Ceramic",
   "replaceable": 140,
