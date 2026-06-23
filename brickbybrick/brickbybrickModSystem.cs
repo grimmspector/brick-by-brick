@@ -18,12 +18,7 @@ namespace brickbybrick
 
         private ModSystemSurvivalHandbook? survivalHandbook;
 
-        //private ICoreClientAPI capi;   // ✔ store client API
-        //private IServerNetworkChannel serverChannel;
-        //private IClientNetworkChannel clientChannel;
-
-        // Called on server and client
-        // Useful for registering block/entity classes on both sides
+        // Registers the item and block classes referenced by the JSON assets.
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
