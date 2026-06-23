@@ -48,8 +48,7 @@
 					"down": {
 						"texture": "#mortar",
 						"uv": [ 0.0, 0.0, 16.0, 16.0 ],
-						"windMode": [ -1, -1, -1, -1 ],
-						"enabled": false
+						"windMode": [ -1, -1, -1, -1 ]
 					}
 				}
 			},
@@ -82,13 +81,11 @@
 					},
 					"up": {
 						"texture": "#colour",
-						"uv": [ 0.0, 0.0, 0.5, 0.5 ],
-						"enabled": false
+						"uv": [ 0.0, 0.0, 0.5, 0.5 ]
 					},
 					"down": {
 						"texture": "#colour",
-						"uv": [ 0.0, 0.0, 0.5, 0.5 ],
-						"enabled": false
+						"uv": [ 0.0, 0.0, 0.5, 0.5 ]
 					}
 				},
 				"children": [
@@ -122,8 +119,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					},
@@ -157,8 +153,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					},
@@ -192,8 +187,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					},
@@ -227,8 +221,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					},
@@ -262,8 +255,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					},
@@ -297,8 +289,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					},
@@ -332,8 +323,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					},
@@ -367,8 +357,7 @@
 							"down": {
 								"texture": "#colour",
 								"uv": [ 0.0, 0.0, 3.5, 7.5 ],
-								"windMode": [ -1, -1, -1, -1 ],
-								"enabled": false
+								"windMode": [ -1, -1, -1, -1 ]
 							}
 						}
 					}

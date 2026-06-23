@@ -431,7 +431,7 @@ namespace brickbybrick.items
             int currentStage = GetBlockStage(block);
             int nextStage = currentStage + 1;
             bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 8);
-            bool isMortarStage = (nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7);
+            bool isMortarStage = nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7;
             string color = GetBlockColor(block);
 
             bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
@@ -1284,14 +1284,14 @@ namespace brickbybrick.items
 
             if (IsStagedStairBlock(block))
             {
-                // Staged stairs have four mod stages; the fifth advance
+                // Staged stairs have five mod stages; the sixth advance
                 // resolves directly to the matching vanilla stair block.
-                if (nextStage <= 4)
+                if (nextStage <= 5)
                 {
                     return block.CodeWithParts(nextStage.ToString());
                 }
 
-                if (nextStage == 5)
+                if (nextStage == 6)
                 {
                     string stairColor = GetBlockColor(block);
                     string vertical = GetBlockVariant(block, "verticalorientation") ?? "up";
@@ -1360,7 +1360,7 @@ namespace brickbybrick.items
 
             if (IsStagedSlabBlock(block) || IsStagedStairBlock(block))
             {
-                return IsStagedSlabBlock(block) ? stage >= 4 : stage >= 5;
+                return IsStagedSlabBlock(block) ? stage >= 4 : stage >= 6;
             }
 
             return false;

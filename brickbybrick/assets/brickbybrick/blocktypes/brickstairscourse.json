@@ -30,16 +30,16 @@
       ]
     },
     {
-      "code": "stage",
-      "states": [ "1", "2", "3", "4", "5" ]
-    },
-    {
       "code": "verticalorientation",
       "loadFromProperties": "abstract/verticalorientation"
     },
     {
       "code": "horizontalorientation",
       "loadFromProperties": "abstract/horizontalorientation"
+    },
+    {
+      "code": "stage",
+      "states": [ "1", "2", "3", "4", "5" ]
     }
 
   ],
@@ -74,8 +74,6 @@
     ]
   },
   "shapeByType": {
-//Updated upstream
-    "*": { "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}" },
     "*-*-up-north-1": {
       "base": "brickbybrick:shapes/block/brick/stair/stair-1",
       "rotateY": 0
@@ -219,8 +217,43 @@
       "base": "brickbybrick:shapes/block/brick/stair/stair-4",
       "rotateX": 180,
       "rotateY": 90
+    },
+    "*-*-up-north-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateY": 0
+    },
+    "*-*-up-west-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateY": 90
+    },
+    "*-*-up-south-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateY": 180
+    },
+    "*-*-up-east-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateY": 270
+    },
+    "*-*-down-north-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateX": 180,
+      "rotateY": 180
+    },
+    "*-*-down-west-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateX": 180,
+      "rotateY": 270
+    },
+    "*-*-down-south-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateX": 180,
+      "rotateY": 0
+    },
+    "*-*-down-east-5": {
+      "base": "brickbybrick:shapes/block/brick/stair/stair-5",
+      "rotateX": 180,
+      "rotateY": 90
     }
-//Stashed changes
   },
   "blockmaterial": "Ceramic",
   "replaceable": 140,
@@ -270,6 +303,16 @@
         "z2": 1
       }
     ],
+    "*-down-*-5": [
+      {
+        "x1": 0,
+        "y1": 0.25,
+        "z1": 0,
+        "x2": 1,
+        "y2": 1,
+        "z2": 1
+      }
+    ],
     "*-up-*-1": [
       {
         "x1": 0,
@@ -307,6 +350,16 @@
         "z1": 0,
         "x2": 1,
         "y2": 0.5,
+        "z2": 1
+      }
+    ],
+    "*-up-*-5": [
+      {
+        "x1": 0,
+        "y1": 0,
+        "z1": 0,
+        "x2": 1,
+        "y2": 0.75,
         "z2": 1
       }
     ]
