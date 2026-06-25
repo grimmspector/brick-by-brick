@@ -1,8 +1,10 @@
-﻿using Vintagestory.API.Common;
+using AttributeRenderingLibrary;
+using Vintagestory.API.Common;
+using Vintagestory.GameContent;
 
 namespace brickbybrick.Blocks
 {
-    internal class BlockBrick : Block
+    internal class BlockBrick : BlockGeneric
     {
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
         {
@@ -15,6 +17,7 @@ namespace brickbybrick.Blocks
             byEntity.World.Api.Logger.Event("Entity: " + byEntity.Code);
             return;
         }
+
         public override bool OnHeldInteractStep(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel)
         {
             base.OnHeldInteractStep(secondsUsed, slot, byEntity, blockSel, entitySel);

@@ -52,6 +52,7 @@
   "block-brickcourse-eight-*-*-*": "Eight-brick construction course",
   "block-brickslabcourse-four-*-*-*": "Brick slab construction course",
   "block-brickstairscourse-four-*-*-*-*": "Brick stair construction course",
+  "block-masonrycourse": "Masonry construction course",
   "block-cobbleblock-*-*": "Cobblestone construction course",
   "toolmode-trowel-build": "Build mode for building up any stone/brick block",
   "toolmode-trowel-slab": "Slab placement mode for any stone/brick material",
