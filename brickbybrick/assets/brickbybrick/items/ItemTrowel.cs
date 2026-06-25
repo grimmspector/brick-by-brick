@@ -1,9 +1,7 @@
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
 using System.Text;
-using System.Xml.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -23,7 +21,15 @@ namespace brickbybrick.items
         WorldInteraction[] placementInteractions;
 
         SkillItem[] toolModes;
-        const int CapacityPerTier = 16;
+        private const int CapacityPerTier = 16;
+        private const float ActionDurationSeconds = 2f;
+        private const float ActionSoundTimeSeconds = 1f;
+        private const int MortarCostPerAction = 1;
+        private const int MasonryCostPerAction = 1;
+        private const int BuildMode = 0;
+        private const int SlabMode = 1;
+        private const int StairMode = 2;
+        private const int BlockMode = 3;
 
         private static readonly string[] BrickSounds =
         {
@@ -42,6 +48,13 @@ namespace brickbybrick.items
 
         private const string MortarUseAnimationCode = "trowelmortarspread";
         private const string BrickUseAnimationCode = "trowelbrickplace";
+
+        private enum ConstructionAction
+        {
+            None,
+            Mortar,
+            Masonry
+        }
 
         public override void OnLoaded(ICoreAPI api)
         {
@@ -167,7 +180,7 @@ namespace brickbybrick.items
 
             // Placement modes own the interaction even when the selected block
             // is not trowelable because they place into the adjacent position.
-            if (toolMode == 1 || toolMode == 2 || toolMode == 3)
+            if (IsPlacementMode(toolMode))
             {
                 UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
                 handling = EnumHandHandling.PreventDefault;
@@ -184,7 +197,7 @@ namespace brickbybrick.items
 
             switch (toolMode)
             {
-                case 0:
+                case BuildMode:
                     handling = EnumHandHandling.PreventDefault;
                     return;
 
@@ -214,17 +227,13 @@ namespace brickbybrick.items
 
             switch (toolMode)
             {
-                case 0:
+                case BuildMode:
                     return HandleTrowelMode0(secondsUsed, slot, byEntity, player, block, pos);
 
-                case 1:
-                    return HandleTrowelMode1(secondsUsed, slot, byEntity, player, blockSel);
-
-                case 2:
-                    return HandleTrowelMode2(secondsUsed, slot, byEntity, player, blockSel);
-
-                case 3:
-                    return HandleTrowelMode3(secondsUsed, slot, byEntity, player, blockSel);
+                case SlabMode:
+                case StairMode:
+                case BlockMode:
+                    return HandlePlacementMode(secondsUsed, slot, byEntity, player, blockSel, toolMode);
 
                 default:
                     return false;
@@ -239,9 +248,7 @@ namespace brickbybrick.items
 
             StopTrowelUseAnimations(byEntity);
 
-            var attrs = slot.Itemstack.Attributes;
-
-            attrs.SetBool("didInteract", false);
+            SetInteracted(slot?.Itemstack, false);
         }
 
         public override bool OnHeldInteractCancel(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, EnumItemUseCancelReason cancelReason)
@@ -250,110 +257,33 @@ namespace brickbybrick.items
             return base.OnHeldInteractCancel(secondsUsed, slot, byEntity, blockSel, entitySel, cancelReason);
         }
 
-        // Places the first staged stair with vanilla-style orientation.
-        private bool HandleTrowelMode2(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
+        // Places the first construction stage for slabs, stairs, and blocks.
+        private bool HandlePlacementMode(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel, int toolMode)
         {
-            if (blockSel == null) return false;
+            if (blockSel == null || HasInteracted(slot?.Itemstack)) return false;
 
-            if (HasInteracted(slot.Itemstack)) return false;
-
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
-            BlockPos soundPos = blockSel.Position;
-
-            // Play feedback at the midpoint, then wait for the full hold time
-            // before consuming materials or placing the staged stair.
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayRandomSound(byEntity.World, soundPos, player, BrickSounds, 20f);
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-            if (secondsUsed < 2f) return true;
+            PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, BrickSounds, 20f);
+            if (secondsUsed < ActionDurationSeconds) return true;
 
             if (!HasEnoughMortar(slot, byEntity)) return false;
-            if (!TryGetMode3BrickInfo(player, byEntity, out ItemSlot offhandSlot, out _, out string color)) return false;
+            if (!TryGetPlacementMaterial(player, byEntity, out ItemSlot offhandSlot, out _, out string color)) return false;
 
-            // Target and orientation are resolved from the original click so
-            // side clicks place beside the block, matching vanilla placement.
-            BlockPos targetPos = ResolveMode3TargetPos(blockSel);
-            ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
-
-            AssetLocation blockCode = new AssetLocation("brickbybrick", $"brickstairscourse-four-{color}-{vertical}-{horizontal}-1");
-            Block placeBlock = byEntity.World.BlockAccessor.GetBlock(blockCode);
-            if (placeBlock == null)
-            {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-could-not-resolve-stair", blockCode));
-                return false;
-            }
+            BlockPos targetPos = ResolvePlacementTarget(blockSel);
+            Block placeBlock = ResolvePlacementBlock(byEntity.World, byEntity, blockSel, toolMode, color);
+            if (placeBlock == null) return false;
 
             Block existingBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
             if (existingBlock == null || !existingBlock.IsReplacableBy(placeBlock))
             {
-                byEntity.World.Api.Logger.Event($"[TROWEL] Stair placement blocked at {targetPos} by {existingBlock?.Code}");
+                byEntity.World.Api.Logger.Event($"[TROWEL] Placement blocked at {targetPos} by {existingBlock?.Code}");
                 return false;
             }
-
-            offhandSlot.TakeOut(1);
-            offhandSlot.MarkDirty();
 
             byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
             placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
 
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
-            SetInteracted(slot.Itemstack, true);
-
-            return false;
-        }
-
-        // Places the first staged slab; build mode handles later stages.
-        private bool HandleTrowelMode1(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
-        {
-            if (blockSel == null) return false;
-
-            if (HasInteracted(slot.Itemstack)) return false;
-
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
-            BlockPos soundPos = blockSel.Position;
-
-            // Play feedback at the midpoint, then wait for the full hold time
-            // before consuming materials or placing the staged slab.
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayRandomSound(byEntity.World, soundPos, player, BrickSounds, 20f);
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-            if (secondsUsed < 2f) return true;
-
-            if (!HasEnoughMortar(slot, byEntity)) return false;
-            if (!TryGetMode3BrickInfo(player, byEntity, out ItemSlot offhandSlot, out _, out string color)) return false;
-
-            // Slab rotation comes from the clicked face, while the target
-            // position remains adjacent to the selected block.
-            BlockPos targetPos = ResolveMode3TargetPos(blockSel);
-            string rot = ResolveSlabRotationCode(blockSel);
-            AssetLocation blockCode = new AssetLocation("brickbybrick", $"brickslabcourse-four-{color}-{rot}-1");
-            Block placeBlock = byEntity.World.BlockAccessor.GetBlock(blockCode);
-            if (placeBlock == null)
-            {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-could-not-resolve-slab", blockCode));
-                return false;
-            }
-
-            Block existingBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
-            if (existingBlock == null || !existingBlock.IsReplacableBy(placeBlock))
-            {
-                byEntity.World.Api.Logger.Event($"[TROWEL] Slab placement blocked at {targetPos} by {existingBlock?.Code}");
-                return false;
-            }
-
-            offhandSlot.TakeOut(1);
-            offhandSlot.MarkDirty();
-
-            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
-            placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
-
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
+            ConsumeOffhand(offhandSlot, MasonryCostPerAction);
+            ConsumeMortar(slot, MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -370,21 +300,11 @@ namespace brickbybrick.items
             // advance needs. Mortar is used for every successful advance.
             int currentStage = GetBlockStage(block);
             int nextStage = currentStage + 1;
-            bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 8);
-            bool isMortarStage = nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7;
+            ConstructionAction action = GetConstructionAction(nextStage);
             string color = GetBlockColor(block);
 
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
-
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayStageSound(byEntity.World, pos, player, isBrickStage, isMortarStage);
-
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-
-            if (secondsUsed < 2f) return true;
+            PlayStageSoundAtMidpoint(secondsUsed, slot, byEntity, pos, player, action);
+            if (secondsUsed < ActionDurationSeconds) return true;
 
             // Determine the next block before consuming any resources so finished
             // staged blocks simply stop progressing without wasting materials.
@@ -395,14 +315,15 @@ namespace brickbybrick.items
             }
 
             // Validate only the resources needed by this stage.
-            if (isBrickStage && !HasMatchingMaterial(player, color, byEntity)) return false;
+            if (action == ConstructionAction.Masonry && !HasMatchingMaterial(player, color, byEntity)) return false;
             if (!HasEnoughMortar(slot, byEntity)) return false;
 
-            if (isBrickStage)
+            ItemSlot materialSlot = null;
+            if (action == ConstructionAction.Masonry)
             {
                 string requiredPath = $"burnedbrick-{color}";
 
-                if (!TryGetOffhandStack(player, out ItemSlot offhandSlot, out ItemStack offhandStack))
+                if (!TryGetOffhandStack(player, out materialSlot, out ItemStack offhandStack))
                 {
                     NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-matching-brick"));
                     return false;
@@ -414,9 +335,6 @@ namespace brickbybrick.items
                     return false;
                 }
 
-                // Consume the brick only after the next block has resolved.
-                offhandSlot.TakeOut(1);
-                offhandSlot.MarkDirty();
             }
 
             Block newBlock = byEntity.World.BlockAccessor.GetBlock(newPath);
@@ -437,91 +355,15 @@ namespace brickbybrick.items
                 byEntity.World.BlockAccessor.SetBlock(0, pos, BlockLayersAccess.Fluid);
             }
 
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
+            if (materialSlot != null)
+            {
+                ConsumeOffhand(materialSlot, MasonryCostPerAction);
+            }
 
+            ConsumeMortar(slot, MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
-        }
-
-        // Places the first staged full-block course.
-        private bool HandleTrowelMode3(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
-        {
-            if (blockSel == null) return false;
-
-            if (HasInteracted(slot.Itemstack)) return false;
-
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
-            BlockPos soundPos = blockSel.Position;
-
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayRandomSound(byEntity.World, soundPos, player, BrickSounds, 20f);
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-            if (secondsUsed < 2f) return true;
-
-            // Validate mortar and offhand brick before resolving placement.
-            if (!HasEnoughMortar(slot, byEntity)) return false;
-
-            if (!TryGetMode3BrickInfo(player, byEntity, out ItemSlot offhandSlot, out _, out string color)) return false;
-
-            BlockPos targetPos = ResolveMode3TargetPos(blockSel);
-            Block placeBlock = ResolveMode3PlacementBlock(byEntity.World, byEntity, color);
-            if (placeBlock == null) return false;
-
-            Block existingBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
-            if (existingBlock == null || !existingBlock.IsReplacableBy(placeBlock))
-            {
-                byEntity.World.Api.Logger.Event($"[TROWEL] Placement blocked at {targetPos} by {existingBlock?.Code}");
-                return false;
-            }
-
-            offhandSlot.TakeOut(1);
-            offhandSlot.MarkDirty();
-
-            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
-            placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
-
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
-
-            SetInteracted(slot.Itemstack, true);
-
-            return false;
-        }
-
-        // Finds an offhand stack and optionally consumes it.
-        private bool TryConsumeFromOffhand(
-            IPlayer player,
-            System.Func<ItemStack, bool> matcher,
-            int quantity,
-            bool consume,
-            out ItemSlot slot,
-            out ItemStack stack)
-        {
-            slot = null;
-            stack = null;
-
-            ItemSlot candidateSlot = player?.InventoryManager?.OffhandHotbarSlot;
-            ItemStack candidateStack = candidateSlot?.Itemstack;
-
-            if (candidateStack == null) return false;
-
-            if (!matcher(candidateStack)) return false;
-
-            if (consume && candidateSlot.StackSize < quantity) return false;
-
-            if (consume)
-            {
-                candidateSlot.TakeOut(quantity);
-                candidateSlot.MarkDirty();
-            }
-
-            slot = candidateSlot;
-            stack = candidateStack;
-
-            return true;
         }
 
         // Mortar capacity follows the tool's material tier.
@@ -715,20 +557,104 @@ namespace brickbybrick.items
             return stack != null;
         }
 
-        private BlockPos ResolveMode3TargetPos(BlockSelection blockSel)
+        private static bool IsPlacementMode(int toolMode)
+        {
+            return toolMode == SlabMode || toolMode == StairMode || toolMode == BlockMode;
+        }
+
+        private static ConstructionAction GetConstructionAction(int nextStage)
+        {
+            return nextStage switch
+            {
+                2 or 4 or 6 or 7 => ConstructionAction.Mortar,
+                3 or 5 or 8 => ConstructionAction.Masonry,
+                _ => ConstructionAction.None
+            };
+        }
+
+        private void PlayActionSoundAtMidpoint(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            IPlayer player,
+            BlockPos pos,
+            string[] sounds,
+            float range)
+        {
+            if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return;
+            if (secondsUsed < ActionSoundTimeSeconds) return;
+            if (slot.Itemstack.Attributes.GetBool("soundPlayed", false)) return;
+
+            PlayRandomSound(byEntity.World, pos, player, sounds, range);
+            slot.Itemstack.Attributes.SetBool("soundPlayed", true);
+        }
+
+        private void PlayStageSoundAtMidpoint(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            BlockPos pos,
+            IPlayer player,
+            ConstructionAction action)
+        {
+            if (action == ConstructionAction.Masonry)
+            {
+                PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, pos, BrickSounds, 20f);
+            }
+            else if (action == ConstructionAction.Mortar)
+            {
+                PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, pos, TrowelSounds, 12f);
+            }
+        }
+
+        private static void ConsumeOffhand(ItemSlot slot, int quantity)
+        {
+            if (slot == null || quantity <= 0) return;
+
+            slot.TakeOut(quantity);
+            slot.MarkDirty();
+        }
+
+        private void ConsumeMortar(ItemSlot slot, int quantity)
+        {
+            if (slot?.Itemstack == null || quantity <= 0) return;
+
+            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - quantity);
+        }
+
+        private BlockPos ResolvePlacementTarget(BlockSelection blockSel)
         {
             return blockSel.Position.AddCopy(blockSel.Face);
         }
 
-        // Running-bond orientation follows the player's horizontal facing.
-        private Block ResolveMode3PlacementBlock(IWorldAccessor world, EntityAgent byEntity, string color)
+        // Resolves the first construction stage for the selected placement mode.
+        private Block ResolvePlacementBlock(
+            IWorldAccessor world,
+            EntityAgent byEntity,
+            BlockSelection blockSel,
+            int toolMode,
+            string color)
         {
-            // Use the entity's current yaw to choose between the two straight
-            // running-bond variants. North/south uses "runningo" and east/west
-            // uses "running" so the visible brick faces align with the player.
-            BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
-            string type = facing.IsAxisWE ? "running" : "runningo";
-            AssetLocation blockCode = new AssetLocation("brickbybrick", $"brickcourse-four-{type}-{color}-1");
+            AssetLocation blockCode;
+
+            if (toolMode == SlabMode)
+            {
+                string rotation = ResolveSlabRotationCode(blockSel);
+                blockCode = new AssetLocation("brickbybrick", $"brickslabcourse-four-{color}-{rotation}-1");
+            }
+            else if (toolMode == StairMode)
+            {
+                ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
+                blockCode = new AssetLocation("brickbybrick", $"brickstairscourse-four-{color}-{vertical}-{horizontal}-1");
+            }
+            else if (toolMode == BlockMode)
+            {
+                blockCode = ResolveBlockPlacementCode(byEntity, color);
+            }
+            else
+            {
+                return null;
+            }
 
             Block placeBlock = world.BlockAccessor.GetBlock(blockCode);
             if (placeBlock == null)
@@ -737,6 +663,17 @@ namespace brickbybrick.items
             }
 
             return placeBlock;
+        }
+
+        // Running-bond orientation follows the player's horizontal facing.
+        private AssetLocation ResolveBlockPlacementCode(EntityAgent byEntity, string color)
+        {
+            // Use the entity's current yaw to choose between the two straight
+            // running-bond variants. North/south uses "runningo" and east/west
+            // uses "running" so the visible brick faces align with the player.
+            BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
+            string type = facing.IsAxisWE ? "running" : "runningo";
+            return new AssetLocation("brickbybrick", $"brickcourse-four-{type}-{color}-1");
         }
 
         private string ResolveSlabRotationCode(BlockSelection blockSel)
@@ -759,7 +696,7 @@ namespace brickbybrick.items
             horizontal = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw).Code;
         }
 
-        private bool TryGetMode3BrickInfo(IPlayer player, EntityAgent byEntity, out ItemSlot slot, out ItemStack stack, out string color)
+        private bool TryGetPlacementMaterial(IPlayer player, EntityAgent byEntity, out ItemSlot slot, out ItemStack stack, out string color)
         {
             slot = null;
             stack = null;
@@ -820,30 +757,20 @@ namespace brickbybrick.items
 
             switch (toolMode)
             {
-                case 0:
+                case BuildMode:
                     if (!IsTrowelable(selectedBlock)) return null;
 
                     int nextStage = GetBlockStage(selectedBlock) + 1;
-
-                    if (nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7)
+                    return GetConstructionAction(nextStage) switch
                     {
-                        return MortarUseAnimationCode;
-                    }
+                        ConstructionAction.Mortar => MortarUseAnimationCode,
+                        ConstructionAction.Masonry => BrickUseAnimationCode,
+                        _ => null
+                    };
 
-                    if (nextStage == 3 || nextStage == 5 || nextStage == 8)
-                    {
-                        return BrickUseAnimationCode;
-                    }
-
-                    return null;
-
-                case 1:
-                    return BrickUseAnimationCode;
-
-                case 2:
-                    return BrickUseAnimationCode;
-
-                case 3:
+                case SlabMode:
+                case StairMode:
+                case BlockMode:
                     return BrickUseAnimationCode;
 
                 default:
@@ -991,12 +918,12 @@ namespace brickbybrick.items
 
         private bool HasInteracted(ItemStack stack)
         {
-            return stack.Attributes.GetBool("didInteract", false);
+            return stack?.Attributes?.GetBool("didInteract", false) == true;
         }
 
         private void SetInteracted(ItemStack stack, bool value)
         {
-            stack.Attributes.SetBool("didInteract", value);
+            stack?.Attributes?.SetBool("didInteract", value);
         }
 
         // Resolves staged slabs and stairs to their vanilla finished blocks.
@@ -1094,16 +1021,5 @@ namespace brickbybrick.items
             return false;
         }
 
-        private void PlayStageSound(IWorldAccessor world, BlockPos pos, IPlayer player, bool isBrickStage, bool isMortarStage)
-        {
-            if (isBrickStage)
-            {
-                PlayRandomSound(world, pos, player, BrickSounds, 20f);
-            }
-            else if (isMortarStage)
-            {
-                PlayRandomSound(world, pos, player, TrowelSounds, 12f);
-            }
-        }
     }
 }
