@@ -1,0 +1,394 @@
+{
+  "code": "masonrycourse",
+  "class": "brickbybrick.brickblock",
+  "entityClass": "Generic",
+  "attributes": {
+    "trowelable": true,
+    "handbook": {
+      "extraSections": [
+        {
+          "title": "handbook-constructioncourse-title",
+          "text": "handbook-constructioncourse-text"
+        }
+      ]
+    }
+  },
+  "behaviors": [
+    {
+      "name": "AttributeRenderingLibrary.BlockShapeTexturesFromAttributes",
+      "properties": {
+        "shape": {
+          "shape-block::bond-running": {
+            "base": "brickbybrick:shapes/block/brick/running/brickblock-{stage}"
+          },
+          "shape-block::bond-runningo": {
+            "base": "brickbybrick:shapes/block/brick/runningo/brickblock-{stage}"
+          },
+          "shape-slab::rotation-down": {
+            "base": "brickbybrick:shapes/block/brick/running/brickblock-{stage}"
+          },
+          "shape-slab::rotation-up": {
+            "base": "brickbybrick:shapes/block/brick/running/brickblock-{stage}",
+            "rotateX": 180
+          },
+          "shape-slab::rotation-north": {
+            "base": "brickbybrick:shapes/block/brick/running/brickblock-{stage}",
+            "rotateX": 90
+          },
+          "shape-slab::rotation-south": {
+            "base": "brickbybrick:shapes/block/brick/running/brickblock-{stage}",
+            "rotateX": 270
+          },
+          "shape-slab::rotation-east": {
+            "base": "brickbybrick:shapes/block/brick/running/brickblock-{stage}",
+            "rotateZ": 90
+          },
+          "shape-slab::rotation-west": {
+            "base": "brickbybrick:shapes/block/brick/running/brickblock-{stage}",
+            "rotateZ": 270
+          },
+          "shape-stair::vertical-up::horizontal-north": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}"
+          },
+          "shape-stair::vertical-up::horizontal-west": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}",
+            "rotateY": 90
+          },
+          "shape-stair::vertical-up::horizontal-south": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}",
+            "rotateY": 180
+          },
+          "shape-stair::vertical-up::horizontal-east": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}",
+            "rotateY": 270
+          },
+          "shape-stair::vertical-down::horizontal-north": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}",
+            "rotateX": 180
+          },
+          "shape-stair::vertical-down::horizontal-west": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}",
+            "rotateX": 180,
+            "rotateY": 90
+          },
+          "shape-stair::vertical-down::horizontal-south": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}",
+            "rotateX": 180,
+            "rotateY": 180
+          },
+          "shape-stair::vertical-down::horizontal-east": {
+            "base": "brickbybrick:shapes/block/brick/stair/stair-{stage}",
+            "rotateX": 180,
+            "rotateY": 270
+          }
+        },
+        "textures": {
+          "shape-stair::state-four::color-fire": {
+            "mortar": {
+              "base": "game:block/wood/barrel/mortar"
+            },
+            "material": {
+              "base": "game:block/clay/brick/four/running/fire1"
+            },
+            "material2": {
+              "base": "game:block/clay/brick/four/running/fire1"
+            },
+            "colour": {
+              "base": "game:block/clay/brickpile/burned/fire-brick1"
+            }
+          },
+          "shape-stair::state-four::color-*": {
+            "mortar": {
+              "base": "game:block/wood/barrel/mortar"
+            },
+            "material": {
+              "base": "game:block/clay/brick/four/soldier/cream1",
+              "overlays": [
+                "game:block/clay/brick/four/soldier/{color}1"
+              ]
+            },
+            "material2": {
+              "base": "game:block/clay/brick/four/header/cream1",
+              "overlays": [
+                "game:block/clay/brick/four/header/{color}1"
+              ]
+            },
+            "colour": {
+              "base": "game:block/clay/brickpile/burned/{color}-brick1"
+            }
+          },
+          "state-four::color-*": {
+            "mortar": {
+              "base": "game:block/wood/barrel/mortar"
+            },
+            "material": {
+              "base": "game:block/clay/brick/four/running/cream1",
+              "overlays": [
+                "game:block/clay/brick/four/running/{color}1"
+              ]
+            },
+            "material2": {
+              "base": "game:block/clay/brick/four/header/cream1",
+              "overlays": [
+                "game:block/clay/brick/four/header/{color}1"
+              ]
+            },
+            "colour": {
+              "base": "game:block/clay/brickpile/burned/{color}-brick1"
+            }
+          }
+        },
+        "collisionSelectionBoxes": {
+          "shape-block::@stage-(1|2)": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.25,
+              "z2": 1
+            }
+          ],
+          "shape-block::@stage-(3|4)": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.5,
+              "z2": 1
+            }
+          ],
+          "shape-block::@stage-(5|6)": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.75,
+              "z2": 1
+            }
+          ],
+          "shape-block::stage-7": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::@stage-(1|2)::rotation-down": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.25,
+              "z2": 1
+            }
+          ],
+          "shape-slab::stage-3::rotation-down": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.5,
+              "z2": 1
+            }
+          ],
+          "shape-slab::@stage-(1|2)::rotation-up": [
+            {
+              "x1": 0,
+              "y1": 0.75,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::stage-3::rotation-up": [
+            {
+              "x1": 0,
+              "y1": 0.5,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::@stage-(1|2)::rotation-north": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 0.25
+            }
+          ],
+          "shape-slab::stage-3::rotation-north": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 0.5
+            }
+          ],
+          "shape-slab::@stage-(1|2)::rotation-south": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0.75,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::stage-3::rotation-south": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0.5,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::@stage-(1|2)::rotation-east": [
+            {
+              "x1": 0.75,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::stage-3::rotation-east": [
+            {
+              "x1": 0.5,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::@stage-(1|2)::rotation-west": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 0.25,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-slab::stage-3::rotation-west": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 0.5,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-stair::vertical-up::@stage-(1|2)": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.25,
+              "z2": 1
+            }
+          ],
+          "shape-stair::vertical-up::@stage-(3|4)": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.5,
+              "z2": 1
+            }
+          ],
+          "shape-stair::vertical-up::stage-5": [
+            {
+              "x1": 0,
+              "y1": 0,
+              "z1": 0,
+              "x2": 1,
+              "y2": 0.75,
+              "z2": 1
+            }
+          ],
+          "shape-stair::vertical-down::@stage-(1|2)": [
+            {
+              "x1": 0,
+              "y1": 0.75,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-stair::vertical-down::@stage-(3|4)": [
+            {
+              "x1": 0,
+              "y1": 0.5,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ],
+          "shape-stair::vertical-down::stage-5": [
+            {
+              "x1": 0,
+              "y1": 0.25,
+              "z1": 0,
+              "x2": 1,
+              "y2": 1,
+              "z2": 1
+            }
+          ]
+        },
+        "liquidBarrierOnSides": {
+          "*": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      }
+    }
+  ],
+  "blockmaterial": "Ceramic",
+  "replaceable": 140,
+  "resistance": 4,
+  "lightAbsorption": 0,
+  "sideopaque": {
+    "all": false
+  },
+  "sounds": {
+    "walk": "game:walk/stone",
+    "place": "game:block/ceramicplace",
+    "byTool": {
+      "Pickaxe": {
+        "hit": "game:block/rock-hit-pickaxe",
+        "break": "game:block/rock-break-pickaxe"
+      }
+    }
+  },
+  "heldTpIdleAnimation": "holdbothhandslarge",
+  "heldRightReadyAnimation": "heldblockready",
+  "heldTpUseAnimation": "twohandplaceblock"
+}

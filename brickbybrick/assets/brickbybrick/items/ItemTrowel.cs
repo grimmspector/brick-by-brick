@@ -1,3 +1,4 @@
+using AttributeRenderingLibrary;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
@@ -30,6 +31,7 @@ namespace brickbybrick.items
         private const int SlabMode = 1;
         private const int StairMode = 2;
         private const int BlockMode = 3;
+        private const string MasonryCourseCode = "brickbybrick:masonrycourse";
 
         private static readonly string[] BrickSounds =
         {
@@ -281,6 +283,7 @@ namespace brickbybrick.items
 
             byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
             placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
+            ApplyCourseState(byEntity.World, targetPos, CreatePlacementVariants(toolMode, blockSel, byEntity, color));
 
             ConsumeOffhand(offhandSlot, MasonryCostPerAction);
             ConsumeMortar(slot, MortarCostPerAction);
@@ -298,17 +301,17 @@ namespace brickbybrick.items
             
             // Read current construction state and decide which material this
             // advance needs. Mortar is used for every successful advance.
-            int currentStage = GetBlockStage(block);
+            int currentStage = GetBlockStage(block, byEntity.World, pos);
             int nextStage = currentStage + 1;
             ConstructionAction action = GetConstructionAction(nextStage);
-            string color = GetBlockColor(block);
+            string color = GetBlockColor(block, byEntity.World, pos);
 
             PlayStageSoundAtMidpoint(secondsUsed, slot, byEntity, pos, player, action);
             if (secondsUsed < ActionDurationSeconds) return true;
 
             // Determine the next block before consuming any resources so finished
             // staged blocks simply stop progressing without wasting materials.
-            AssetLocation newPath = ResolveNextBlock(block, nextStage, color);
+            AssetLocation newPath = ResolveNextBlock(block, nextStage, color, byEntity.World, pos);
             if (newPath == null)
             {
                 return false;
@@ -344,9 +347,25 @@ namespace brickbybrick.items
                 return false;
             }
 
-            // ExchangeBlock preserves the position while swapping to the next
-            // construction stage or final vanilla block.
-            byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
+            Variants courseVariants = GetCourseVariants(byEntity.World, pos, block);
+
+            bool remainsConstructionCourse = newPath.ToString() == MasonryCourseCode;
+            if (remainsConstructionCourse)
+            {
+                // ExchangeBlock keeps the existing ARL block entity while the
+                // construction remains the same attribute-backed block.
+                byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
+                courseVariants.Set("stage", nextStage.ToString());
+                ApplyCourseState(byEntity.World, pos, courseVariants);
+            }
+            else
+            {
+                // Completed masonry must discard the ARL block entity. A full
+                // replacement avoids retaining construction data on slabs and
+                // stairs whose final blocks use different block classes.
+                byEntity.World.BlockAccessor.SetBlock(newBlock.Id, pos);
+                newBlock.OnBlockPlaced(byEntity.World, pos, slot.Itemstack);
+            }
 
             // Full brick blocks occupy the entire space, so remove any water
             // that was sharing the construction course's fluid layer.
@@ -635,27 +654,9 @@ namespace brickbybrick.items
             int toolMode,
             string color)
         {
-            AssetLocation blockCode;
+            if (!IsPlacementMode(toolMode)) return null;
 
-            if (toolMode == SlabMode)
-            {
-                string rotation = ResolveSlabRotationCode(blockSel);
-                blockCode = new AssetLocation("brickbybrick", $"brickslabcourse-four-{color}-{rotation}-1");
-            }
-            else if (toolMode == StairMode)
-            {
-                ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
-                blockCode = new AssetLocation("brickbybrick", $"brickstairscourse-four-{color}-{vertical}-{horizontal}-1");
-            }
-            else if (toolMode == BlockMode)
-            {
-                blockCode = ResolveBlockPlacementCode(byEntity, color);
-            }
-            else
-            {
-                return null;
-            }
-
+            AssetLocation blockCode = new AssetLocation(MasonryCourseCode);
             Block placeBlock = world.BlockAccessor.GetBlock(blockCode);
             if (placeBlock == null)
             {
@@ -665,15 +666,33 @@ namespace brickbybrick.items
             return placeBlock;
         }
 
-        // Running-bond orientation follows the player's horizontal facing.
-        private AssetLocation ResolveBlockPlacementCode(EntityAgent byEntity, string color)
+        private Variants CreatePlacementVariants(int toolMode, BlockSelection blockSel, EntityAgent byEntity, string color)
         {
-            // Use the entity's current yaw to choose between the two straight
-            // running-bond variants. North/south uses "runningo" and east/west
-            // uses "running" so the visible brick faces align with the player.
-            BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
-            string type = facing.IsAxisWE ? "running" : "runningo";
-            return new AssetLocation("brickbybrick", $"brickcourse-four-{type}-{color}-1");
+            Variants variants = new();
+            variants.Set("state", "four");
+            variants.Set("color", color);
+            variants.Set("stage", "1");
+
+            if (toolMode == SlabMode)
+            {
+                variants.Set("shape", "slab");
+                variants.Set("rotation", ResolveSlabRotationCode(blockSel));
+            }
+            else if (toolMode == StairMode)
+            {
+                ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
+                variants.Set("shape", "stair");
+                variants.Set("vertical", vertical);
+                variants.Set("horizontal", horizontal);
+            }
+            else
+            {
+                BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
+                variants.Set("shape", "block");
+                variants.Set("bond", facing.IsAxisWE ? "running" : "runningo");
+            }
+
+            return variants;
         }
 
         private string ResolveSlabRotationCode(BlockSelection blockSel)
@@ -760,7 +779,7 @@ namespace brickbybrick.items
                 case BuildMode:
                     if (!IsTrowelable(selectedBlock)) return null;
 
-                    int nextStage = GetBlockStage(selectedBlock) + 1;
+                    int nextStage = GetBlockStage(selectedBlock, byEntity.World, blockSel.Position) + 1;
                     return GetConstructionAction(nextStage) switch
                     {
                         ConstructionAction.Mortar => MortarUseAnimationCode,
@@ -833,7 +852,74 @@ namespace brickbybrick.items
                 : activeInteractions.Append(modeInteraction);
 
         }
-        private int GetBlockStage(Block block)
+        private Variants GetCourseVariants(IWorldAccessor world, BlockPos pos, Block block)
+        {
+            BlockEntity blockEntity = world?.BlockAccessor?.GetBlockEntity(pos);
+            BlockEntityBehaviorShapeTexturesFromAttributes behavior =
+                blockEntity?.GetBehavior<BlockEntityBehaviorShapeTexturesFromAttributes>();
+
+            if (behavior?.Variants?.Any == true)
+            {
+                Variants copiedVariants = new();
+                copiedVariants.Set(behavior.Variants.GetElements());
+                return copiedVariants;
+            }
+
+            // Legacy construction blocks remain registered for save compatibility.
+            // Convert their code variants into ARL attributes on the next action.
+            Variants variants = new();
+            variants.Set("state", GetBlockVariant(block, "state") ?? "four");
+            variants.Set("color", GetBlockVariant(block, "color") ?? block?.LastCodePart(1));
+            variants.Set("stage", GetLegacyBlockStage(block).ToString());
+
+            if (IsStagedSlabBlock(block))
+            {
+                variants.Set("shape", "slab");
+                variants.Set("rotation", GetBlockVariant(block, "rot") ?? BlockFacing.DOWN.Code);
+            }
+            else if (IsStagedStairBlock(block))
+            {
+                variants.Set("shape", "stair");
+                variants.Set("vertical", GetBlockVariant(block, "verticalorientation") ?? "up");
+                variants.Set("horizontal", GetBlockVariant(block, "horizontalorientation") ?? BlockFacing.NORTH.Code);
+            }
+            else
+            {
+                variants.Set("shape", "block");
+                variants.Set("bond", GetBlockVariant(block, "type") ?? "running");
+            }
+
+            return variants;
+        }
+
+        private void ApplyCourseState(IWorldAccessor world, BlockPos pos, Variants variants)
+        {
+            BlockEntity blockEntity = world?.BlockAccessor?.GetBlockEntity(pos);
+            BlockEntityBehaviorShapeTexturesFromAttributes behavior =
+                blockEntity?.GetBehavior<BlockEntityBehaviorShapeTexturesFromAttributes>();
+            if (behavior == null) return;
+
+            ItemStack courseStack = new ItemStack(world.BlockAccessor.GetBlock(new AssetLocation(MasonryCourseCode)));
+            variants.ToStack(courseStack);
+            behavior.OnBlockPlaced(courseStack);
+            blockEntity.MarkDirty(true);
+        }
+
+        private int GetBlockStage(Block block, IWorldAccessor world = null, BlockPos pos = null)
+        {
+            if (world != null && pos != null)
+            {
+                string stage = GetCourseVariants(world, pos, block).Get("stage");
+                if (int.TryParse(stage, out int attributeStage))
+                {
+                    return attributeStage;
+                }
+            }
+
+            return GetLegacyBlockStage(block);
+        }
+
+        private int GetLegacyBlockStage(Block block)
         {
             if (block == null) return 0;
 
@@ -846,8 +932,17 @@ namespace brickbybrick.items
             return int.TryParse(block.LastCodePart(0), out stage) ? stage : 0;
         }
 
-        private string GetBlockColor(Block block)
+        private string GetBlockColor(Block block, IWorldAccessor world = null, BlockPos pos = null)
         {
+            if (world != null && pos != null)
+            {
+                string attributeColor = GetCourseVariants(world, pos, block).Get("color");
+                if (!string.IsNullOrEmpty(attributeColor))
+                {
+                    return attributeColor;
+                }
+            }
+
             if (block?.Variant != null && block.Variant.TryGetValue("color", out string color))
             {
                 return color;
@@ -927,23 +1022,26 @@ namespace brickbybrick.items
         }
 
         // Resolves staged slabs and stairs to their vanilla finished blocks.
-        private AssetLocation ResolveNextBlock(Block block, int nextStage, string color)
+        private AssetLocation ResolveNextBlock(Block block, int nextStage, string color, IWorldAccessor world = null, BlockPos pos = null)
         {
             if (block == null) return null;
 
-            if (IsStagedSlabBlock(block))
+            Variants variants = world != null && pos != null ? GetCourseVariants(world, pos, block) : null;
+            string shape = variants?.Get("shape");
+
+            if (shape == "slab" || IsStagedSlabBlock(block))
             {
                 // Staged slabs have three mod stages; the fourth advance
                 // resolves directly to the matching vanilla slab block.
                 if (nextStage <= 3)
                 {
-                    return block.CodeWithParts(nextStage.ToString());
+                    return new AssetLocation(MasonryCourseCode);
                 }
 
                 if (nextStage == 4)
                 {
-                    string slabColor = GetBlockColor(block);
-                    string rot = GetBlockVariant(block, "rot") ?? BlockFacing.DOWN.Code;
+                    string slabColor = variants?.Get("color") ?? GetBlockColor(block);
+                    string rot = variants?.Get("rotation") ?? GetBlockVariant(block, "rot") ?? BlockFacing.DOWN.Code;
 
                     return new AssetLocation("game", $"brickslabs-four-{slabColor}-{rot}-free");
                 }
@@ -951,20 +1049,20 @@ namespace brickbybrick.items
                 return null;
             }
 
-            if (IsStagedStairBlock(block))
+            if (shape == "stair" || IsStagedStairBlock(block))
             {
                 // Staged stairs have five mod stages; the sixth advance
                 // resolves directly to the matching vanilla stair block.
                 if (nextStage <= 5)
                 {
-                    return block.CodeWithParts(nextStage.ToString());
+                    return new AssetLocation(MasonryCourseCode);
                 }
 
                 if (nextStage == 6)
                 {
-                    string stairColor = GetBlockColor(block);
-                    string vertical = GetBlockVariant(block, "verticalorientation") ?? "up";
-                    string horizontal = GetBlockVariant(block, "horizontalorientation") ?? BlockFacing.NORTH.Code;
+                    string stairColor = variants?.Get("color") ?? GetBlockColor(block);
+                    string vertical = variants?.Get("vertical") ?? GetBlockVariant(block, "verticalorientation") ?? "up";
+                    string horizontal = variants?.Get("horizontal") ?? GetBlockVariant(block, "horizontalorientation") ?? BlockFacing.NORTH.Code;
 
                     return new AssetLocation("game", $"brickstairs-four-{stairColor}-{vertical}-{horizontal}-free");
                 }
@@ -974,7 +1072,7 @@ namespace brickbybrick.items
 
             if (nextStage <= 7)
             {
-                return block.CodeWithParts(nextStage.ToString());
+                return new AssetLocation(MasonryCourseCode);
             }
 
             if (nextStage == 8)
@@ -986,7 +1084,9 @@ namespace brickbybrick.items
                     return new AssetLocation("brickbybrick:brickblock-good-fire");
                 }
 
-                return block.CodeWithoutParts(1);
+                string state = variants?.Get("state") ?? GetBlockVariant(block, "state") ?? "four";
+                string bond = variants?.Get("bond") ?? GetBlockVariant(block, "type") ?? "running";
+                return new AssetLocation("game", $"brickcourse-{state}-{bond}-{color}");
             }
 
             return null;
@@ -1004,13 +1104,15 @@ namespace brickbybrick.items
 
         private bool IsCompletingFullBrickBlock(Block block, int nextStage)
         {
-            if (block?.Code?.PathStartsWith("brickcourse") != true) return false;
-
-            return nextStage == 8;
+            return nextStage == 8
+                && (block?.Code?.PathStartsWith("brickcourse") == true
+                    || block?.Code?.Path == "masonrycourse");
         }
 
         private bool IsFinalStagedVariant(Block block)
         {
+            if (block?.Code?.Path == "masonrycourse") return false;
+
             int stage = GetBlockStage(block);
 
             if (IsStagedSlabBlock(block) || IsStagedStairBlock(block))

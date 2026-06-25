@@ -297,9 +297,15 @@
         "base": "game:block/clay/brickpile/burned/{color}-brick1"
       }
     },
-    "*-four-running-clinker": {
+    "*-four-running-clinker-*": {
       "material": {
         "base": "game:block/clay/brick/four/running/clinker*"
+      },
+      "material2": {
+        "base": "game:block/clay/brick/four/running/clinker*"
+      },
+      "colour": {
+        "base": "game:block/clay/brickpile/burned/clinker-brick1"
       }
     },
     "*-four-running-*": {
