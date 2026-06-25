@@ -7,7 +7,7 @@
     "Grimm Spector",
     "Ultrcombraun"
   ],
-  "description": "A mod to add immersive mechanics for buildilng stone, brick and similar block types with trowels and individual pieces. Compatible with all Vintage Story 1.22.x versions.",
+  "description": "A mod to add immersive mechanics for building stone, brick and similar block types with trowels and individual pieces. Compatible with all Vintage Story 1.22.x versions.",
   "version": "0.1.1",
   "dependencies": {
     "game": "1.22.0"
