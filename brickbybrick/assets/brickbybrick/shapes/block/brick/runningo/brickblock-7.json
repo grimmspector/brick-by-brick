@@ -7,7 +7,12 @@
   "textureWidth": 16,
   "textureHeight": 16,
   "textureSizes": {},
-  "textures": {},
+  "textures": {
+    "mortar": "game:block/wood/barrel/mortar",
+    "material": "game:block/clay/brick/four/running",
+    "colour": "game:block/clay/brickpile/burned",
+    "material2": "game:block/clay/brick/four/header"
+  },
   "elements": [
     {
       "name": "RunningORoot",
