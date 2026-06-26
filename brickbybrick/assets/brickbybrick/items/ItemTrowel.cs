@@ -301,8 +301,7 @@ namespace brickbybrick.items
             Variants placementVariants = CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
             ItemStack placementStack = CreateCourseStack(byEntity.World, placementVariants);
 
-            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
-            placeBlock.OnBlockPlaced(byEntity.World, targetPos, placementStack);
+            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos, placementStack);
             ApplyCourseState(byEntity.World, targetPos, placementVariants);
             SpawnConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.25, true, materialStack);
 
