@@ -110,7 +110,7 @@ namespace brickbybrick.items
                 {
                     new WorldInteraction()
                     {
-                        ActionLangCode = "heldhelp-trowel",
+                        ActionLangCode = "brickbybrick:heldhelp-trowel-build",
                         MouseButton = EnumMouseButton.Right,
                         Itemstacks = stacks.ToArray()
                     }
@@ -138,7 +138,7 @@ namespace brickbybrick.items
                 {
                     new WorldInteraction()
                     {
-                        ActionLangCode = "heldhelp-trowel",
+                        ActionLangCode = "brickbybrick:heldhelp-trowel-block",
                         MouseButton = EnumMouseButton.Right,
                         Itemstacks = stacks.ToArray()
                     }
@@ -181,7 +181,8 @@ namespace brickbybrick.items
 
             // Refill from mortar containers immediately before any build mode
             // handling so buckets and similar targets always win over placement.
-            if (TryCollectFromContainer(world, pos, slot))
+            if (brickbybrickModSystem.Config.Trowels.AllowContainerRefill
+                && TryCollectFromContainer(world, pos, slot))
             {
                 SetInteracted(slot.Itemstack, true);
                 handling = EnumHandHandling.PreventDefault;
@@ -304,7 +305,7 @@ namespace brickbybrick.items
 
             PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, BrickSounds, 20f);
             SpawnPlacementParticlesDuringAction(secondsUsed, slot, byEntity, blockSel, toolMode);
-            if (secondsUsed < brickbybrickModSystem.Config.ConstructionActionSeconds) return true;
+            if (secondsUsed < brickbybrickModSystem.Config.GetConstructionActionSeconds()) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
             if (!HasEnoughMortar(slot, byEntity)) return false;
@@ -328,8 +329,8 @@ namespace brickbybrick.items
             ApplyCourseState(byEntity.World, targetPos, placementVariants);
             SpawnConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.25, true, materialStack);
 
-            ConsumeOffhand(offhandSlot, brickbybrickModSystem.Config.MasonryCostPerAction);
-            ConsumeMortar(slot, brickbybrickModSystem.Config.MortarCostPerAction);
+            ConsumeOffhand(offhandSlot, brickbybrickModSystem.Config.Trowels.MasonryCostPerAction);
+            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -352,7 +353,7 @@ namespace brickbybrick.items
 
             PlayStageSoundAtMidpoint(secondsUsed, slot, byEntity, pos, player, action);
             SpawnStageParticlesDuringAction(secondsUsed, slot, byEntity, pos, block, action, color);
-            if (secondsUsed < brickbybrickModSystem.Config.ConstructionActionSeconds) return true;
+            if (secondsUsed < brickbybrickModSystem.Config.GetConstructionActionSeconds()) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
             // Re-read the target after the timed action. Another player or a
@@ -418,10 +419,10 @@ namespace brickbybrick.items
 
             if (materialSlot != null)
             {
-                ConsumeOffhand(materialSlot, brickbybrickModSystem.Config.MasonryCostPerAction);
+                ConsumeOffhand(materialSlot, brickbybrickModSystem.Config.Trowels.MasonryCostPerAction);
             }
 
-            ConsumeMortar(slot, brickbybrickModSystem.Config.MortarCostPerAction);
+            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -431,7 +432,7 @@ namespace brickbybrick.items
         public static int GetMaxCapacity(ItemStack stack)
         {
             int toolTier = stack.Collectible.ToolTier;
-            return toolTier * brickbybrickModSystem.Config.TrowelCapacityPerTier;
+            return toolTier * brickbybrickModSystem.Config.Trowels.CapacityPerTier;
         }
 
         public static int GetStoredAmount(ItemStack stack)
@@ -588,6 +589,7 @@ namespace brickbybrick.items
         // Adds slight pitch and volume variation to action sounds.
         private void PlayRandomSound(IWorldAccessor world, BlockPos pos, IPlayer player, string[] sounds, float range)
         {
+            if (!brickbybrickModSystem.Config.Effects.EnableConstructionSounds) return;
             if (world == null ||  sounds == null || sounds.Length == 0) return;
  
             var rand = world.Rand;
@@ -670,10 +672,10 @@ namespace brickbybrick.items
             float range)
         {
             if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return;
-            if (secondsUsed < brickbybrickModSystem.Config.ConstructionActionSeconds / 2f) return;
+            if (secondsUsed < brickbybrickModSystem.Config.GetConstructionActionSeconds() / 2f) return;
             if (slot.Itemstack.Attributes.GetBool("soundPlayed", false)) return;
 
-            PlayRandomSound(byEntity.World, pos, player, sounds, range);
+            PlayRandomSound(byEntity.World, pos, player, sounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
             slot.Itemstack.Attributes.SetBool("soundPlayed", true);
         }
 
@@ -706,6 +708,7 @@ namespace brickbybrick.items
             bool includeMortar = false,
             ItemStack materialStack = null)
         {
+            if (!brickbybrickModSystem.Config.Effects.EnableConstructionParticles) return;
             if (world?.Side != EnumAppSide.Server || pos == null) return;
 
             EmitConstructionParticles(world, pos, block, action, color, completed, 1f, surfaceHeight, includeMortar, materialStack);
@@ -747,6 +750,7 @@ namespace brickbybrick.items
             EntityAgent byEntity,
             ConstructionAction action)
         {
+            if (!brickbybrickModSystem.Config.Effects.EnableConstructionParticles) return false;
             if (action == ConstructionAction.None) return false;
             if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return false;
 
@@ -977,6 +981,23 @@ namespace brickbybrick.items
             if (slot?.Itemstack == null || quantity <= 0) return;
 
             SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - quantity);
+        }
+
+        // Builder mode carries fractional cost forward on the trowel so one
+        // mortar portion pays for exactly two normal one-portion actions.
+        private void ConsumeConfiguredMortar(ItemSlot slot, int baseQuantity)
+        {
+            if (slot?.Itemstack == null || baseQuantity <= 0) return;
+
+            const string CostRemainderAttribute = "mortarCostRemainder";
+            float multiplier = brickbybrickModSystem.Config.GetMortarCostMultiplier();
+            float totalCost = slot.Itemstack.Attributes.GetFloat(CostRemainderAttribute, 0.0f)
+                + baseQuantity * multiplier;
+            int wholeCost = (int)Math.Floor(totalCost);
+            float remainder = totalCost - wholeCost;
+
+            slot.Itemstack.Attributes.SetFloat(CostRemainderAttribute, remainder);
+            ConsumeMortar(slot, wholeCost);
         }
 
         private BlockPos ResolvePlacementTarget(BlockSelection blockSel)
@@ -1214,18 +1235,37 @@ namespace brickbybrick.items
             int toolMode = inSlot?.Itemstack == null ? 0 : Math.Min(maxToolMode, inSlot.Itemstack.Attributes.GetInt("toolMode"));
             WorldInteraction[] activeInteractions = toolMode == 0 ? interactions : placementInteractions;
 
+            WorldInteraction actionInteraction = new WorldInteraction()
+            {
+                ActionLangCode = GetHeldHelpLangCode(toolMode),
+                MouseButton = EnumMouseButton.Right,
+                Itemstacks = activeInteractions?[0].Itemstacks
+            };
+
             WorldInteraction modeInteraction = new WorldInteraction()
             {
-                ActionLangCode = "Change tool mode",
+                ActionLangCode = "brickbybrick:heldhelp-trowel-change-mode",
                 HotKeyCodes = new string[] { "toolmodeselect" },
                 MouseButton = EnumMouseButton.None
             };
 
-            return activeInteractions == null
+            return activeInteractions == null || activeInteractions.Length == 0
                 ? new WorldInteraction[] { modeInteraction }
-                : activeInteractions.Append(modeInteraction);
+                : new WorldInteraction[] { actionInteraction, modeInteraction };
 
         }
+
+        private string GetHeldHelpLangCode(int toolMode)
+        {
+            return toolMode switch
+            {
+                SlabMode => "brickbybrick:heldhelp-trowel-slab",
+                StairMode => "brickbybrick:heldhelp-trowel-stair",
+                BlockMode => "brickbybrick:heldhelp-trowel-block",
+                _ => "brickbybrick:heldhelp-trowel-build"
+            };
+        }
+
         private Variants GetCourseVariants(IWorldAccessor world, BlockPos pos, Block block)
         {
             BlockEntity blockEntity = world?.BlockAccessor?.GetBlockEntity(pos);
@@ -1466,7 +1506,6 @@ namespace brickbybrick.items
 
         private sealed class TrowelPlacementPreviewRenderer : IRenderer, IDisposable
         {
-            private const float PreviewAlpha = 0.52f;
             private const float ContactFaceOffset = 0.015625f;
             private const string DefaultPreviewColor = "red";
 
@@ -1485,13 +1524,15 @@ namespace brickbybrick.items
 
             public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
             {
+                if (!brickbybrickModSystem.Config.Trowels.EnablePlacementPreview) return;
                 if (!TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)) return;
 
                 MeshRef meshRef = GetOrCreateMeshRef(finalBlock);
                 if (meshRef == null) return;
 
                 IRenderAPI rpi = capi.Render;
-                Vec4f ghostTint = new Vec4f(1f, 1f, 1f, PreviewAlpha);
+                float previewAlpha = brickbybrickModSystem.Config.Trowels.PlacementPreviewOpacity;
+                Vec4f ghostTint = new Vec4f(1f, 1f, 1f, previewAlpha);
                 Vec3d cameraPos = capi.World.Player.Entity.CameraPos;
                 IStandardShaderProgram shader = rpi.PreparedStandardShader(targetPos.X, targetPos.Y, targetPos.Z, ghostTint);
                 Vec3f faceOffset = GetFaceOffset(selectedFace);
