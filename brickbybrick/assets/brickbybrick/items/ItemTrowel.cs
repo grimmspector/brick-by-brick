@@ -23,11 +23,6 @@ namespace brickbybrick.items
 
         SkillItem[] toolModes;
         private TrowelPlacementPreviewRenderer placementPreviewRenderer;
-        private const int CapacityPerTier = 16;
-        private const float ActionDurationSeconds = 2f;
-        private const float ActionSoundTimeSeconds = 1f;
-        private const int MortarCostPerAction = 1;
-        private const int MasonryCostPerAction = 1;
         private const int BuildMode = 0;
         private const int SlabMode = 1;
         private const int StairMode = 2;
@@ -309,7 +304,7 @@ namespace brickbybrick.items
 
             PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, BrickSounds, 20f);
             SpawnPlacementParticlesDuringAction(secondsUsed, slot, byEntity, blockSel, toolMode);
-            if (secondsUsed < ActionDurationSeconds) return true;
+            if (secondsUsed < brickbybrickModSystem.Config.ConstructionActionSeconds) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
             if (!HasEnoughMortar(slot, byEntity)) return false;
@@ -333,8 +328,8 @@ namespace brickbybrick.items
             ApplyCourseState(byEntity.World, targetPos, placementVariants);
             SpawnConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.25, true, materialStack);
 
-            ConsumeOffhand(offhandSlot, MasonryCostPerAction);
-            ConsumeMortar(slot, MortarCostPerAction);
+            ConsumeOffhand(offhandSlot, brickbybrickModSystem.Config.MasonryCostPerAction);
+            ConsumeMortar(slot, brickbybrickModSystem.Config.MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -357,7 +352,7 @@ namespace brickbybrick.items
 
             PlayStageSoundAtMidpoint(secondsUsed, slot, byEntity, pos, player, action);
             SpawnStageParticlesDuringAction(secondsUsed, slot, byEntity, pos, block, action, color);
-            if (secondsUsed < ActionDurationSeconds) return true;
+            if (secondsUsed < brickbybrickModSystem.Config.ConstructionActionSeconds) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
             // Re-read the target after the timed action. Another player or a
@@ -423,10 +418,10 @@ namespace brickbybrick.items
 
             if (materialSlot != null)
             {
-                ConsumeOffhand(materialSlot, MasonryCostPerAction);
+                ConsumeOffhand(materialSlot, brickbybrickModSystem.Config.MasonryCostPerAction);
             }
 
-            ConsumeMortar(slot, MortarCostPerAction);
+            ConsumeMortar(slot, brickbybrickModSystem.Config.MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -436,7 +431,7 @@ namespace brickbybrick.items
         public static int GetMaxCapacity(ItemStack stack)
         {
             int toolTier = stack.Collectible.ToolTier;
-            return toolTier * CapacityPerTier;
+            return toolTier * brickbybrickModSystem.Config.TrowelCapacityPerTier;
         }
 
         public static int GetStoredAmount(ItemStack stack)
@@ -675,7 +670,7 @@ namespace brickbybrick.items
             float range)
         {
             if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return;
-            if (secondsUsed < ActionSoundTimeSeconds) return;
+            if (secondsUsed < brickbybrickModSystem.Config.ConstructionActionSeconds / 2f) return;
             if (slot.Itemstack.Attributes.GetBool("soundPlayed", false)) return;
 
             PlayRandomSound(byEntity.World, pos, player, sounds, range);

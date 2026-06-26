@@ -14,7 +14,10 @@ namespace brickbybrick
 {
     public class brickbybrickModSystem : ModSystem
     {
+        private const string ConfigFileName = "brickbybrick.json";
         private const string MasonryGuidePageCode = "gamemechanicinfo-brickbybrick-masonry";
+
+        internal static BrickByBrickConfig Config { get; private set; } = new();
 
         private ModSystemSurvivalHandbook? survivalHandbook;
 
@@ -22,11 +25,21 @@ namespace brickbybrick
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
+            LoadConfig(api);
             Mod.Logger.Event($"started '{Mod.Info.Name}' mod");
             api.RegisterItemClass(Mod.Info.ModID + ".trowel", typeof(ItemTrowel));
             api.RegisterBlockClass(Mod.Info.ModID + ".cobbleblock", typeof(BlockStone));
             api.RegisterBlockClass(Mod.Info.ModID + ".brickblock", typeof(BlockBrick));
 
+        }
+
+        // Loads one shared settings object on each side. Vintage Story writes
+        // the default file only when none exists, then validation guards edits.
+        private void LoadConfig(ICoreAPI api)
+        {
+            Config = api.LoadModConfig<BrickByBrickConfig>(ConfigFileName) ?? new BrickByBrickConfig();
+            Config.Validate();
+            api.StoreModConfig(Config, ConfigFileName);
         }
 
         public override void StartServerSide(ICoreServerAPI api)
