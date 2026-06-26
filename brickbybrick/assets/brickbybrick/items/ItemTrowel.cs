@@ -22,6 +22,7 @@ namespace brickbybrick.items
         WorldInteraction[] placementInteractions;
 
         SkillItem[] toolModes;
+        private TrowelPlacementPreviewRenderer placementPreviewRenderer;
         private const int CapacityPerTier = 16;
         private const float ActionDurationSeconds = 2f;
         private const float ActionSoundTimeSeconds = 1f;
@@ -148,6 +149,21 @@ namespace brickbybrick.items
                     }
                 };
             });
+
+            placementPreviewRenderer = new TrowelPlacementPreviewRenderer(capi, this);
+            capi.Event.RegisterRenderer(placementPreviewRenderer, EnumRenderStage.AfterOIT, "brickbybrick-trowel-placement-preview");
+        }
+
+        public override void OnUnloaded(ICoreAPI api)
+        {
+            if (api is ICoreClientAPI capi && placementPreviewRenderer != null)
+            {
+                capi.Event.UnregisterRenderer(placementPreviewRenderer, EnumRenderStage.AfterOIT);
+                placementPreviewRenderer.Dispose();
+                placementPreviewRenderer = null;
+            }
+
+            base.OnUnloaded(api);
         }
 
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
@@ -611,6 +627,33 @@ namespace brickbybrick.items
         private static bool IsPlacementMode(int toolMode)
         {
             return toolMode == SlabMode || toolMode == StairMode || toolMode == BlockMode;
+        }
+
+        private AssetLocation ResolveFinishedPlacementBlockCode(int toolMode, Variants variants, string color)
+        {
+            if (variants == null || string.IsNullOrEmpty(color)) return null;
+
+            if (toolMode == SlabMode)
+            {
+                string rot = variants.Get("rotation") ?? BlockFacing.DOWN.Code;
+                return new AssetLocation("game", $"brickslabs-four-{color}-{rot}-free");
+            }
+
+            if (toolMode == StairMode)
+            {
+                string vertical = variants.Get("vertical") ?? "up";
+                string horizontal = variants.Get("horizontal") ?? BlockFacing.NORTH.Code;
+                return new AssetLocation("game", $"brickstairs-four-{color}-{vertical}-{horizontal}-free");
+            }
+
+            if (color == "fire")
+            {
+                return new AssetLocation("brickbybrick:brickblock-good-fire");
+            }
+
+            string state = variants.Get("state") ?? "four";
+            string bond = variants.Get("bond") ?? "running";
+            return new AssetLocation("game", $"brickcourse-{state}-{bond}-{color}");
         }
 
         private static ConstructionAction GetConstructionAction(int nextStage)
@@ -1394,6 +1437,187 @@ namespace brickbybrick.items
         {
             return nextStage == 8
                 && block?.Code?.Path == "masonrycourse";
+        }
+
+        private sealed class TrowelPlacementPreviewRenderer : IRenderer, IDisposable
+        {
+            private const float PreviewAlpha = 0.52f;
+            private const float ContactFaceOffset = 0.015625f;
+            private const string DefaultPreviewColor = "red";
+
+            private readonly ICoreClientAPI capi;
+            private readonly ItemTrowel trowel;
+            private readonly Dictionary<string, MeshRef> meshRefs = new();
+
+            public double RenderOrder => 0.55;
+            public int RenderRange => 24;
+
+            public TrowelPlacementPreviewRenderer(ICoreClientAPI capi, ItemTrowel trowel)
+            {
+                this.capi = capi;
+                this.trowel = trowel;
+            }
+
+            public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
+            {
+                if (!TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)) return;
+
+                MeshRef meshRef = GetOrCreateMeshRef(finalBlock);
+                if (meshRef == null) return;
+
+                IRenderAPI rpi = capi.Render;
+                Vec4f ghostTint = new Vec4f(1f, 1f, 1f, PreviewAlpha);
+                Vec3d cameraPos = capi.World.Player.Entity.CameraPos;
+                IStandardShaderProgram shader = rpi.PreparedStandardShader(targetPos.X, targetPos.Y, targetPos.Z, ghostTint);
+                Vec3f faceOffset = GetFaceOffset(selectedFace);
+
+                shader.Tex2D = capi.BlockTextureAtlas.AtlasTextures[0].TextureId;
+                shader.RgbaTint = ghostTint;
+                shader.AlphaTest = 0.01f;
+                shader.ExtraGlow = 96;
+                shader.SsaoAttn = 0f;
+                shader.OverlayOpacity = 0f;
+                shader.ModelMatrix = Matrixf.Create()
+                    .Translate(
+                        (float)(targetPos.X - cameraPos.X) + faceOffset.X,
+                        (float)(targetPos.Y - cameraPos.Y) + faceOffset.Y,
+                        (float)(targetPos.Z - cameraPos.Z) + faceOffset.Z)
+                    .Values;
+
+                rpi.GlToggleBlend(true);
+                rpi.GLDepthMask(false);
+                rpi.GlEnableCullFace();
+                rpi.RenderMesh(meshRef);
+                rpi.GLDepthMask(true);
+                rpi.GlToggleBlend(false);
+                shader.Stop();
+            }
+
+            public void Dispose()
+            {
+                foreach (MeshRef meshRef in meshRefs.Values)
+                {
+                    capi.Render.DeleteMesh(meshRef);
+                }
+
+                meshRefs.Clear();
+            }
+
+            private MeshRef GetOrCreateMeshRef(Block block)
+            {
+                string key = block.Code.ToString();
+                if (meshRefs.TryGetValue(key, out MeshRef meshRef)) return meshRef;
+
+                capi.Tesselator.TesselateBlock(block, out MeshData meshData);
+                meshRef = capi.Render.UploadMesh(meshData);
+                meshRefs[key] = meshRef;
+
+                return meshRef;
+            }
+
+            private bool TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)
+            {
+                targetPos = null;
+                finalBlock = null;
+                selectedFace = BlockFacing.UP;
+
+                IClientPlayer player = capi.World.Player;
+                ItemSlot activeSlot = player?.InventoryManager?.ActiveHotbarSlot;
+                BlockSelection blockSel = player?.CurrentBlockSelection;
+                if (activeSlot?.Itemstack?.Collectible != trowel || blockSel == null) return false;
+
+                int toolMode = trowel.GetToolMode(activeSlot, player, blockSel);
+                if (!IsPlacementMode(toolMode)) return false;
+                if (!TryResolveMaterial(player, out ItemStack materialStack, out string family, out string color)) return false;
+
+                targetPos = trowel.ResolvePlacementTarget(blockSel);
+                selectedFace = blockSel.Face ?? BlockFacing.UP;
+                Block placeBlock = trowel.ResolvePlacementBlock(capi.World, player.Entity, blockSel, toolMode, color);
+                Block existingBlock = capi.World.BlockAccessor.GetBlock(targetPos);
+                if (placeBlock == null || existingBlock == null || !existingBlock.IsReplacableBy(placeBlock)) return false;
+
+                Variants variants = CreatePreviewVariants(toolMode, blockSel, player.Entity, family, color, materialStack);
+                AssetLocation finalCode = trowel.ResolveFinishedPlacementBlockCode(toolMode, variants, color);
+                finalBlock = finalCode == null ? null : capi.World.BlockAccessor.GetBlock(finalCode);
+
+                return finalBlock != null;
+            }
+
+            // Preview checks stay silent so invalid offhand contents do not
+            // spam normal placement notices while the player looks around.
+            private bool TryResolveMaterial(IPlayer player, out ItemStack materialStack, out string family, out string color)
+            {
+                materialStack = null;
+                family = null;
+                color = null;
+
+                if (!trowel.TryGetOffhandStack(player, out _, out materialStack))
+                {
+                    family = "brick";
+                    color = DefaultPreviewColor;
+                    return true;
+                }
+
+                family = trowel.GetMasonryFamily(materialStack);
+                color = trowel.GetItemColor(materialStack);
+
+                if (!string.IsNullOrEmpty(family) && !string.IsNullOrEmpty(color)) return true;
+
+                family = "brick";
+                color = DefaultPreviewColor;
+                return true;
+            }
+
+            private Variants CreatePreviewVariants(
+                int toolMode,
+                BlockSelection blockSel,
+                EntityAgent byEntity,
+                string family,
+                string color,
+                ItemStack materialStack)
+            {
+                if (materialStack != null)
+                {
+                    return trowel.CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
+                }
+
+                Variants variants = new();
+                variants.Set("family", family);
+                variants.Set("state", "four");
+                variants.Set("color", color);
+
+                if (toolMode == SlabMode)
+                {
+                    variants.Set("shape", "slab");
+                    variants.Set("rotation", trowel.ResolveSlabRotationCode(blockSel));
+                }
+                else if (toolMode == StairMode)
+                {
+                    trowel.ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
+                    variants.Set("shape", "stair");
+                    variants.Set("vertical", vertical);
+                    variants.Set("horizontal", horizontal);
+                }
+                else
+                {
+                    BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
+                    variants.Set("shape", "block");
+                    variants.Set("bond", facing.IsAxisWE ? "running" : "runningo");
+                }
+
+                return variants;
+            }
+
+            private Vec3f GetFaceOffset(BlockFacing face)
+            {
+                if (face == BlockFacing.DOWN) return new Vec3f(0, -ContactFaceOffset, 0);
+                if (face == BlockFacing.NORTH) return new Vec3f(0, 0, -ContactFaceOffset);
+                if (face == BlockFacing.SOUTH) return new Vec3f(0, 0, ContactFaceOffset);
+                if (face == BlockFacing.WEST) return new Vec3f(-ContactFaceOffset, 0, 0);
+                if (face == BlockFacing.EAST) return new Vec3f(ContactFaceOffset, 0, 0);
+
+                return new Vec3f(0, ContactFaceOffset, 0);
+            }
         }
 
     }
