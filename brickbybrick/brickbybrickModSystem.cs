@@ -37,7 +37,16 @@ namespace brickbybrick
         // the default file only when none exists, then validation guards edits.
         private void LoadConfig(ICoreAPI api)
         {
-            Config = api.LoadModConfig<BrickByBrickConfig>(ConfigFileName) ?? new BrickByBrickConfig();
+            try
+            {
+                Config = api.LoadModConfig<BrickByBrickConfig>(ConfigFileName) ?? new BrickByBrickConfig();
+            }
+            catch (Exception exception)
+            {
+                Mod.Logger.Error($"Could not load {ConfigFileName}; defaults will be used. {exception.Message}");
+                Config = new BrickByBrickConfig();
+            }
+
             Config.Validate();
             api.StoreModConfig(Config, ConfigFileName);
         }
@@ -45,6 +54,21 @@ namespace brickbybrick
         public override void StartServerSide(ICoreServerAPI api)
         {
             ValidateConstructionRegistry(api);
+        }
+
+        public override void AssetsFinalize(ICoreAPI api)
+        {
+            base.AssetsFinalize(api);
+
+            if (!Config.Construction.DisableVanillaBlockRecipes) return;
+
+            foreach (GridRecipe recipe in api.World.GridRecipes)
+            {
+                if (IsDisabledVanillaBlockRecipe(recipe))
+                {
+                    recipe.Enabled = false;
+                }
+            }
         }
 
         public override void StartClientSide(ICoreClientAPI api)
@@ -79,6 +103,38 @@ namespace brickbybrick
             GuiHandbookPage masonryGuide = pages[masonryGuideIndex];
             pages.RemoveAt(masonryGuideIndex);
             pages.Add(masonryGuide);
+        }
+
+        // Disables only vanilla recipes whose outputs belong to an enabled
+        // material family. Modded recipes and unrelated decorative recipes stay intact.
+        private static bool IsDisabledVanillaBlockRecipe(GridRecipe recipe)
+        {
+            if (recipe?.Name?.Domain != GlobalConstants.DefaultDomain) return false;
+
+            string? outputPath = recipe.Output?.Code?.Path;
+            if (string.IsNullOrEmpty(outputPath)) return false;
+
+            if (Config.Materials.EnableBrickConstruction)
+            {
+                if (outputPath.StartsWith("brickcourse-", StringComparison.Ordinal)
+                    || outputPath.StartsWith("brickslab", StringComparison.Ordinal)
+                    || outputPath.StartsWith("brickstair", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            if (Config.Materials.EnableStoneConstruction)
+            {
+                if (outputPath.StartsWith("cobblestone-", StringComparison.Ordinal)
+                    || outputPath.StartsWith("cobblestoneslab", StringComparison.Ordinal)
+                    || outputPath.StartsWith("cobblestonestair", StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // Fail loudly when a required construction asset is missing. Optional

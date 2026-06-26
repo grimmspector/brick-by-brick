@@ -12,6 +12,8 @@
     <VintageStoryMirrorDir>$(MSBuildThisFileDirectory)..\.local\vintagestory</VintageStoryMirrorDir>
     <VintageStoryDir Condition="'$(VintageStoryDir)' == '' And Exists('$(VintageStoryMirrorDir)\VintagestoryAPI.dll')">$(VintageStoryMirrorDir)</VintageStoryDir>
     <VintageStoryDir Condition="'$(VintageStoryDir)' == '' And '$(VINTAGE_STORY)' != ''">$(VINTAGE_STORY)</VintageStoryDir>
+    <NewtonsoftJsonPath>$(VintageStoryDir)\Lib\Newtonsoft.Json.dll</NewtonsoftJsonPath>
+    <NewtonsoftJsonPath Condition="!Exists('$(NewtonsoftJsonPath)') And '$(VINTAGE_STORY)' != ''">$(VINTAGE_STORY)\Lib\Newtonsoft.Json.dll</NewtonsoftJsonPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,6 +43,10 @@
     </Reference>
     <Reference Include="VintagestoryLib">
       <HintPath>$(VintageStoryDir)\VintagestoryLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(NewtonsoftJsonPath)</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
