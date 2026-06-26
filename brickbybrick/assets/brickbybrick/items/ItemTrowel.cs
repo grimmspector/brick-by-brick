@@ -1,9 +1,8 @@
+using AttributeRenderingLibrary;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
 using System.Text;
-using System.Xml.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -23,7 +22,18 @@ namespace brickbybrick.items
         WorldInteraction[] placementInteractions;
 
         SkillItem[] toolModes;
-        const int CapacityPerTier = 16;
+        private TrowelPlacementPreviewRenderer placementPreviewRenderer;
+        private const int CapacityPerTier = 16;
+        private const float ActionDurationSeconds = 2f;
+        private const float ActionSoundTimeSeconds = 1f;
+        private const int MortarCostPerAction = 1;
+        private const int MasonryCostPerAction = 1;
+        private const int BuildMode = 0;
+        private const int SlabMode = 1;
+        private const int StairMode = 2;
+        private const int BlockMode = 3;
+        private const string MasonryCourseCode = "brickbybrick:masonrycourse";
+        private const string FamilyAttribute = "masonryFamily";
 
         private static readonly string[] BrickSounds =
         {
@@ -42,6 +52,13 @@ namespace brickbybrick.items
 
         private const string MortarUseAnimationCode = "trowelmortarspread";
         private const string BrickUseAnimationCode = "trowelbrickplace";
+
+        private enum ConstructionAction
+        {
+            None,
+            Mortar,
+            Masonry
+        }
 
         public override void OnLoaded(ICoreAPI api)
         {
@@ -132,6 +149,21 @@ namespace brickbybrick.items
                     }
                 };
             });
+
+            placementPreviewRenderer = new TrowelPlacementPreviewRenderer(capi, this);
+            capi.Event.RegisterRenderer(placementPreviewRenderer, EnumRenderStage.AfterOIT, "brickbybrick-trowel-placement-preview");
+        }
+
+        public override void OnUnloaded(ICoreAPI api)
+        {
+            if (api is ICoreClientAPI capi && placementPreviewRenderer != null)
+            {
+                capi.Event.UnregisterRenderer(placementPreviewRenderer, EnumRenderStage.AfterOIT);
+                placementPreviewRenderer.Dispose();
+                placementPreviewRenderer = null;
+            }
+
+            base.OnUnloaded(api);
         }
 
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
@@ -150,6 +182,7 @@ namespace brickbybrick.items
             // and midpoint sound flag before mode-specific logic starts.
             SetInteracted(slot.Itemstack, false);
             slot.Itemstack.Attributes.SetBool("soundPlayed", false);
+            slot.Itemstack.Attributes.SetFloat("lastParticleTime", -1f);
 
             // Refill from mortar containers immediately before any build mode
             // handling so buckets and similar targets always win over placement.
@@ -167,8 +200,20 @@ namespace brickbybrick.items
 
             // Placement modes own the interaction even when the selected block
             // is not trowelable because they place into the adjacent position.
-            if (toolMode == 1 || toolMode == 2 || toolMode == 3)
+            if (IsPlacementMode(toolMode))
             {
+                if (!HasEnoughMortar(slot, byEntity))
+                {
+                    handling = EnumHandHandling.PreventDefault;
+                    return;
+                }
+
+                if (!TryGetPlacementMaterial(byPlayer, byEntity, out _, out _, out _, out _))
+                {
+                    handling = EnumHandHandling.PreventDefault;
+                    return;
+                }
+
                 UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
                 handling = EnumHandHandling.PreventDefault;
                 return;
@@ -180,11 +225,23 @@ namespace brickbybrick.items
                 return;
             }
 
+            if (!HasEnoughMortar(slot, byEntity))
+            {
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
+            if (!CanStartBuildStage(block, world, pos, byPlayer, byEntity))
+            {
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
             UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
 
             switch (toolMode)
             {
-                case 0:
+                case BuildMode:
                     handling = EnumHandHandling.PreventDefault;
                     return;
 
@@ -214,17 +271,13 @@ namespace brickbybrick.items
 
             switch (toolMode)
             {
-                case 0:
+                case BuildMode:
                     return HandleTrowelMode0(secondsUsed, slot, byEntity, player, block, pos);
 
-                case 1:
-                    return HandleTrowelMode1(secondsUsed, slot, byEntity, player, blockSel);
-
-                case 2:
-                    return HandleTrowelMode2(secondsUsed, slot, byEntity, player, blockSel);
-
-                case 3:
-                    return HandleTrowelMode3(secondsUsed, slot, byEntity, player, blockSel);
+                case SlabMode:
+                case StairMode:
+                case BlockMode:
+                    return HandlePlacementMode(secondsUsed, slot, byEntity, player, blockSel, toolMode);
 
                 default:
                     return false;
@@ -239,9 +292,7 @@ namespace brickbybrick.items
 
             StopTrowelUseAnimations(byEntity);
 
-            var attrs = slot.Itemstack.Attributes;
-
-            attrs.SetBool("didInteract", false);
+            SetInteracted(slot?.Itemstack, false);
         }
 
         public override bool OnHeldInteractCancel(float secondsUsed, ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, EnumItemUseCancelReason cancelReason)
@@ -250,110 +301,40 @@ namespace brickbybrick.items
             return base.OnHeldInteractCancel(secondsUsed, slot, byEntity, blockSel, entitySel, cancelReason);
         }
 
-        // Places the first staged stair with vanilla-style orientation.
-        private bool HandleTrowelMode2(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
+        // Places the first construction stage for slabs, stairs, and blocks.
+        private bool HandlePlacementMode(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel, int toolMode)
         {
-            if (blockSel == null) return false;
+            if (blockSel == null || HasInteracted(slot?.Itemstack)) return false;
+            if (!HasEnoughMortar(slot, byEntity)) return false;
 
-            if (HasInteracted(slot.Itemstack)) return false;
-
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
-            BlockPos soundPos = blockSel.Position;
-
-            // Play feedback at the midpoint, then wait for the full hold time
-            // before consuming materials or placing the staged stair.
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayRandomSound(byEntity.World, soundPos, player, BrickSounds, 20f);
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-            if (secondsUsed < 2f) return true;
+            PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, BrickSounds, 20f);
+            SpawnPlacementParticlesDuringAction(secondsUsed, slot, byEntity, blockSel, toolMode);
+            if (secondsUsed < ActionDurationSeconds) return true;
+            if (byEntity.World.Side != EnumAppSide.Server) return false;
 
             if (!HasEnoughMortar(slot, byEntity)) return false;
-            if (!TryGetMode3BrickInfo(player, byEntity, out ItemSlot offhandSlot, out _, out string color)) return false;
+            if (!TryGetPlacementMaterial(player, byEntity, out ItemSlot offhandSlot, out ItemStack materialStack, out string family, out string color)) return false;
 
-            // Target and orientation are resolved from the original click so
-            // side clicks place beside the block, matching vanilla placement.
-            BlockPos targetPos = ResolveMode3TargetPos(blockSel);
-            ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
-
-            AssetLocation blockCode = new AssetLocation("brickbybrick", $"brickstairscourse-four-{color}-{vertical}-{horizontal}-1");
-            Block placeBlock = byEntity.World.BlockAccessor.GetBlock(blockCode);
-            if (placeBlock == null)
-            {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-could-not-resolve-stair", blockCode));
-                return false;
-            }
+            BlockPos targetPos = ResolvePlacementTarget(blockSel);
+            Block placeBlock = ResolvePlacementBlock(byEntity.World, byEntity, blockSel, toolMode, color);
+            if (placeBlock == null) return false;
 
             Block existingBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
             if (existingBlock == null || !existingBlock.IsReplacableBy(placeBlock))
             {
-                byEntity.World.Api.Logger.Event($"[TROWEL] Stair placement blocked at {targetPos} by {existingBlock?.Code}");
+                byEntity.World.Api.Logger.Event($"[TROWEL] Placement blocked at {targetPos} by {existingBlock?.Code}");
                 return false;
             }
 
-            offhandSlot.TakeOut(1);
-            offhandSlot.MarkDirty();
+            Variants placementVariants = CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
+            ItemStack placementStack = CreateCourseStack(byEntity.World, placementVariants);
 
-            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
-            placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
+            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos, placementStack);
+            ApplyCourseState(byEntity.World, targetPos, placementVariants);
+            SpawnConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.25, true, materialStack);
 
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
-            SetInteracted(slot.Itemstack, true);
-
-            return false;
-        }
-
-        // Places the first staged slab; build mode handles later stages.
-        private bool HandleTrowelMode1(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
-        {
-            if (blockSel == null) return false;
-
-            if (HasInteracted(slot.Itemstack)) return false;
-
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
-            BlockPos soundPos = blockSel.Position;
-
-            // Play feedback at the midpoint, then wait for the full hold time
-            // before consuming materials or placing the staged slab.
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayRandomSound(byEntity.World, soundPos, player, BrickSounds, 20f);
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-            if (secondsUsed < 2f) return true;
-
-            if (!HasEnoughMortar(slot, byEntity)) return false;
-            if (!TryGetMode3BrickInfo(player, byEntity, out ItemSlot offhandSlot, out _, out string color)) return false;
-
-            // Slab rotation comes from the clicked face, while the target
-            // position remains adjacent to the selected block.
-            BlockPos targetPos = ResolveMode3TargetPos(blockSel);
-            string rot = ResolveSlabRotationCode(blockSel);
-            AssetLocation blockCode = new AssetLocation("brickbybrick", $"brickslabcourse-four-{color}-{rot}-1");
-            Block placeBlock = byEntity.World.BlockAccessor.GetBlock(blockCode);
-            if (placeBlock == null)
-            {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-could-not-resolve-slab", blockCode));
-                return false;
-            }
-
-            Block existingBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
-            if (existingBlock == null || !existingBlock.IsReplacableBy(placeBlock))
-            {
-                byEntity.World.Api.Logger.Event($"[TROWEL] Slab placement blocked at {targetPos} by {existingBlock?.Code}");
-                return false;
-            }
-
-            offhandSlot.TakeOut(1);
-            offhandSlot.MarkDirty();
-
-            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
-            placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
-
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
+            ConsumeOffhand(offhandSlot, MasonryCostPerAction);
+            ConsumeMortar(slot, MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -365,58 +346,43 @@ namespace brickbybrick.items
             if (!IsTrowelable(block)) return false;
             
             if (HasInteracted(slot.Itemstack)) return false;
+            if (!HasEnoughMortar(slot, byEntity)) return false;
             
             // Read current construction state and decide which material this
             // advance needs. Mortar is used for every successful advance.
-            int currentStage = GetBlockStage(block);
+            int currentStage = GetBlockStage(block, byEntity.World, pos);
             int nextStage = currentStage + 1;
-            bool isBrickStage = (nextStage == 3 || nextStage == 5 || nextStage == 8);
-            bool isMortarStage = nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7;
-            string color = GetBlockColor(block);
+            ConstructionAction action = GetConstructionAction(nextStage);
+            string color = GetBlockColor(block, byEntity.World, pos);
 
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
+            PlayStageSoundAtMidpoint(secondsUsed, slot, byEntity, pos, player, action);
+            SpawnStageParticlesDuringAction(secondsUsed, slot, byEntity, pos, block, action, color);
+            if (secondsUsed < ActionDurationSeconds) return true;
+            if (byEntity.World.Side != EnumAppSide.Server) return false;
 
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayStageSound(byEntity.World, pos, player, isBrickStage, isMortarStage);
-
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-
-            if (secondsUsed < 2f) return true;
+            // Re-read the target after the timed action. Another player or a
+            // block update may have changed it while this interaction ran.
+            Block currentBlock = byEntity.World.BlockAccessor.GetBlock(pos);
+            if (!IsTrowelable(currentBlock)) return false;
+            if (GetBlockStage(currentBlock, byEntity.World, pos) != currentStage) return false;
+            block = currentBlock;
 
             // Determine the next block before consuming any resources so finished
             // staged blocks simply stop progressing without wasting materials.
-            AssetLocation newPath = ResolveNextBlock(block, nextStage, color);
+            AssetLocation newPath = ResolveNextBlock(block, nextStage, color, byEntity.World, pos);
             if (newPath == null)
             {
                 return false;
             }
 
             // Validate only the resources needed by this stage.
-            if (isBrickStage && !HasMatchingMaterial(player, color, byEntity)) return false;
+            if (action == ConstructionAction.Masonry && !HasMatchingMaterial(player, color, byEntity)) return false;
             if (!HasEnoughMortar(slot, byEntity)) return false;
 
-            if (isBrickStage)
+            ItemSlot materialSlot = null;
+            if (action == ConstructionAction.Masonry)
             {
-                string requiredPath = $"burnedbrick-{color}";
-
-                if (!TryGetOffhandStack(player, out ItemSlot offhandSlot, out ItemStack offhandStack))
-                {
-                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-matching-brick"));
-                    return false;
-                }
-
-                if (offhandStack.Collectible?.Code?.Path != requiredPath)
-                {
-                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredPath, offhandStack.Collectible?.Code?.Path));
-                    return false;
-                }
-
-                // Consume the brick only after the next block has resolved.
-                offhandSlot.TakeOut(1);
-                offhandSlot.MarkDirty();
+                if (!TryGetRequiredBrick(player, color, byEntity, out materialSlot)) return false;
             }
 
             Block newBlock = byEntity.World.BlockAccessor.GetBlock(newPath);
@@ -426,9 +392,27 @@ namespace brickbybrick.items
                 return false;
             }
 
-            // ExchangeBlock preserves the position while swapping to the next
-            // construction stage or final vanilla block.
-            byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
+            Variants courseVariants = GetCourseVariants(byEntity.World, pos, block);
+
+            bool remainsConstructionCourse = newPath.ToString() == MasonryCourseCode;
+            if (remainsConstructionCourse)
+            {
+                // ExchangeBlock keeps the existing ARL block entity while the
+                // construction remains the same attribute-backed block.
+                byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
+                courseVariants.Set("stage", nextStage.ToString());
+                ApplyCourseState(byEntity.World, pos, courseVariants);
+                SpawnConstructionParticles(byEntity.World, pos, newBlock, action, color, false, null, false, GetCourseMaterialStack(byEntity.World, pos, block));
+            }
+            else
+            {
+                // Completed masonry must discard the ARL block entity. A full
+                // replacement avoids retaining construction data on slabs and
+                // stairs whose final blocks use different block classes.
+                byEntity.World.BlockAccessor.SetBlock(newBlock.Id, pos);
+                newBlock.OnBlockPlaced(byEntity.World, pos, slot.Itemstack);
+                SpawnConstructionParticles(byEntity.World, pos, newBlock, action, color, true, null, false, GetCourseMaterialStack(byEntity.World, pos, block));
+            }
 
             // Full brick blocks occupy the entire space, so remove any water
             // that was sharing the construction course's fluid layer.
@@ -437,91 +421,15 @@ namespace brickbybrick.items
                 byEntity.World.BlockAccessor.SetBlock(0, pos, BlockLayersAccess.Fluid);
             }
 
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
+            if (materialSlot != null)
+            {
+                ConsumeOffhand(materialSlot, MasonryCostPerAction);
+            }
 
+            ConsumeMortar(slot, MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
             return false;
-        }
-
-        // Places the first staged full-block course.
-        private bool HandleTrowelMode3(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
-        {
-            if (blockSel == null) return false;
-
-            if (HasInteracted(slot.Itemstack)) return false;
-
-            bool soundPlayed = slot.Itemstack.Attributes.GetBool("soundPlayed", false);
-            BlockPos soundPos = blockSel.Position;
-
-            if (!soundPlayed && secondsUsed >= 1f && byEntity.World.Side == EnumAppSide.Client)
-            {
-                PlayRandomSound(byEntity.World, soundPos, player, BrickSounds, 20f);
-                slot.Itemstack.Attributes.SetBool("soundPlayed", true);
-            }
-
-            if (secondsUsed < 2f) return true;
-
-            // Validate mortar and offhand brick before resolving placement.
-            if (!HasEnoughMortar(slot, byEntity)) return false;
-
-            if (!TryGetMode3BrickInfo(player, byEntity, out ItemSlot offhandSlot, out _, out string color)) return false;
-
-            BlockPos targetPos = ResolveMode3TargetPos(blockSel);
-            Block placeBlock = ResolveMode3PlacementBlock(byEntity.World, byEntity, color);
-            if (placeBlock == null) return false;
-
-            Block existingBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
-            if (existingBlock == null || !existingBlock.IsReplacableBy(placeBlock))
-            {
-                byEntity.World.Api.Logger.Event($"[TROWEL] Placement blocked at {targetPos} by {existingBlock?.Code}");
-                return false;
-            }
-
-            offhandSlot.TakeOut(1);
-            offhandSlot.MarkDirty();
-
-            byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
-            placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
-
-            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - 1);
-
-            SetInteracted(slot.Itemstack, true);
-
-            return false;
-        }
-
-        // Finds an offhand stack and optionally consumes it.
-        private bool TryConsumeFromOffhand(
-            IPlayer player,
-            System.Func<ItemStack, bool> matcher,
-            int quantity,
-            bool consume,
-            out ItemSlot slot,
-            out ItemStack stack)
-        {
-            slot = null;
-            stack = null;
-
-            ItemSlot candidateSlot = player?.InventoryManager?.OffhandHotbarSlot;
-            ItemStack candidateStack = candidateSlot?.Itemstack;
-
-            if (candidateStack == null) return false;
-
-            if (!matcher(candidateStack)) return false;
-
-            if (consume && candidateSlot.StackSize < quantity) return false;
-
-            if (consume)
-            {
-                candidateSlot.TakeOut(quantity);
-                candidateSlot.MarkDirty();
-            }
-
-            slot = candidateSlot;
-            stack = candidateStack;
-
-            return true;
         }
 
         // Mortar capacity follows the tool's material tier.
@@ -715,21 +623,383 @@ namespace brickbybrick.items
             return stack != null;
         }
 
-        private BlockPos ResolveMode3TargetPos(BlockSelection blockSel)
+        private static bool IsPlacementMode(int toolMode)
+        {
+            return toolMode == SlabMode || toolMode == StairMode || toolMode == BlockMode;
+        }
+
+        private AssetLocation ResolveFinishedPlacementBlockCode(int toolMode, Variants variants, string color)
+        {
+            if (variants == null || string.IsNullOrEmpty(color)) return null;
+
+            if (toolMode == SlabMode)
+            {
+                string rot = variants.Get("rotation") ?? BlockFacing.DOWN.Code;
+                return new AssetLocation("game", $"brickslabs-four-{color}-{rot}-free");
+            }
+
+            if (toolMode == StairMode)
+            {
+                string vertical = variants.Get("vertical") ?? "up";
+                string horizontal = variants.Get("horizontal") ?? BlockFacing.NORTH.Code;
+                return new AssetLocation("game", $"brickstairs-four-{color}-{vertical}-{horizontal}-free");
+            }
+
+            if (color == "fire")
+            {
+                return new AssetLocation("brickbybrick:brickblock-good-fire");
+            }
+
+            string state = variants.Get("state") ?? "four";
+            string bond = variants.Get("bond") ?? "running";
+            return new AssetLocation("game", $"brickcourse-{state}-{bond}-{color}");
+        }
+
+        private static ConstructionAction GetConstructionAction(int nextStage)
+        {
+            return nextStage switch
+            {
+                2 or 4 or 6 or 7 => ConstructionAction.Mortar,
+                3 or 5 or 8 => ConstructionAction.Masonry,
+                _ => ConstructionAction.None
+            };
+        }
+
+        private void PlayActionSoundAtMidpoint(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            IPlayer player,
+            BlockPos pos,
+            string[] sounds,
+            float range)
+        {
+            if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return;
+            if (secondsUsed < ActionSoundTimeSeconds) return;
+            if (slot.Itemstack.Attributes.GetBool("soundPlayed", false)) return;
+
+            PlayRandomSound(byEntity.World, pos, player, sounds, range);
+            slot.Itemstack.Attributes.SetBool("soundPlayed", true);
+        }
+
+        private void PlayStageSoundAtMidpoint(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            BlockPos pos,
+            IPlayer player,
+            ConstructionAction action)
+        {
+            if (action == ConstructionAction.Masonry)
+            {
+                PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, pos, BrickSounds, 20f);
+            }
+            else if (action == ConstructionAction.Mortar)
+            {
+                PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, pos, TrowelSounds, 12f);
+            }
+        }
+
+        private void SpawnConstructionParticles(
+            IWorldAccessor world,
+            BlockPos pos,
+            Block block,
+            ConstructionAction action,
+            string color,
+            bool completed,
+            double? surfaceHeight = null,
+            bool includeMortar = false,
+            ItemStack materialStack = null)
+        {
+            if (world?.Side != EnumAppSide.Server || pos == null) return;
+
+            EmitConstructionParticles(world, pos, block, action, color, completed, 1f, surfaceHeight, includeMortar, materialStack);
+        }
+
+        private void SpawnStageParticlesDuringAction(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            BlockPos pos,
+            Block block,
+            ConstructionAction action,
+            string color)
+        {
+            if (!ShouldSpawnActionParticles(secondsUsed, slot, byEntity, action)) return;
+
+            EmitConstructionParticles(byEntity.World, pos, block, action, color, false, 0.35f, null, false, GetCourseMaterialStack(byEntity.World, pos, block));
+        }
+
+        private void SpawnPlacementParticlesDuringAction(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            BlockSelection blockSel,
+            int toolMode)
+        {
+            if (!ShouldSpawnActionParticles(secondsUsed, slot, byEntity, ConstructionAction.Masonry)) return;
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            if (!TryGetPlacementMaterial(player, byEntity, out _, out ItemStack materialStack, out _, out string color)) return;
+
+            BlockPos targetPos = ResolvePlacementTarget(blockSel);
+            Block placeBlock = ResolvePlacementBlock(byEntity.World, byEntity, blockSel, toolMode, null);
+            EmitConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.35f, 0.25, true, materialStack);
+        }
+
+        private bool ShouldSpawnActionParticles(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            ConstructionAction action)
+        {
+            if (action == ConstructionAction.None) return false;
+            if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return false;
+
+            float lastParticleTime = slot.Itemstack.Attributes.GetFloat("lastParticleTime", -1f);
+            if (lastParticleTime >= 0 && secondsUsed - lastParticleTime < 0.25f) return false;
+
+            slot.Itemstack.Attributes.SetFloat("lastParticleTime", secondsUsed);
+            return true;
+        }
+
+        private void EmitConstructionParticles(
+            IWorldAccessor world,
+            BlockPos pos,
+            Block block,
+            ConstructionAction action,
+            string color,
+            bool completed,
+            float quantityMultiplier,
+            double? surfaceHeight = null,
+            bool includeMortar = false,
+            ItemStack materialStack = null)
+        {
+            const double ParticleLift = 1d / 64d;
+
+            Cuboidf bounds = GetParticleBounds(world, pos, block);
+            double particleY = pos.Y + (surfaceHeight ?? bounds.Y2) + ParticleLift;
+            Vec3d minPos = new Vec3d(pos.X, particleY - 0.02, pos.Z);
+            Vec3d maxPos = new Vec3d(pos.X + 1, particleY + 0.04, pos.Z + 1);
+            Vec3d centerPos = new Vec3d(
+                (minPos.X + maxPos.X) / 2,
+                (minPos.Y + maxPos.Y) / 2,
+                (minPos.Z + maxPos.Z) / 2
+            );
+
+            if (completed)
+            {
+                SpawnDustPuff(world, pos, centerPos, ScaleQuantity(42, quantityMultiplier), 0.5f);
+                return;
+            }
+
+            if (action == ConstructionAction.Masonry)
+            {
+                SpawnBrickChipScatter(world, centerPos, ScaleQuantity(18, quantityMultiplier), materialStack, GetFallbackBrickParticleColor(color), 0.5f);
+
+                if (includeMortar)
+                {
+                    SpawnMortarScatter(world, centerPos, ScaleQuantity(15, quantityMultiplier), 0.5f);
+                }
+            }
+            else if (action == ConstructionAction.Mortar)
+            {
+                SpawnMortarScatter(world, centerPos, ScaleQuantity(30, quantityMultiplier), 0.5f);
+            }
+        }
+
+        private int ScaleQuantity(int quantity, float multiplier)
+        {
+            return Math.Max(1, (int)Math.Ceiling(quantity * multiplier));
+        }
+
+        private Cuboidf GetParticleBounds(IWorldAccessor world, BlockPos pos, Block block)
+        {
+            // Use the rendered block's selection bounds so stage particles stay
+            // near the visible course instead of spawning from empty space.
+            Cuboidf[] boxes = block?.GetSelectionBoxes(world.BlockAccessor, pos);
+            Cuboidf bounds = boxes != null && boxes.Length > 0 ? boxes[0] : new Cuboidf(0, 0, 0, 1, 1, 1);
+
+            for (int i = 1; i < boxes?.Length; i++)
+            {
+                bounds = bounds.Clone();
+                bounds.X1 = Math.Min(bounds.X1, boxes[i].X1);
+                bounds.Y1 = Math.Min(bounds.Y1, boxes[i].Y1);
+                bounds.Z1 = Math.Min(bounds.Z1, boxes[i].Z1);
+                bounds.X2 = Math.Max(bounds.X2, boxes[i].X2);
+                bounds.Y2 = Math.Max(bounds.Y2, boxes[i].Y2);
+                bounds.Z2 = Math.Max(bounds.Z2, boxes[i].Z2);
+            }
+
+            return bounds;
+        }
+
+        private void SpawnBrickChipScatter(
+            IWorldAccessor world,
+            Vec3d centerPos,
+            int quantity,
+            ItemStack materialStack,
+            int fallbackColor,
+            float scale)
+        {
+            Random rand = world.Rand;
+
+            for (int i = 0; i < quantity; i++)
+            {
+                Vec3d origin = OffsetFromCenter(centerPos, rand, 0.45);
+                Vec3f velocity = DirectionalVelocity(centerPos, origin, rand, 0.12f, 0.22f, 0.025f, 0.075f);
+                Vec3d minPos = new Vec3d(origin.X - 0.02, origin.Y - 0.01, origin.Z - 0.02);
+                Vec3d maxPos = new Vec3d(origin.X + 0.02, origin.Y + 0.03, origin.Z + 0.02);
+
+                if (materialStack != null)
+                {
+                    world.SpawnCubeParticles(origin, materialStack, 0.18f, 1, scale, null, velocity);
+                }
+                else
+                {
+                    world.SpawnParticles(1, fallbackColor, minPos, maxPos, velocity, velocity, 0.55f, 0.45f, scale, EnumParticleModel.Cube, null);
+                }
+            }
+        }
+
+        private void SpawnDustPuff(
+            IWorldAccessor world,
+            BlockPos blockPos,
+            Vec3d centerPos,
+            int quantity,
+            float scale)
+        {
+            Random rand = world.Rand;
+
+            for (int i = 0; i < quantity; i++)
+            {
+                Vec3d origin = OffsetFromCenter(centerPos, rand, 0.35);
+                Vec3f velocity = DirectionalVelocity(centerPos, origin, rand, 0.12f, 0.22f, 0.035f, 0.11f);
+
+                world.SpawnCubeParticles(blockPos, origin, 0.08f, 1, scale, null, velocity);
+            }
+        }
+
+        private void SpawnMortarScatter(IWorldAccessor world, Vec3d centerPos, int quantity, float scale)
+        {
+            Random rand = world.Rand;
+            Vec3d splashCenter = OffsetFromCenter(centerPos, rand, 0.25);
+
+            for (int i = 0; i < quantity; i++)
+            {
+                Vec3d origin = OffsetFromCenter(splashCenter, rand, 0.4);
+                Vec3f velocity = DirectionalVelocity(splashCenter, origin, rand, 0.05f, 0.12f, -0.075f, -0.02f);
+                Vec3d minPos = new Vec3d(origin.X - 0.02, origin.Y + 0.04, origin.Z - 0.02);
+                Vec3d maxPos = new Vec3d(origin.X + 0.02, origin.Y + 0.12, origin.Z + 0.02);
+
+                world.SpawnParticles(
+                    1,
+                    GetMortarParticleColor(),
+                    minPos,
+                    maxPos,
+                    velocity,
+                    velocity,
+                    0.55f,
+                    0.45f,
+                    scale,
+                    EnumParticleModel.Cube,
+                    null
+                );
+            }
+        }
+
+        private Vec3d OffsetFromCenter(Vec3d centerPos, Random rand, double radius)
+        {
+            double angle = rand.NextDouble() * GameMath.TWOPI;
+            double distance = Math.Sqrt(rand.NextDouble()) * radius;
+
+            return new Vec3d(
+                centerPos.X + Math.Cos(angle) * distance,
+                centerPos.Y,
+                centerPos.Z + Math.Sin(angle) * distance
+            );
+        }
+
+        private Vec3f DirectionalVelocity(
+            Vec3d centerPos,
+            Vec3d origin,
+            Random rand,
+            float minHorizontal,
+            float maxHorizontal,
+            float minVertical,
+            float maxVertical)
+        {
+            double x = origin.X - centerPos.X;
+            double z = origin.Z - centerPos.Z;
+            double length = Math.Sqrt(x * x + z * z);
+
+            if (length < 0.001)
+            {
+                double angle = rand.NextDouble() * GameMath.TWOPI;
+                x = Math.Cos(angle);
+                z = Math.Sin(angle);
+                length = 1;
+            }
+
+            float horizontal = minHorizontal + (float)rand.NextDouble() * (maxHorizontal - minHorizontal);
+
+            return new Vec3f(
+                (float)(x / length) * horizontal,
+                minVertical + (float)rand.NextDouble() * (maxVertical - minVertical),
+                (float)(z / length) * horizontal
+            );
+        }
+
+        private int GetMortarParticleColor()
+        {
+            return ColorUtil.ToRgba(255, 198, 190, 168);
+        }
+
+        private int GetFallbackBrickParticleColor(string color)
+        {
+            return color switch
+            {
+                "brown" => ColorUtil.ToRgba(255, 113, 68, 43),
+                "darkbrown" => ColorUtil.ToRgba(255, 75, 48, 34),
+                "fire" => ColorUtil.ToRgba(255, 127, 60, 41),
+                "gray" => ColorUtil.ToRgba(255, 112, 105, 96),
+                "orange" => ColorUtil.ToRgba(255, 173, 82, 39),
+                "red" => ColorUtil.ToRgba(255, 139, 54, 39),
+                "tan" => ColorUtil.ToRgba(255, 181, 143, 95),
+                _ => ColorUtil.ToRgba(255, 142, 92, 64)
+            };
+        }
+
+        private static void ConsumeOffhand(ItemSlot slot, int quantity)
+        {
+            if (slot == null || quantity <= 0) return;
+
+            slot.TakeOut(quantity);
+            slot.MarkDirty();
+        }
+
+        private void ConsumeMortar(ItemSlot slot, int quantity)
+        {
+            if (slot?.Itemstack == null || quantity <= 0) return;
+
+            SetStoredAmount(slot, GetStoredAmount(slot.Itemstack) - quantity);
+        }
+
+        private BlockPos ResolvePlacementTarget(BlockSelection blockSel)
         {
             return blockSel.Position.AddCopy(blockSel.Face);
         }
 
-        // Running-bond orientation follows the player's horizontal facing.
-        private Block ResolveMode3PlacementBlock(IWorldAccessor world, EntityAgent byEntity, string color)
+        // Resolves the first construction stage for the selected placement mode.
+        private Block ResolvePlacementBlock(
+            IWorldAccessor world,
+            EntityAgent byEntity,
+            BlockSelection blockSel,
+            int toolMode,
+            string color)
         {
-            // Use the entity's current yaw to choose between the two straight
-            // running-bond variants. North/south uses "runningo" and east/west
-            // uses "running" so the visible brick faces align with the player.
-            BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
-            string type = facing.IsAxisWE ? "running" : "runningo";
-            AssetLocation blockCode = new AssetLocation("brickbybrick", $"brickcourse-four-{type}-{color}-1");
+            if (!IsPlacementMode(toolMode)) return null;
 
+            AssetLocation blockCode = new AssetLocation(MasonryCourseCode);
             Block placeBlock = world.BlockAccessor.GetBlock(blockCode);
             if (placeBlock == null)
             {
@@ -737,6 +1007,52 @@ namespace brickbybrick.items
             }
 
             return placeBlock;
+        }
+
+        private ItemStack CreateCourseStack(IWorldAccessor world, Variants variants)
+        {
+            ItemStack stack = new ItemStack(world.BlockAccessor.GetBlock(new AssetLocation(MasonryCourseCode)));
+            variants.ToStack(stack);
+
+            return stack;
+        }
+
+        private Variants CreatePlacementVariants(
+            int toolMode,
+            BlockSelection blockSel,
+            EntityAgent byEntity,
+            string family,
+            string color,
+            ItemStack materialStack)
+        {
+            Variants variants = new();
+            variants.Set("family", family);
+            variants.Set("state", "four");
+            variants.Set("color", color);
+            variants.Set("stage", "1");
+            variants.Set("materialDomain", materialStack.Collectible.Code.Domain);
+            variants.Set("materialPath", materialStack.Collectible.Code.Path);
+
+            if (toolMode == SlabMode)
+            {
+                variants.Set("shape", "slab");
+                variants.Set("rotation", ResolveSlabRotationCode(blockSel));
+            }
+            else if (toolMode == StairMode)
+            {
+                ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
+                variants.Set("shape", "stair");
+                variants.Set("vertical", vertical);
+                variants.Set("horizontal", horizontal);
+            }
+            else
+            {
+                BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
+                variants.Set("shape", "block");
+                variants.Set("bond", facing.IsAxisWE ? "running" : "runningo");
+            }
+
+            return variants;
         }
 
         private string ResolveSlabRotationCode(BlockSelection blockSel)
@@ -759,10 +1075,17 @@ namespace brickbybrick.items
             horizontal = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw).Code;
         }
 
-        private bool TryGetMode3BrickInfo(IPlayer player, EntityAgent byEntity, out ItemSlot slot, out ItemStack stack, out string color)
+        private bool TryGetPlacementMaterial(
+            IPlayer player,
+            EntityAgent byEntity,
+            out ItemSlot slot,
+            out ItemStack stack,
+            out string family,
+            out string color)
         {
             slot = null;
             stack = null;
+            family = null;
             color = null;
 
             if (!TryGetOffhandStack(player, out slot, out stack))
@@ -771,8 +1094,8 @@ namespace brickbybrick.items
                 return false;
             }
 
-            string path = stack.Collectible?.Code?.Path;
-            if (string.IsNullOrEmpty(path) || !path.StartsWith("burnedbrick-"))
+            family = GetMasonryFamily(stack);
+            if (string.IsNullOrEmpty(family))
             {
                 NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-burned-brick-found", stack?.Collectible?.Code));
                 return false;
@@ -786,6 +1109,23 @@ namespace brickbybrick.items
             }
 
             return true;
+        }
+
+        // Item attributes are the extension point for other mods. The path
+        // fallbacks cover vanilla and common vanilla-style material variants.
+        private string GetMasonryFamily(ItemStack stack)
+        {
+            string configuredFamily = stack?.Collectible?.Attributes?[FamilyAttribute].AsString();
+            if (!string.IsNullOrEmpty(configuredFamily)) return configuredFamily;
+
+            string path = stack?.Collectible?.Code?.Path;
+            if (string.IsNullOrEmpty(path)) return null;
+            if (path.StartsWith("burnedbrick-", StringComparison.Ordinal)) return "brick";
+            if (path.StartsWith("refractorybrick-", StringComparison.Ordinal)) return "refractory";
+            if (path.StartsWith("stonebrick-", StringComparison.Ordinal)) return "ashlar";
+            if (path.StartsWith("stone-", StringComparison.Ordinal)) return "cobble";
+
+            return null;
         }
 
         private void NotifyPlayerDebug(IPlayer player, IWorldAccessor world, string message)
@@ -820,30 +1160,20 @@ namespace brickbybrick.items
 
             switch (toolMode)
             {
-                case 0:
+                case BuildMode:
                     if (!IsTrowelable(selectedBlock)) return null;
 
-                    int nextStage = GetBlockStage(selectedBlock) + 1;
-
-                    if (nextStage == 2 || nextStage == 4 || nextStage == 6 || nextStage == 7)
+                    int nextStage = GetBlockStage(selectedBlock, byEntity.World, blockSel.Position) + 1;
+                    return GetConstructionAction(nextStage) switch
                     {
-                        return MortarUseAnimationCode;
-                    }
+                        ConstructionAction.Mortar => MortarUseAnimationCode,
+                        ConstructionAction.Masonry => BrickUseAnimationCode,
+                        _ => null
+                    };
 
-                    if (nextStage == 3 || nextStage == 5 || nextStage == 8)
-                    {
-                        return BrickUseAnimationCode;
-                    }
-
-                    return null;
-
-                case 1:
-                    return BrickUseAnimationCode;
-
-                case 2:
-                    return BrickUseAnimationCode;
-
-                case 3:
+                case SlabMode:
+                case StairMode:
+                case BlockMode:
                     return BrickUseAnimationCode;
 
                 default:
@@ -878,13 +1208,8 @@ namespace brickbybrick.items
 
         private bool IsTrowelable(Block block)
         {
-            if (block?.Attributes?["trowelable"].AsBool(false) != true) return false;
-
-            // Final staged slab and stair variants should behave like completed
-            // blocks, so mode 0 no longer advances them.
-            if (IsFinalStagedVariant(block)) return false;
-
-            return true;
+            return block?.Code?.Path == "masonrycourse"
+                && block.Attributes?["trowelable"].AsBool(false) == true;
         }
 
         public override WorldInteraction[] GetHeldInteractionHelp(ItemSlot inSlot)
@@ -906,37 +1231,74 @@ namespace brickbybrick.items
                 : activeInteractions.Append(modeInteraction);
 
         }
-        private int GetBlockStage(Block block)
+        private Variants GetCourseVariants(IWorldAccessor world, BlockPos pos, Block block)
         {
-            if (block == null) return 0;
+            BlockEntity blockEntity = world?.BlockAccessor?.GetBlockEntity(pos);
+            BlockEntityBehaviorShapeTexturesFromAttributes behavior =
+                blockEntity?.GetBehavior<BlockEntityBehaviorShapeTexturesFromAttributes>();
 
-            if (block.Variant != null && block.Variant.TryGetValue("stage", out string stageValue))
+            if (behavior?.Variants?.Any == true)
             {
-                return int.TryParse(stageValue, out int parsedStage) ? parsedStage : 0;
+                Variants copiedVariants = new();
+                copiedVariants.Set(behavior.Variants.GetElements());
+                return copiedVariants;
             }
 
-            int stage;
-            return int.TryParse(block.LastCodePart(0), out stage) ? stage : 0;
+            return new Variants();
         }
 
-        private string GetBlockColor(Block block)
+        private void ApplyCourseState(IWorldAccessor world, BlockPos pos, Variants variants)
         {
-            if (block?.Variant != null && block.Variant.TryGetValue("color", out string color))
+            BlockEntity blockEntity = world?.BlockAccessor?.GetBlockEntity(pos);
+            BlockEntityBehaviorShapeTexturesFromAttributes behavior =
+                blockEntity?.GetBehavior<BlockEntityBehaviorShapeTexturesFromAttributes>();
+            if (behavior == null) return;
+
+            ItemStack courseStack = CreateCourseStack(world, variants);
+            behavior.OnBlockPlaced(courseStack);
+            blockEntity.MarkDirty(true);
+        }
+
+        private int GetBlockStage(Block block, IWorldAccessor world = null, BlockPos pos = null)
+        {
+            if (world != null && pos != null)
             {
-                return color;
+                string stage = GetCourseVariants(world, pos, block).Get("stage");
+                if (int.TryParse(stage, out int attributeStage))
+                {
+                    return attributeStage;
+                }
             }
 
-            return block?.LastCodePart(1);
+            return 0;
         }
 
-        private string GetBlockVariant(Block block, string variantCode)
+        private string GetBlockColor(Block block, IWorldAccessor world = null, BlockPos pos = null)
         {
-            if (block?.Variant != null && block.Variant.TryGetValue(variantCode, out string value))
+            if (world != null && pos != null)
             {
-                return value;
+                string attributeColor = GetCourseVariants(world, pos, block).Get("color");
+                if (!string.IsNullOrEmpty(attributeColor))
+                {
+                    return attributeColor;
+                }
             }
 
             return null;
+        }
+
+        private ItemStack GetCourseMaterialStack(IWorldAccessor world, BlockPos pos, Block block)
+        {
+            if (world == null || pos == null) return null;
+
+            Variants variants = GetCourseVariants(world, pos, block);
+            string materialDomain = variants.Get("materialDomain");
+            string materialPath = variants.Get("materialPath");
+
+            if (string.IsNullOrEmpty(materialDomain) || string.IsNullOrEmpty(materialPath)) return null;
+
+            Item item = world.GetItem(new AssetLocation(materialDomain, materialPath));
+            return item == null ? null : new ItemStack(item);
         }
 
         // Prefer the item variant, then fall back to the final code part.
@@ -958,23 +1320,54 @@ namespace brickbybrick.items
             return parts.Length > 1 ? parts[parts.Length - 1] : null;
         }
 
+        // Build mode alternates between mortar and brick-setting stages. Brick
+        // stages need their exact material before any animation begins.
+        private bool CanStartBuildStage(Block block, IWorldAccessor world, BlockPos pos, IPlayer player, EntityAgent byEntity)
+        {
+            int nextStage = GetBlockStage(block, world, pos) + 1;
+            ConstructionAction action = GetConstructionAction(nextStage);
+
+            if (action != ConstructionAction.Masonry) return true;
+
+            return TryGetRequiredBrick(player, GetBlockColor(block, world, pos), byEntity, out _);
+        }
+
         private bool HasMatchingMaterial(IPlayer player, string color, EntityAgent byEntity)
         {
+            return TryGetRequiredBrick(player, color, byEntity, out _);
+        }
+
+        private bool TryGetRequiredBrick(IPlayer player, string color, EntityAgent byEntity, out ItemSlot slot)
+        {
+            slot = null;
+
             string requiredPath = $"burnedbrick-{color}";
-            if (!TryGetOffhandStack(player, out _, out ItemStack stack))
+            string requiredName = FormatRequiredBrickName(color);
+
+            if (!TryGetOffhandStack(player, out slot, out ItemStack stack))
             {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-required-brick", requiredPath));
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-required-brick", requiredName));
                 return false;
             }
 
             string held = stack.Collectible?.Code?.Path;
             if (held != requiredPath)
             {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredPath, held ?? Lang.Get("brickbybrick:notice-trowel-nothing")));
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredName, FormatHeldItemName(stack)));
                 return false;
             }
 
             return true;
+        }
+
+        private string FormatRequiredBrickName(string color)
+        {
+            return string.IsNullOrEmpty(color) ? Lang.Get("brickbybrick:notice-trowel-matching-brick") : $"{color} fired brick";
+        }
+
+        private string FormatHeldItemName(ItemStack stack)
+        {
+            return stack?.GetName() ?? Lang.Get("brickbybrick:notice-trowel-nothing");
         }
 
         private bool HasEnoughMortar(ItemSlot slot, EntityAgent byEntity)
@@ -991,32 +1384,35 @@ namespace brickbybrick.items
 
         private bool HasInteracted(ItemStack stack)
         {
-            return stack.Attributes.GetBool("didInteract", false);
+            return stack?.Attributes?.GetBool("didInteract", false) == true;
         }
 
         private void SetInteracted(ItemStack stack, bool value)
         {
-            stack.Attributes.SetBool("didInteract", value);
+            stack?.Attributes?.SetBool("didInteract", value);
         }
 
         // Resolves staged slabs and stairs to their vanilla finished blocks.
-        private AssetLocation ResolveNextBlock(Block block, int nextStage, string color)
+        private AssetLocation ResolveNextBlock(Block block, int nextStage, string color, IWorldAccessor world = null, BlockPos pos = null)
         {
             if (block == null) return null;
 
-            if (IsStagedSlabBlock(block))
+            Variants variants = world != null && pos != null ? GetCourseVariants(world, pos, block) : null;
+            string shape = variants?.Get("shape");
+
+            if (shape == "slab")
             {
                 // Staged slabs have three mod stages; the fourth advance
                 // resolves directly to the matching vanilla slab block.
                 if (nextStage <= 3)
                 {
-                    return block.CodeWithParts(nextStage.ToString());
+                    return new AssetLocation(MasonryCourseCode);
                 }
 
                 if (nextStage == 4)
                 {
-                    string slabColor = GetBlockColor(block);
-                    string rot = GetBlockVariant(block, "rot") ?? BlockFacing.DOWN.Code;
+                    string slabColor = variants?.Get("color") ?? GetBlockColor(block);
+                    string rot = variants?.Get("rotation") ?? BlockFacing.DOWN.Code;
 
                     return new AssetLocation("game", $"brickslabs-four-{slabColor}-{rot}-free");
                 }
@@ -1024,20 +1420,20 @@ namespace brickbybrick.items
                 return null;
             }
 
-            if (IsStagedStairBlock(block))
+            if (shape == "stair")
             {
                 // Staged stairs have five mod stages; the sixth advance
                 // resolves directly to the matching vanilla stair block.
                 if (nextStage <= 5)
                 {
-                    return block.CodeWithParts(nextStage.ToString());
+                    return new AssetLocation(MasonryCourseCode);
                 }
 
                 if (nextStage == 6)
                 {
-                    string stairColor = GetBlockColor(block);
-                    string vertical = GetBlockVariant(block, "verticalorientation") ?? "up";
-                    string horizontal = GetBlockVariant(block, "horizontalorientation") ?? BlockFacing.NORTH.Code;
+                    string stairColor = variants?.Get("color") ?? GetBlockColor(block);
+                    string vertical = variants?.Get("vertical") ?? "up";
+                    string horizontal = variants?.Get("horizontal") ?? BlockFacing.NORTH.Code;
 
                     return new AssetLocation("game", $"brickstairs-four-{stairColor}-{vertical}-{horizontal}-free");
                 }
@@ -1047,7 +1443,7 @@ namespace brickbybrick.items
 
             if (nextStage <= 7)
             {
-                return block.CodeWithParts(nextStage.ToString());
+                return new AssetLocation(MasonryCourseCode);
             }
 
             if (nextStage == 8)
@@ -1059,51 +1455,200 @@ namespace brickbybrick.items
                     return new AssetLocation("brickbybrick:brickblock-good-fire");
                 }
 
-                return block.CodeWithoutParts(1);
+                string state = variants?.Get("state") ?? "four";
+                string bond = variants?.Get("bond") ?? "running";
+                return new AssetLocation("game", $"brickcourse-{state}-{bond}-{color}");
             }
 
             return null;
         }
 
-        private bool IsStagedSlabBlock(Block block)
-        {
-            return block?.Code?.PathStartsWith("brickslabcourse") == true;
-        }
-
-        private bool IsStagedStairBlock(Block block)
-        {
-            return block?.Code?.PathStartsWith("brickstairscourse") == true;
-        }
-
         private bool IsCompletingFullBrickBlock(Block block, int nextStage)
         {
-            if (block?.Code?.PathStartsWith("brickcourse") != true) return false;
-
-            return nextStage == 8;
+            return nextStage == 8
+                && block?.Code?.Path == "masonrycourse";
         }
 
-        private bool IsFinalStagedVariant(Block block)
+        private sealed class TrowelPlacementPreviewRenderer : IRenderer, IDisposable
         {
-            int stage = GetBlockStage(block);
+            private const float PreviewAlpha = 0.52f;
+            private const float ContactFaceOffset = 0.015625f;
+            private const string DefaultPreviewColor = "red";
 
-            if (IsStagedSlabBlock(block) || IsStagedStairBlock(block))
+            private readonly ICoreClientAPI capi;
+            private readonly ItemTrowel trowel;
+            private readonly Dictionary<string, MeshRef> meshRefs = new();
+
+            public double RenderOrder => 0.55;
+            public int RenderRange => 24;
+
+            public TrowelPlacementPreviewRenderer(ICoreClientAPI capi, ItemTrowel trowel)
             {
-                return IsStagedSlabBlock(block) ? stage >= 4 : stage >= 6;
+                this.capi = capi;
+                this.trowel = trowel;
             }
 
-            return false;
+            public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
+            {
+                if (!TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)) return;
+
+                MeshRef meshRef = GetOrCreateMeshRef(finalBlock);
+                if (meshRef == null) return;
+
+                IRenderAPI rpi = capi.Render;
+                Vec4f ghostTint = new Vec4f(1f, 1f, 1f, PreviewAlpha);
+                Vec3d cameraPos = capi.World.Player.Entity.CameraPos;
+                IStandardShaderProgram shader = rpi.PreparedStandardShader(targetPos.X, targetPos.Y, targetPos.Z, ghostTint);
+                Vec3f faceOffset = GetFaceOffset(selectedFace);
+
+                shader.Tex2D = capi.BlockTextureAtlas.AtlasTextures[0].TextureId;
+                shader.RgbaTint = ghostTint;
+                shader.AlphaTest = 0.01f;
+                shader.ExtraGlow = 96;
+                shader.SsaoAttn = 0f;
+                shader.OverlayOpacity = 0f;
+                shader.ModelMatrix = Matrixf.Create()
+                    .Translate(
+                        (float)(targetPos.X - cameraPos.X) + faceOffset.X,
+                        (float)(targetPos.Y - cameraPos.Y) + faceOffset.Y,
+                        (float)(targetPos.Z - cameraPos.Z) + faceOffset.Z)
+                    .Values;
+
+                rpi.GlToggleBlend(true);
+                rpi.GLDepthMask(false);
+                rpi.GlEnableCullFace();
+                rpi.RenderMesh(meshRef);
+                rpi.GLDepthMask(true);
+                rpi.GlToggleBlend(false);
+                shader.Stop();
+            }
+
+            public void Dispose()
+            {
+                foreach (MeshRef meshRef in meshRefs.Values)
+                {
+                    capi.Render.DeleteMesh(meshRef);
+                }
+
+                meshRefs.Clear();
+            }
+
+            private MeshRef GetOrCreateMeshRef(Block block)
+            {
+                string key = block.Code.ToString();
+                if (meshRefs.TryGetValue(key, out MeshRef meshRef)) return meshRef;
+
+                capi.Tesselator.TesselateBlock(block, out MeshData meshData);
+                meshRef = capi.Render.UploadMesh(meshData);
+                meshRefs[key] = meshRef;
+
+                return meshRef;
+            }
+
+            private bool TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)
+            {
+                targetPos = null;
+                finalBlock = null;
+                selectedFace = BlockFacing.UP;
+
+                IClientPlayer player = capi.World.Player;
+                ItemSlot activeSlot = player?.InventoryManager?.ActiveHotbarSlot;
+                BlockSelection blockSel = player?.CurrentBlockSelection;
+                if (activeSlot?.Itemstack?.Collectible != trowel || blockSel == null) return false;
+
+                int toolMode = trowel.GetToolMode(activeSlot, player, blockSel);
+                if (!IsPlacementMode(toolMode)) return false;
+                if (!TryResolveMaterial(player, out ItemStack materialStack, out string family, out string color)) return false;
+
+                targetPos = trowel.ResolvePlacementTarget(blockSel);
+                selectedFace = blockSel.Face ?? BlockFacing.UP;
+                Block placeBlock = trowel.ResolvePlacementBlock(capi.World, player.Entity, blockSel, toolMode, color);
+                Block existingBlock = capi.World.BlockAccessor.GetBlock(targetPos);
+                if (placeBlock == null || existingBlock == null || !existingBlock.IsReplacableBy(placeBlock)) return false;
+
+                Variants variants = CreatePreviewVariants(toolMode, blockSel, player.Entity, family, color, materialStack);
+                AssetLocation finalCode = trowel.ResolveFinishedPlacementBlockCode(toolMode, variants, color);
+                finalBlock = finalCode == null ? null : capi.World.BlockAccessor.GetBlock(finalCode);
+
+                return finalBlock != null;
+            }
+
+            // Preview checks stay silent so invalid offhand contents do not
+            // spam normal placement notices while the player looks around.
+            private bool TryResolveMaterial(IPlayer player, out ItemStack materialStack, out string family, out string color)
+            {
+                materialStack = null;
+                family = null;
+                color = null;
+
+                if (!trowel.TryGetOffhandStack(player, out _, out materialStack))
+                {
+                    family = "brick";
+                    color = DefaultPreviewColor;
+                    return true;
+                }
+
+                family = trowel.GetMasonryFamily(materialStack);
+                color = trowel.GetItemColor(materialStack);
+
+                if (!string.IsNullOrEmpty(family) && !string.IsNullOrEmpty(color)) return true;
+
+                family = "brick";
+                color = DefaultPreviewColor;
+                return true;
+            }
+
+            private Variants CreatePreviewVariants(
+                int toolMode,
+                BlockSelection blockSel,
+                EntityAgent byEntity,
+                string family,
+                string color,
+                ItemStack materialStack)
+            {
+                if (materialStack != null)
+                {
+                    return trowel.CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
+                }
+
+                Variants variants = new();
+                variants.Set("family", family);
+                variants.Set("state", "four");
+                variants.Set("color", color);
+
+                if (toolMode == SlabMode)
+                {
+                    variants.Set("shape", "slab");
+                    variants.Set("rotation", trowel.ResolveSlabRotationCode(blockSel));
+                }
+                else if (toolMode == StairMode)
+                {
+                    trowel.ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
+                    variants.Set("shape", "stair");
+                    variants.Set("vertical", vertical);
+                    variants.Set("horizontal", horizontal);
+                }
+                else
+                {
+                    BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
+                    variants.Set("shape", "block");
+                    variants.Set("bond", facing.IsAxisWE ? "running" : "runningo");
+                }
+
+                return variants;
+            }
+
+            private Vec3f GetFaceOffset(BlockFacing face)
+            {
+                if (face == BlockFacing.DOWN) return new Vec3f(0, -ContactFaceOffset, 0);
+                if (face == BlockFacing.NORTH) return new Vec3f(0, 0, -ContactFaceOffset);
+                if (face == BlockFacing.SOUTH) return new Vec3f(0, 0, ContactFaceOffset);
+                if (face == BlockFacing.WEST) return new Vec3f(-ContactFaceOffset, 0, 0);
+                if (face == BlockFacing.EAST) return new Vec3f(ContactFaceOffset, 0, 0);
+
+                return new Vec3f(0, ContactFaceOffset, 0);
+            }
         }
 
-        private void PlayStageSound(IWorldAccessor world, BlockPos pos, IPlayer player, bool isBrickStage, bool isMortarStage)
-        {
-            if (isBrickStage)
-            {
-                PlayRandomSound(world, pos, player, BrickSounds, 20f);
-            }
-            else if (isMortarStage)
-            {
-                PlayRandomSound(world, pos, player, TrowelSounds, 12f);
-            }
-        }
     }
 }

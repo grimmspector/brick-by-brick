@@ -129,7 +129,7 @@
   },
   "textures": {
     "all": {
-      "base": "game:block/clay/brick/four/soldier/fire1"
+      "base": "game:block/clay/brick/four/running/fire1"
     },
     "north": {
       "base": "game:block/clay/brick/four/running/fire1"

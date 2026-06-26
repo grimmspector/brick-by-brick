@@ -674,12 +674,13 @@ fabric.properties
 
 # End of https://www.toptal.com/developers/gitignore/api/csharp,visualstudio,visualstudiocode,rider
 
-<<<<<<< Updated upstream
 # Local tool/runtime folders created
 .dotnetcli/
 .ref-repos/
 .local/
 assets-examples/
+research/
 *.sh
 *.ps1
 *.lnk
+research/

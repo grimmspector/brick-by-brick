@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -13,6 +13,10 @@
     <VintageStoryDir Condition="'$(VintageStoryDir)' == '' And Exists('$(VintageStoryMirrorDir)\VintagestoryAPI.dll')">$(VintageStoryMirrorDir)</VintageStoryDir>
     <VintageStoryDir Condition="'$(VintageStoryDir)' == '' And '$(VINTAGE_STORY)' != ''">$(VINTAGE_STORY)</VintageStoryDir>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CraluminumMods.VintageStory.AttributeRenderingLibrary" Version="3.1.5" PrivateAssets="all" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="VintagestoryAPI">
