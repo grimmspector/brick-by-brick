@@ -1,6 +1,10 @@
 using AttributeRenderingLibrary;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
+
+#nullable disable
 
 namespace brickbybrick.Blocks
 {
@@ -33,6 +37,35 @@ namespace brickbybrick.Blocks
                 return false;
             }
             return true;
+        }
+
+        public override int GetRandomColor(ICoreClientAPI capi, BlockPos pos, BlockFacing facing, int rndIndex = -1)
+        {
+            ItemStack materialStack = GetCourseMaterialStack(capi, pos);
+
+            if (materialStack?.Collectible != null)
+            {
+                return materialStack.Collectible.GetRandomColor(capi, materialStack);
+            }
+
+            return base.GetRandomColor(capi, pos, facing, rndIndex);
+        }
+
+        private ItemStack GetCourseMaterialStack(ICoreClientAPI capi, BlockPos pos)
+        {
+            BlockEntity blockEntity = capi?.World?.BlockAccessor?.GetBlockEntity(pos);
+            BlockEntityBehaviorShapeTexturesFromAttributes behavior =
+                blockEntity?.GetBehavior<BlockEntityBehaviorShapeTexturesFromAttributes>();
+
+            if (behavior?.Variants?.Any != true) return null;
+
+            string materialDomain = behavior.Variants.Get("materialDomain");
+            string materialPath = behavior.Variants.Get("materialPath");
+
+            if (string.IsNullOrEmpty(materialDomain) || string.IsNullOrEmpty(materialPath)) return null;
+
+            Item item = capi.World.GetItem(new AssetLocation(materialDomain, materialPath));
+            return item == null ? null : new ItemStack(item);
         }
     }
 }
