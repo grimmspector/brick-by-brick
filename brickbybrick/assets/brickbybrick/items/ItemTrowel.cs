@@ -191,6 +191,12 @@ namespace brickbybrick.items
                     return;
                 }
 
+                if (!TryGetPlacementMaterial(byPlayer, byEntity, out _, out _, out _, out _))
+                {
+                    handling = EnumHandHandling.PreventDefault;
+                    return;
+                }
+
                 UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
                 handling = EnumHandHandling.PreventDefault;
                 return;
@@ -203,6 +209,12 @@ namespace brickbybrick.items
             }
 
             if (!HasEnoughMortar(slot, byEntity))
+            {
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
+            if (!CanStartBuildStage(block, world, pos, byPlayer, byEntity))
             {
                 handling = EnumHandHandling.PreventDefault;
                 return;
@@ -348,20 +360,7 @@ namespace brickbybrick.items
             ItemSlot materialSlot = null;
             if (action == ConstructionAction.Masonry)
             {
-                string requiredPath = $"burnedbrick-{color}";
-
-                if (!TryGetOffhandStack(player, out materialSlot, out ItemStack offhandStack))
-                {
-                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-matching-brick"));
-                    return false;
-                }
-
-                if (offhandStack.Collectible?.Code?.Path != requiredPath)
-                {
-                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredPath, offhandStack.Collectible?.Code?.Path));
-                    return false;
-                }
-
+                if (!TryGetRequiredBrick(player, color, byEntity, out materialSlot)) return false;
             }
 
             Block newBlock = byEntity.World.BlockAccessor.GetBlock(newPath);
@@ -980,23 +979,54 @@ namespace brickbybrick.items
             return parts.Length > 1 ? parts[parts.Length - 1] : null;
         }
 
+        // Build mode alternates between mortar and brick-setting stages. Brick
+        // stages need their exact material before any animation begins.
+        private bool CanStartBuildStage(Block block, IWorldAccessor world, BlockPos pos, IPlayer player, EntityAgent byEntity)
+        {
+            int nextStage = GetBlockStage(block, world, pos) + 1;
+            ConstructionAction action = GetConstructionAction(nextStage);
+
+            if (action != ConstructionAction.Masonry) return true;
+
+            return TryGetRequiredBrick(player, GetBlockColor(block, world, pos), byEntity, out _);
+        }
+
         private bool HasMatchingMaterial(IPlayer player, string color, EntityAgent byEntity)
         {
+            return TryGetRequiredBrick(player, color, byEntity, out _);
+        }
+
+        private bool TryGetRequiredBrick(IPlayer player, string color, EntityAgent byEntity, out ItemSlot slot)
+        {
+            slot = null;
+
             string requiredPath = $"burnedbrick-{color}";
-            if (!TryGetOffhandStack(player, out _, out ItemStack stack))
+            string requiredName = FormatRequiredBrickName(color);
+
+            if (!TryGetOffhandStack(player, out slot, out ItemStack stack))
             {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-required-brick", requiredPath));
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-hold-required-brick", requiredName));
                 return false;
             }
 
             string held = stack.Collectible?.Code?.Path;
             if (held != requiredPath)
             {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredPath, held ?? Lang.Get("brickbybrick:notice-trowel-nothing")));
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredName, FormatHeldItemName(stack)));
                 return false;
             }
 
             return true;
+        }
+
+        private string FormatRequiredBrickName(string color)
+        {
+            return string.IsNullOrEmpty(color) ? Lang.Get("brickbybrick:notice-trowel-matching-brick") : $"{color} fired brick";
+        }
+
+        private string FormatHeldItemName(ItemStack stack)
+        {
+            return stack?.GetName() ?? Lang.Get("brickbybrick:notice-trowel-nothing");
         }
 
         private bool HasEnoughMortar(ItemSlot slot, EntityAgent byEntity)
