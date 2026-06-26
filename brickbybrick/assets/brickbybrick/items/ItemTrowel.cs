@@ -2,6 +2,7 @@ using AttributeRenderingLibrary;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -23,6 +24,7 @@ namespace brickbybrick.items
 
         SkillItem[] toolModes;
         private TrowelPlacementPreviewRenderer placementPreviewRenderer;
+        private XSkillsExperienceBridge xSkillsExperience;
         private const int CapacityPerTier = 16;
         private const float ActionDurationSeconds = 2f;
         private const float ActionSoundTimeSeconds = 1f;
@@ -34,6 +36,8 @@ namespace brickbybrick.items
         private const int BlockMode = 3;
         private const string MasonryCourseCode = "brickbybrick:masonrycourse";
         private const string FamilyAttribute = "masonryFamily";
+        private const string XSkillsConstructionSkillName = "pottery";
+        private const float XSkillsExperiencePerRewardedStage = 0.1f;
 
         private static readonly string[] BrickSounds =
         {
@@ -63,6 +67,7 @@ namespace brickbybrick.items
         public override void OnLoaded(ICoreAPI api)
         {
             base.OnLoaded(api);
+            xSkillsExperience = XSkillsExperienceBridge.TryCreate(api, XSkillsConstructionSkillName);
 
             // Cache mode data once per API instance. Icons are client-only, so
             // server loads keep the same mode codes with null textures.
@@ -428,6 +433,7 @@ namespace brickbybrick.items
 
             ConsumeMortar(slot, MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
+            AwardXSkillsCompletionExperience(player, remainsConstructionCourse, nextStage);
 
             return false;
         }
@@ -1467,6 +1473,77 @@ namespace brickbybrick.items
         {
             return nextStage == 8
                 && block?.Code?.Path == "masonrycourse";
+        }
+
+        private void AwardXSkillsCompletionExperience(IPlayer player, bool remainsConstructionCourse, int completedStages)
+        {
+            if (remainsConstructionCourse) return;
+            if (completedStages <= 0) return;
+            if (IsCreativePlayer(player)) return;
+
+            float experience = Math.Max(0, completedStages - 2) * XSkillsExperiencePerRewardedStage;
+            xSkillsExperience?.TryAward(player, experience);
+        }
+
+        private bool IsCreativePlayer(IPlayer player)
+        {
+            return player?.WorldData?.CurrentGameMode.ToString() == "Creative";
+        }
+
+        // Uses reflection so XSkills and XLib remain fully optional.
+        private sealed class XSkillsExperienceBridge
+        {
+            private const string XLevelingSystemName = "XLib.XLeveling.XLeveling";
+
+            private readonly object levelingApi;
+            private readonly int skillId;
+            private readonly MethodInfo addExperienceMethod;
+
+            private XSkillsExperienceBridge(object levelingApi, int skillId, MethodInfo addExperienceMethod)
+            {
+                this.levelingApi = levelingApi;
+                this.skillId = skillId;
+                this.addExperienceMethod = addExperienceMethod;
+            }
+
+            public static XSkillsExperienceBridge TryCreate(ICoreAPI api, string skillName)
+            {
+                try
+                {
+                    object xLeveling = api?.ModLoader?.GetModSystem(XLevelingSystemName);
+                    object apiBridge = xLeveling?.GetType().GetProperty("IXLevelingAPI")?.GetValue(xLeveling);
+                    MethodInfo addExperience = apiBridge?.GetType().GetMethod(
+                        "AddExperienceToPlayerSkill",
+                        new Type[] { typeof(IPlayer), typeof(int), typeof(float), typeof(bool) });
+                    MethodInfo getSkill = xLeveling?.GetType().GetMethod(
+                        "GetSkill",
+                        new Type[] { typeof(string), typeof(bool) });
+                    object skill = getSkill?.Invoke(xLeveling, new object[] { skillName, false });
+
+                    if (apiBridge == null || addExperience == null || skill == null) return null;
+
+                    object id = skill.GetType().GetProperty("Id")?.GetValue(skill);
+                    return id is int skillId ? new XSkillsExperienceBridge(apiBridge, skillId, addExperience) : null;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            public void TryAward(IPlayer player, float experience)
+            {
+                if (player == null || experience <= 0) return;
+
+                try
+                {
+                    addExperienceMethod.Invoke(levelingApi, new object[] { player, skillId, experience, true });
+                }
+                catch
+                {
+                    // Optional integration failures should never block construction.
+                }
+            }
         }
 
         private sealed class TrowelPlacementPreviewRenderer : IRenderer, IDisposable
