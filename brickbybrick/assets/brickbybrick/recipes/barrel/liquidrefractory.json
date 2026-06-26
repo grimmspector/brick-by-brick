@@ -1,0 +1,26 @@
+[
+  {
+    "code": "liquidrefractory-tier1",
+    "ingredients": [
+      { "type": "item", "code": "brickbybrick:liquidmortarportion", "litres": 1 },
+      { "type": "item", "code": "brickbybrick:crushedrefractory-fire", "quantity": 1 }
+    ],
+    "output": { "type": "item", "code": "brickbybrick:liquidrefractoryportion-tier1", "litres": 1 }
+  },
+  {
+    "code": "liquidrefractory-tier2",
+    "ingredients": [
+      { "type": "item", "code": "brickbybrick:liquidmortarportion", "litres": 1 },
+      { "type": "item", "code": "brickbybrick:crushedrefractory-tier1", "quantity": 1 }
+    ],
+    "output": { "type": "item", "code": "brickbybrick:liquidrefractoryportion-tier2", "litres": 1 }
+  },
+  {
+    "code": "liquidrefractory-tier3",
+    "ingredients": [
+      { "type": "item", "code": "brickbybrick:liquidmortarportion", "litres": 1 },
+      { "type": "item", "code": "brickbybrick:crushedrefractory-tier2", "quantity": 1 }
+    ],
+    "output": { "type": "item", "code": "brickbybrick:liquidrefractoryportion-tier3", "litres": 1 }
+  }
+]

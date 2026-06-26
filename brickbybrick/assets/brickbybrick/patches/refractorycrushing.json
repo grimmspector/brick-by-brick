@@ -1,0 +1,34 @@
+[
+  {
+    "file": "game:itemtypes/resource/burnedbrick",
+    "op": "add",
+    "path": "/crushingPropsByType",
+    "value": {
+      "burnedbrick-fire": {
+        "crushedStack": { "type": "item", "code": "brickbybrick:crushedrefractory-fire", "stacksize": 1 },
+        "hardnessTier": 2
+      }
+    }
+  },
+  {
+    "file": "game:itemtypes/resource/refractorybrick",
+    "op": "add",
+    "path": "/storageFlags",
+    "value": 261
+  },
+  {
+    "file": "game:itemtypes/resource/refractorybrick",
+    "op": "add",
+    "path": "/crushingPropsByType",
+    "value": {
+      "refractorybrick-fired-tier1": {
+        "crushedStack": { "type": "item", "code": "brickbybrick:crushedrefractory-tier1", "stacksize": 1 },
+        "hardnessTier": 3
+      },
+      "refractorybrick-fired-tier2": {
+        "crushedStack": { "type": "item", "code": "brickbybrick:crushedrefractory-tier2", "stacksize": 1 },
+        "hardnessTier": 3
+      }
+    }
+  }
+]

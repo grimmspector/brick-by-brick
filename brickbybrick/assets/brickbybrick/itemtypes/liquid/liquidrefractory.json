@@ -2,8 +2,15 @@
   "code": "liquidrefractoryportion",
   "class": "ItemLiquidPortion",
   "matterState": "liquid",
+  "variantgroups": [
+    {
+      "code": "tier",
+      "states": [ "tier1", "tier2", "tier3" ]
+    }
+  ],
   "attributes": {
     "handbook": {
+      "groupBy": [ "liquidrefractoryportion-*" ],
       "ignoreCreativeInvStacks": true,
       "extraSections": [
         {
@@ -15,32 +22,22 @@
     "waterTightContainerProps": {
       "containable": true,
       "itemsPerLitre": 14,
-      "texture": {
-        "base": "game:block/liquid/waterportion"
-      },
+      "texture": { "base": "game:block/clay/refractory/{tier}/front1" },
       "tintIndex": 2,
       "whenSpilled": {
         "action": "DropContents",
         "stack": {
           "type": "item",
-          "code": "liquidrefractoryportion"
+          "code": "liquidrefractoryportion-{tier}"
         }
       }
     }
   },
-  "shape": {
-    "base": "game:item/liquid"
-  },
-  "texture": {
-    "base": "game:block/liquid/waterportion"
-  },
+  "shape": { "base": "game:item/liquid" },
+  "texture": { "base": "game:block/clay/refractory/{tier}/front1" },
   "creativeinventoryStacks": [
     {
-      "tabs": [
-        "general",
-        "liquids",
-        "brickbybrick"
-      ],
+      "tabs": [ "general", "liquids", "brickbybrick" ],
       "stacks": [
         {
           "type": "block",
@@ -49,7 +46,7 @@
             "ucontents": [
               {
                 "type": "item",
-                "code": "brickbybrick:liquidrefractoryportion",
+                "code": "brickbybrick:liquidrefractoryportion-{tier}",
                 "makefull": true
               }
             ]
@@ -59,42 +56,5 @@
     }
   ],
   "maxstacksize": 5000,
-  "materialDensity": 420,
-  "guiTransform": {
-    "translation": {
-      "x": 0,
-      "y": 1,
-      "z": 0
-    },
-    "rotation": {
-      "x": 123,
-      "y": -33,
-      "z": -13
-    },
-    "origin": {
-      "x": 0.5,
-      "y": 0,
-      "z": 0.5
-    },
-    "scale": 1.4
-  },
-  "fpHandTransform": {
-    "translation": {
-      "x": 0,
-      "y": 0,
-      "z": 0
-    },
-    "rotation": {
-      "x": 25,
-      "y": 157,
-      "z": -5
-    }
-  },
-  "tpHandTransform": {
-    "translation": {
-      "x": -1.5,
-      "y": -1,
-      "z": -1.4
-    }
-  }
+  "materialDensity": 420
 }

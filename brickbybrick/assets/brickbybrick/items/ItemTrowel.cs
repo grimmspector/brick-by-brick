@@ -34,6 +34,11 @@ namespace brickbybrick.items
         private const int BlockMode = 3;
         private const string MasonryCourseCode = "brickbybrick:masonrycourse";
         private const string FamilyAttribute = "masonryFamily";
+        private const string MortarCodeAttribute = "mortarCode";
+        private const string FinishedBlockAttribute = "masonryFinishedBlockCode";
+        private const string FinishedSlabAttribute = "masonryFinishedSlabCode";
+        private const string FinishedStairAttribute = "masonryFinishedStairCode";
+        private const string RequiredMortarAttribute = "masonryMortarCode";
 
         private static readonly string[] BrickSounds =
         {
@@ -133,7 +138,8 @@ namespace brickbybrick.items
                     string path = item?.Code?.Path;
                     if (string.IsNullOrEmpty(path)) continue;
 
-                    if (path.StartsWith("burnedbrick-", StringComparison.Ordinal))
+                    if (path.StartsWith("burnedbrick-", StringComparison.Ordinal)
+                        || path.StartsWith("refractorybrick-fired-", StringComparison.Ordinal))
                     {
                         stacks.Add(new ItemStack(item));
                     }
@@ -184,6 +190,15 @@ namespace brickbybrick.items
             slot.Itemstack.Attributes.SetBool("soundPlayed", false);
             slot.Itemstack.Attributes.SetFloat("lastParticleTime", -1f);
 
+            // Sneak-right-click returns stored mortar to a compatible liquid
+            // container. Normal right-click retains the existing refill action.
+            if (byEntity.Controls.Sneak && TryEmptyIntoContainer(world, pos, slot, byEntity))
+            {
+                SetInteracted(slot.Itemstack, true);
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
             // Refill from mortar containers immediately before any build mode
             // handling so buckets and similar targets always win over placement.
             if (TryCollectFromContainer(world, pos, slot))
@@ -202,13 +217,20 @@ namespace brickbybrick.items
             // is not trowelable because they place into the adjacent position.
             if (IsPlacementMode(toolMode))
             {
-                if (!HasEnoughMortar(slot, byEntity))
+                if (!TryGetPlacementMaterial(byPlayer, byEntity, out _, out ItemStack materialStack, out string family, out _))
                 {
                     handling = EnumHandHandling.PreventDefault;
                     return;
                 }
 
-                if (!TryGetPlacementMaterial(byPlayer, byEntity, out _, out _, out _, out _))
+                if (family == "refractory" && toolMode != BlockMode)
+                {
+                    NotifyPlayerDebug(byPlayer, world, Lang.Get("brickbybrick:notice-trowel-refractory-blocks-only"));
+                    handling = EnumHandHandling.PreventDefault;
+                    return;
+                }
+
+                if (!HasCompatibleMortar(slot, byEntity, materialStack))
                 {
                     handling = EnumHandHandling.PreventDefault;
                     return;
@@ -225,7 +247,7 @@ namespace brickbybrick.items
                 return;
             }
 
-            if (!HasEnoughMortar(slot, byEntity))
+            if (!HasCompatibleMortar(slot, byEntity, GetCourseMaterialStack(world, pos, block)))
             {
                 handling = EnumHandHandling.PreventDefault;
                 return;
@@ -305,15 +327,17 @@ namespace brickbybrick.items
         private bool HandlePlacementMode(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel, int toolMode)
         {
             if (blockSel == null || HasInteracted(slot?.Itemstack)) return false;
-            if (!HasEnoughMortar(slot, byEntity)) return false;
+            if (!TryGetPlacementMaterial(player, byEntity, out ItemSlot offhandSlot, out ItemStack materialStack, out string family, out string color)) return false;
+            if (family == "refractory" && toolMode != BlockMode) return false;
+            if (!HasCompatibleMortar(slot, byEntity, materialStack)) return false;
 
             PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, BrickSounds, 20f);
             SpawnPlacementParticlesDuringAction(secondsUsed, slot, byEntity, blockSel, toolMode);
             if (secondsUsed < ActionDurationSeconds) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
-            if (!HasEnoughMortar(slot, byEntity)) return false;
-            if (!TryGetPlacementMaterial(player, byEntity, out ItemSlot offhandSlot, out ItemStack materialStack, out string family, out string color)) return false;
+            if (!TryGetPlacementMaterial(player, byEntity, out offhandSlot, out materialStack, out family, out color)) return false;
+            if (!HasCompatibleMortar(slot, byEntity, materialStack)) return false;
 
             BlockPos targetPos = ResolvePlacementTarget(blockSel);
             Block placeBlock = ResolvePlacementBlock(byEntity.World, byEntity, blockSel, toolMode, color);
@@ -346,7 +370,7 @@ namespace brickbybrick.items
             if (!IsTrowelable(block)) return false;
             
             if (HasInteracted(slot.Itemstack)) return false;
-            if (!HasEnoughMortar(slot, byEntity)) return false;
+            if (!HasCompatibleMortar(slot, byEntity, GetCourseMaterialStack(byEntity.World, pos, block))) return false;
             
             // Read current construction state and decide which material this
             // advance needs. Mortar is used for every successful advance.
@@ -376,13 +400,13 @@ namespace brickbybrick.items
             }
 
             // Validate only the resources needed by this stage.
-            if (action == ConstructionAction.Masonry && !HasMatchingMaterial(player, color, byEntity)) return false;
-            if (!HasEnoughMortar(slot, byEntity)) return false;
+            if (action == ConstructionAction.Masonry && !TryGetRequiredBrick(player, byEntity.World, pos, block, byEntity, out _)) return false;
+            if (!HasCompatibleMortar(slot, byEntity, GetCourseMaterialStack(byEntity.World, pos, block))) return false;
 
             ItemSlot materialSlot = null;
             if (action == ConstructionAction.Masonry)
             {
-                if (!TryGetRequiredBrick(player, color, byEntity, out materialSlot)) return false;
+                if (!TryGetRequiredBrick(player, byEntity.World, pos, block, byEntity, out materialSlot)) return false;
             }
 
             Block newBlock = byEntity.World.BlockAccessor.GetBlock(newPath);
@@ -444,6 +468,14 @@ namespace brickbybrick.items
             return stack.Attributes.GetInt("mortarAmount", 0);
         }
 
+        // Trowels filled before mortar typing was introduced contain only an
+        // amount. Treat those saved stacks as ordinary mortar.
+        private string GetStoredMortarCode(ItemStack stack)
+        {
+            string code = stack?.Attributes?.GetString(MortarCodeAttribute);
+            return string.IsNullOrWhiteSpace(code) ? "brickbybrick:liquidmortarportion" : code;
+        }
+
         // Keeps stored mortar and the durability display in sync.
         private void SetStoredAmount(ItemSlot slot, int newAmount)
         {
@@ -455,6 +487,10 @@ namespace brickbybrick.items
             newAmount = GameMath.Clamp(newAmount, 0, max);
 
             stack.Attributes.SetInt("mortarAmount", newAmount);
+            if (newAmount == 0)
+            {
+                stack.Attributes.RemoveAttribute(MortarCodeAttribute);
+            }
 
             int jsonMax = stack.Collectible.GetMaxDurability(stack);
 
@@ -481,7 +517,7 @@ namespace brickbybrick.items
             return GetMaxCapacity(itemstack);
         }
 
-        private int AddLiquid(ItemSlot toolSlot, int amountToAdd)
+        private int AddLiquid(ItemSlot toolSlot, ItemStack liquidStack, int amountToAdd)
         {
             ItemStack stack = toolSlot.Itemstack;
 
@@ -493,6 +529,7 @@ namespace brickbybrick.items
 
             if (moved <= 0) return 0;
 
+            stack.Attributes.SetString(MortarCodeAttribute, liquidStack.Collectible.Code.ToString());
             SetStoredAmount(toolSlot, current + moved);
 
             return moved;
@@ -502,7 +539,9 @@ namespace brickbybrick.items
         {
             if (stack == null) return false;
 
-            return stack?.Collectible?.Code?.Path == "liquidmortarportion";
+            string path = stack?.Collectible?.Code?.Path;
+            return path == "liquidmortarportion"
+                || path?.StartsWith("liquidrefractoryportion-", StringComparison.Ordinal) == true;
         }
 
         // Pulls mortar until the trowel is full or the container is empty.
@@ -525,7 +564,10 @@ namespace brickbybrick.items
 
                 if (!IsValidLiquid(content)) continue;
 
-                int moved = AddLiquid(toolSlot, content.StackSize);
+                string storedCode = GetStoredMortarCode(toolSlot.Itemstack);
+                if (GetStoredAmount(toolSlot.Itemstack) > 0 && storedCode != content.Collectible.Code.ToString()) continue;
+
+                int moved = AddLiquid(toolSlot, content, content.StackSize);
 
                 if (moved > 0)
                 {
@@ -543,6 +585,34 @@ namespace brickbybrick.items
             }
 
             return movedAny;
+        }
+
+        // Deposits mortar through the vanilla liquid-container API so bucket
+        // capacity and same-liquid checks remain authoritative.
+        private bool TryEmptyIntoContainer(IWorldAccessor world, BlockPos pos, ItemSlot toolSlot, EntityAgent byEntity)
+        {
+            int stored = GetStoredAmount(toolSlot.Itemstack);
+            if (stored <= 0) return false;
+
+            Block block = world.BlockAccessor.GetBlock(pos);
+            if (block is not BlockLiquidContainerBase container) return false;
+
+            string mortarCode = GetStoredMortarCode(toolSlot.Itemstack);
+            Item mortarItem = world.GetItem(new AssetLocation(mortarCode));
+            if (mortarItem == null) return false;
+
+            ItemStack mortarStack = new ItemStack(mortarItem, stored);
+            float itemsPerLitre = mortarItem.Attributes?["waterTightContainerProps"]["itemsPerLitre"].AsFloat(1f) ?? 1f;
+            int moved = container.TryPutLiquid(pos, mortarStack, stored / itemsPerLitre);
+            if (moved <= 0)
+            {
+                IPlayer player = (byEntity as EntityPlayer)?.Player;
+                NotifyPlayerDebug(player, world, Lang.Get("brickbybrick:notice-trowel-container-rejected-mortar"));
+                return true;
+            }
+
+            SetStoredAmount(toolSlot, stored - moved);
+            return true;
         }
 
         // Replaces durability text with the stored mortar amount.
@@ -568,6 +638,14 @@ namespace brickbybrick.items
             int max = GetMaxCapacity(inSlot.Itemstack);
 
             dsc.AppendLine(Lang.Get("brickbybrick:tooltip-trowel-mortar", stored, max));
+
+            if (stored > 0)
+            {
+                string mortarCode = GetStoredMortarCode(inSlot.Itemstack);
+                Item mortarItem = world.GetItem(new AssetLocation(mortarCode));
+                string mortarName = mortarItem == null ? mortarCode : new ItemStack(mortarItem).GetName();
+                dsc.AppendLine(Lang.Get("brickbybrick:tooltip-trowel-contents", mortarName));
+            }
 
             if (stored == 0)
             {
@@ -628,9 +706,38 @@ namespace brickbybrick.items
             return toolMode == SlabMode || toolMode == StairMode || toolMode == BlockMode;
         }
 
-        private AssetLocation ResolveFinishedPlacementBlockCode(int toolMode, Variants variants, string color)
+        // Resolves only mechanically valid finished blocks. Materials can opt
+        // into additional shapes by declaring their exact finished block codes.
+        private AssetLocation ResolveFinishedPlacementBlockCode(
+            int toolMode,
+            Variants variants,
+            ItemStack materialStack,
+            string family,
+            string color)
         {
             if (variants == null || string.IsNullOrEmpty(color)) return null;
+
+            string configuredAttribute = toolMode switch
+            {
+                SlabMode => FinishedSlabAttribute,
+                StairMode => FinishedStairAttribute,
+                BlockMode => FinishedBlockAttribute,
+                _ => null
+            };
+            string configuredCode = configuredAttribute == null
+                ? null
+                : materialStack?.Collectible?.Attributes?[configuredAttribute].AsString();
+            if (!string.IsNullOrEmpty(configuredCode)) return new AssetLocation(configuredCode);
+
+            if (family == "refractory")
+            {
+                return toolMode == BlockMode
+                    ? new AssetLocation("game", $"refractorybricks-good-{color}")
+                    : null;
+            }
+
+            // The built-in brick resolver is not safe for stone families.
+            if (family != "brick") return null;
 
             if (toolMode == SlabMode)
             {
@@ -1329,20 +1436,18 @@ namespace brickbybrick.items
 
             if (action != ConstructionAction.Masonry) return true;
 
-            return TryGetRequiredBrick(player, GetBlockColor(block, world, pos), byEntity, out _);
+            return TryGetRequiredBrick(player, world, pos, block, byEntity, out _);
         }
 
-        private bool HasMatchingMaterial(IPlayer player, string color, EntityAgent byEntity)
-        {
-            return TryGetRequiredBrick(player, color, byEntity, out _);
-        }
-
-        private bool TryGetRequiredBrick(IPlayer player, string color, EntityAgent byEntity, out ItemSlot slot)
+        private bool TryGetRequiredBrick(IPlayer player, IWorldAccessor world, BlockPos pos, Block block, EntityAgent byEntity, out ItemSlot slot, string fallbackColor = null)
         {
             slot = null;
 
-            string requiredPath = $"burnedbrick-{color}";
-            string requiredName = FormatRequiredBrickName(color);
+            ItemStack courseMaterial = GetCourseMaterialStack(world, pos, block);
+            string requiredCode = courseMaterial?.Collectible?.Code?.ToString();
+            string color = fallbackColor ?? GetBlockColor(block, world, pos);
+            string requiredPath = courseMaterial?.Collectible?.Code?.Path ?? $"burnedbrick-{color}";
+            string requiredName = courseMaterial?.GetName() ?? FormatRequiredBrickName(color);
 
             if (!TryGetOffhandStack(player, out slot, out ItemStack stack))
             {
@@ -1351,7 +1456,7 @@ namespace brickbybrick.items
             }
 
             string held = stack.Collectible?.Code?.Path;
-            if (held != requiredPath)
+            if (requiredCode != null ? stack.Collectible?.Code?.ToString() != requiredCode : held != requiredPath)
             {
                 NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-brick", requiredName, FormatHeldItemName(stack)));
                 return false;
@@ -1380,6 +1485,27 @@ namespace brickbybrick.items
             }
 
             return true;
+        }
+
+        // Refractory courses require mortar of the same tier as their bricks.
+        private bool HasCompatibleMortar(ItemSlot slot, EntityAgent byEntity, ItemStack materialStack)
+        {
+            if (!HasEnoughMortar(slot, byEntity)) return false;
+
+            string materialPath = materialStack?.Collectible?.Code?.Path;
+            string configuredMortarCode = materialStack?.Collectible?.Attributes?[RequiredMortarAttribute].AsString();
+            string requiredPath = !string.IsNullOrEmpty(configuredMortarCode)
+                ? new AssetLocation(configuredMortarCode).Path
+                : materialPath?.StartsWith("refractorybrick-fired-tier", StringComparison.Ordinal) == true
+                    ? materialPath.Replace("refractorybrick-fired-", "liquidrefractoryportion-")
+                    : "liquidmortarportion";
+            string storedPath = new AssetLocation(GetStoredMortarCode(slot.Itemstack)).Path;
+
+            if (storedPath == requiredPath) return true;
+
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-wrong-mortar", requiredPath));
+            return false;
         }
 
         private bool HasInteracted(ItemStack stack)
@@ -1448,6 +1574,20 @@ namespace brickbybrick.items
 
             if (nextStage == 8)
             {
+                string family = variants?.Get("family");
+                if (family == "refractory")
+                {
+                    ItemStack materialStack = GetCourseMaterialStack(world, pos, block);
+                    string configuredBlockCode = materialStack?.Collectible?.Attributes?[FinishedBlockAttribute].AsString();
+                    if (!string.IsNullOrEmpty(configuredBlockCode))
+                    {
+                        return new AssetLocation(configuredBlockCode);
+                    }
+
+                    string tier = variants?.Get("color");
+                    return new AssetLocation("game", $"refractorybricks-good-{tier}");
+                }
+
                 // Fire brick uses a custom finished block, while other colors
                 // can drop the stage suffix from the course code.
                 if (color == "fire")
@@ -1567,7 +1707,12 @@ namespace brickbybrick.items
                 if (placeBlock == null || existingBlock == null || !existingBlock.IsReplacableBy(placeBlock)) return false;
 
                 Variants variants = CreatePreviewVariants(toolMode, blockSel, player.Entity, family, color, materialStack);
-                AssetLocation finalCode = trowel.ResolveFinishedPlacementBlockCode(toolMode, variants, color);
+                AssetLocation finalCode = trowel.ResolveFinishedPlacementBlockCode(
+                    toolMode,
+                    variants,
+                    materialStack,
+                    family,
+                    color);
                 finalBlock = finalCode == null ? null : capi.World.BlockAccessor.GetBlock(finalCode);
 
                 return finalBlock != null;
@@ -1591,11 +1736,7 @@ namespace brickbybrick.items
                 family = trowel.GetMasonryFamily(materialStack);
                 color = trowel.GetItemColor(materialStack);
 
-                if (!string.IsNullOrEmpty(family) && !string.IsNullOrEmpty(color)) return true;
-
-                family = "brick";
-                color = DefaultPreviewColor;
-                return true;
+                return !string.IsNullOrEmpty(family) && !string.IsNullOrEmpty(color);
             }
 
             private Variants CreatePreviewVariants(

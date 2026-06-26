@@ -1,0 +1,25 @@
+{
+  "code": "crushedrefractory",
+  "variantgroups": [
+    {
+      "code": "source",
+      "states": [ "fire", "tier1", "tier2" ]
+    }
+  ],
+  "maxstacksize": 64,
+  "storageFlags": 5,
+  "attributes": {
+    "handbook": {
+      "groupBy": [ "crushedrefractory-*" ]
+    }
+  },
+  "shape": { "base": "game:item/resource/crushed" },
+  "texturesByType": {
+    "crushedrefractory-fire": { "material": { "base": "game:block/clay/brickpile/burned/fire-brick1" } },
+    "crushedrefractory-tier1": { "material": { "base": "game:block/clay/refractory/tier1/front1" } },
+    "crushedrefractory-tier2": { "material": { "base": "game:block/clay/refractory/tier2/front1" } }
+  },
+  "creativeinventory": {
+    "brickbybrick": [ "*" ]
+  }
+}
