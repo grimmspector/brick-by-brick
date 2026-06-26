@@ -2,6 +2,9 @@
   "code": "masonrycourse",
   "class": "brickbybrick.brickblock",
   "entityClass": "Generic",
+  "shape": {
+    "base": "brickbybrick:shapes/block/empty"
+  },
   "attributes": {
     "trowelable": true,
     "handbook": {
