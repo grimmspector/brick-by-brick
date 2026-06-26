@@ -22,7 +22,7 @@ namespace brickbybrick
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
-            Mod.Logger.Notification("Hello from template mod: " + api.Side);
+            Mod.Logger.Event($"started '{Mod.Info.Name}' mod");
             api.RegisterItemClass(Mod.Info.ModID + ".trowel", typeof(ItemTrowel));
             api.RegisterBlockClass(Mod.Info.ModID + ".cobbleblock", typeof(BlockStone));
             api.RegisterBlockClass(Mod.Info.ModID + ".brickblock", typeof(BlockBrick));
@@ -31,13 +31,11 @@ namespace brickbybrick
 
         public override void StartServerSide(ICoreServerAPI api)
         {
-            Mod.Logger.Notification("Hello from template mod server side: " + Lang.Get("brickbybrick:hello"));
+            ValidateConstructionRegistry(api);
         }
 
         public override void StartClientSide(ICoreClientAPI api)
         {
-            Mod.Logger.Notification("Hello from template mod client side: " + Lang.Get("brickbybrick:hello"));
-
             survivalHandbook = api.ModLoader.GetModSystem<ModSystemSurvivalHandbook>();
             if (survivalHandbook != null)
             {
@@ -68,6 +66,31 @@ namespace brickbybrick
             GuiHandbookPage masonryGuide = pages[masonryGuideIndex];
             pages.RemoveAt(masonryGuideIndex);
             pages.Add(masonryGuide);
+        }
+
+        // Fail loudly when a required construction asset is missing. Optional
+        // material families remain data-driven and may be supplied by add-ons.
+        private void ValidateConstructionRegistry(ICoreAPI api)
+        {
+            string[] requiredBlocks =
+            {
+                "brickbybrick:masonrycourse",
+                "brickbybrick:brickblock-good-fire"
+            };
+
+            foreach (string code in requiredBlocks)
+            {
+                if (api.World.GetBlock(new AssetLocation(code)) == null)
+                {
+                    Mod.Logger.Error($"Required construction block is not registered: {code}");
+                }
+            }
+
+            Block? course = api.World.GetBlock(new AssetLocation("brickbybrick:masonrycourse"));
+            if (course?.Attributes?["trowelable"].AsBool(false) != true)
+            {
+                Mod.Logger.Error("The masonry course is missing its trowelable attribute.");
+            }
         }
     }   
 }

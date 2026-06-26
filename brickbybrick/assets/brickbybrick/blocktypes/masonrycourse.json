@@ -83,6 +83,48 @@
           }
         },
         "textures": {
+          "family-cobble::color-*": {
+            "mortar": {
+              "base": "game:block/wood/barrel/mortar"
+            },
+            "material": {
+              "base": "game:block/stone/cobblestone/{color}1"
+            },
+            "material2": {
+              "base": "game:block/stone/cobblestone/{color}1"
+            },
+            "colour": {
+              "base": "game:block/stone/cobblestone/{color}1"
+            }
+          },
+          "family-ashlar::color-*": {
+            "mortar": {
+              "base": "game:block/wood/barrel/mortar"
+            },
+            "material": {
+              "base": "game:block/stone/brick/{color}1"
+            },
+            "material2": {
+              "base": "game:block/stone/brick/{color}1"
+            },
+            "colour": {
+              "base": "game:block/stone/brick/{color}1"
+            }
+          },
+          "family-refractory::color-*": {
+            "mortar": {
+              "base": "game:block/wood/barrel/mortar"
+            },
+            "material": {
+              "base": "game:block/clay/refractory/{color}/front1"
+            },
+            "material2": {
+              "base": "game:block/clay/refractory/{color}/front1"
+            },
+            "colour": {
+              "base": "game:block/clay/refractory/{color}/front1"
+            }
+          },
           "shape-stair::state-four::color-fire": {
             "mortar": {
               "base": "game:block/wood/barrel/mortar"
