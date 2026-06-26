@@ -166,6 +166,7 @@ namespace brickbybrick.items
             // and midpoint sound flag before mode-specific logic starts.
             SetInteracted(slot.Itemstack, false);
             slot.Itemstack.Attributes.SetBool("soundPlayed", false);
+            slot.Itemstack.Attributes.SetFloat("lastParticleTime", -1f);
 
             // Refill from mortar containers immediately before any build mode
             // handling so buckets and similar targets always win over placement.
@@ -279,6 +280,7 @@ namespace brickbybrick.items
             if (!HasEnoughMortar(slot, byEntity)) return false;
 
             PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, BrickSounds, 20f);
+            SpawnPlacementParticlesDuringAction(secondsUsed, slot, byEntity, blockSel, toolMode);
             if (secondsUsed < ActionDurationSeconds) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
@@ -296,9 +298,13 @@ namespace brickbybrick.items
                 return false;
             }
 
+            Variants placementVariants = CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
+            ItemStack placementStack = CreateCourseStack(byEntity.World, placementVariants);
+
             byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos);
-            placeBlock.OnBlockPlaced(byEntity.World, targetPos, slot.Itemstack);
-            ApplyCourseState(byEntity.World, targetPos, CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack));
+            placeBlock.OnBlockPlaced(byEntity.World, targetPos, placementStack);
+            ApplyCourseState(byEntity.World, targetPos, placementVariants);
+            SpawnConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.25, true, materialStack);
 
             ConsumeOffhand(offhandSlot, MasonryCostPerAction);
             ConsumeMortar(slot, MortarCostPerAction);
@@ -323,6 +329,7 @@ namespace brickbybrick.items
             string color = GetBlockColor(block, byEntity.World, pos);
 
             PlayStageSoundAtMidpoint(secondsUsed, slot, byEntity, pos, player, action);
+            SpawnStageParticlesDuringAction(secondsUsed, slot, byEntity, pos, block, action, color);
             if (secondsUsed < ActionDurationSeconds) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
@@ -381,6 +388,7 @@ namespace brickbybrick.items
                 byEntity.World.BlockAccessor.ExchangeBlock(newBlock.Id, pos);
                 courseVariants.Set("stage", nextStage.ToString());
                 ApplyCourseState(byEntity.World, pos, courseVariants);
+                SpawnConstructionParticles(byEntity.World, pos, newBlock, action, color, false, null, false, GetCourseMaterialStack(byEntity.World, pos, block));
             }
             else
             {
@@ -389,6 +397,7 @@ namespace brickbybrick.items
                 // stairs whose final blocks use different block classes.
                 byEntity.World.BlockAccessor.SetBlock(newBlock.Id, pos);
                 newBlock.OnBlockPlaced(byEntity.World, pos, slot.Itemstack);
+                SpawnConstructionParticles(byEntity.World, pos, newBlock, action, color, true, null, false, GetCourseMaterialStack(byEntity.World, pos, block));
             }
 
             // Full brick blocks occupy the entire space, so remove any water
@@ -650,6 +659,275 @@ namespace brickbybrick.items
             }
         }
 
+        private void SpawnConstructionParticles(
+            IWorldAccessor world,
+            BlockPos pos,
+            Block block,
+            ConstructionAction action,
+            string color,
+            bool completed,
+            double? surfaceHeight = null,
+            bool includeMortar = false,
+            ItemStack materialStack = null)
+        {
+            if (world?.Side != EnumAppSide.Server || pos == null) return;
+
+            EmitConstructionParticles(world, pos, block, action, color, completed, 1f, surfaceHeight, includeMortar, materialStack);
+        }
+
+        private void SpawnStageParticlesDuringAction(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            BlockPos pos,
+            Block block,
+            ConstructionAction action,
+            string color)
+        {
+            if (!ShouldSpawnActionParticles(secondsUsed, slot, byEntity, action)) return;
+
+            EmitConstructionParticles(byEntity.World, pos, block, action, color, false, 0.35f, null, false, GetCourseMaterialStack(byEntity.World, pos, block));
+        }
+
+        private void SpawnPlacementParticlesDuringAction(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            BlockSelection blockSel,
+            int toolMode)
+        {
+            if (!ShouldSpawnActionParticles(secondsUsed, slot, byEntity, ConstructionAction.Masonry)) return;
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            if (!TryGetPlacementMaterial(player, byEntity, out _, out ItemStack materialStack, out _, out string color)) return;
+
+            BlockPos targetPos = ResolvePlacementTarget(blockSel);
+            Block placeBlock = ResolvePlacementBlock(byEntity.World, byEntity, blockSel, toolMode, null);
+            EmitConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.35f, 0.25, true, materialStack);
+        }
+
+        private bool ShouldSpawnActionParticles(
+            float secondsUsed,
+            ItemSlot slot,
+            EntityAgent byEntity,
+            ConstructionAction action)
+        {
+            if (action == ConstructionAction.None) return false;
+            if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return false;
+
+            float lastParticleTime = slot.Itemstack.Attributes.GetFloat("lastParticleTime", -1f);
+            if (lastParticleTime >= 0 && secondsUsed - lastParticleTime < 0.25f) return false;
+
+            slot.Itemstack.Attributes.SetFloat("lastParticleTime", secondsUsed);
+            return true;
+        }
+
+        private void EmitConstructionParticles(
+            IWorldAccessor world,
+            BlockPos pos,
+            Block block,
+            ConstructionAction action,
+            string color,
+            bool completed,
+            float quantityMultiplier,
+            double? surfaceHeight = null,
+            bool includeMortar = false,
+            ItemStack materialStack = null)
+        {
+            const double ParticleLift = 1d / 64d;
+
+            Cuboidf bounds = GetParticleBounds(world, pos, block);
+            double particleY = pos.Y + (surfaceHeight ?? bounds.Y2) + ParticleLift;
+            Vec3d minPos = new Vec3d(pos.X, particleY - 0.02, pos.Z);
+            Vec3d maxPos = new Vec3d(pos.X + 1, particleY + 0.04, pos.Z + 1);
+            Vec3d centerPos = new Vec3d(
+                (minPos.X + maxPos.X) / 2,
+                (minPos.Y + maxPos.Y) / 2,
+                (minPos.Z + maxPos.Z) / 2
+            );
+
+            if (completed)
+            {
+                SpawnDustPuff(world, pos, centerPos, ScaleQuantity(42, quantityMultiplier), 0.5f);
+                return;
+            }
+
+            if (action == ConstructionAction.Masonry)
+            {
+                SpawnBrickChipScatter(world, centerPos, ScaleQuantity(18, quantityMultiplier), materialStack, GetFallbackBrickParticleColor(color), 0.5f);
+
+                if (includeMortar)
+                {
+                    SpawnMortarScatter(world, centerPos, ScaleQuantity(15, quantityMultiplier), 0.5f);
+                }
+            }
+            else if (action == ConstructionAction.Mortar)
+            {
+                SpawnMortarScatter(world, centerPos, ScaleQuantity(30, quantityMultiplier), 0.5f);
+            }
+        }
+
+        private int ScaleQuantity(int quantity, float multiplier)
+        {
+            return Math.Max(1, (int)Math.Ceiling(quantity * multiplier));
+        }
+
+        private Cuboidf GetParticleBounds(IWorldAccessor world, BlockPos pos, Block block)
+        {
+            // Use the rendered block's selection bounds so stage particles stay
+            // near the visible course instead of spawning from empty space.
+            Cuboidf[] boxes = block?.GetSelectionBoxes(world.BlockAccessor, pos);
+            Cuboidf bounds = boxes != null && boxes.Length > 0 ? boxes[0] : new Cuboidf(0, 0, 0, 1, 1, 1);
+
+            for (int i = 1; i < boxes?.Length; i++)
+            {
+                bounds = bounds.Clone();
+                bounds.X1 = Math.Min(bounds.X1, boxes[i].X1);
+                bounds.Y1 = Math.Min(bounds.Y1, boxes[i].Y1);
+                bounds.Z1 = Math.Min(bounds.Z1, boxes[i].Z1);
+                bounds.X2 = Math.Max(bounds.X2, boxes[i].X2);
+                bounds.Y2 = Math.Max(bounds.Y2, boxes[i].Y2);
+                bounds.Z2 = Math.Max(bounds.Z2, boxes[i].Z2);
+            }
+
+            return bounds;
+        }
+
+        private void SpawnBrickChipScatter(
+            IWorldAccessor world,
+            Vec3d centerPos,
+            int quantity,
+            ItemStack materialStack,
+            int fallbackColor,
+            float scale)
+        {
+            Random rand = world.Rand;
+
+            for (int i = 0; i < quantity; i++)
+            {
+                Vec3d origin = OffsetFromCenter(centerPos, rand, 0.45);
+                Vec3f velocity = DirectionalVelocity(centerPos, origin, rand, 0.12f, 0.22f, 0.025f, 0.075f);
+                Vec3d minPos = new Vec3d(origin.X - 0.02, origin.Y - 0.01, origin.Z - 0.02);
+                Vec3d maxPos = new Vec3d(origin.X + 0.02, origin.Y + 0.03, origin.Z + 0.02);
+
+                if (materialStack != null)
+                {
+                    world.SpawnCubeParticles(origin, materialStack, 0.18f, 1, scale, null, velocity);
+                }
+                else
+                {
+                    world.SpawnParticles(1, fallbackColor, minPos, maxPos, velocity, velocity, 0.55f, 0.45f, scale, EnumParticleModel.Cube, null);
+                }
+            }
+        }
+
+        private void SpawnDustPuff(
+            IWorldAccessor world,
+            BlockPos blockPos,
+            Vec3d centerPos,
+            int quantity,
+            float scale)
+        {
+            Random rand = world.Rand;
+
+            for (int i = 0; i < quantity; i++)
+            {
+                Vec3d origin = OffsetFromCenter(centerPos, rand, 0.35);
+                Vec3f velocity = DirectionalVelocity(centerPos, origin, rand, 0.12f, 0.22f, 0.035f, 0.11f);
+
+                world.SpawnCubeParticles(blockPos, origin, 0.08f, 1, scale, null, velocity);
+            }
+        }
+
+        private void SpawnMortarScatter(IWorldAccessor world, Vec3d centerPos, int quantity, float scale)
+        {
+            Random rand = world.Rand;
+            Vec3d splashCenter = OffsetFromCenter(centerPos, rand, 0.25);
+
+            for (int i = 0; i < quantity; i++)
+            {
+                Vec3d origin = OffsetFromCenter(splashCenter, rand, 0.4);
+                Vec3f velocity = DirectionalVelocity(splashCenter, origin, rand, 0.05f, 0.12f, -0.075f, -0.02f);
+                Vec3d minPos = new Vec3d(origin.X - 0.02, origin.Y + 0.04, origin.Z - 0.02);
+                Vec3d maxPos = new Vec3d(origin.X + 0.02, origin.Y + 0.12, origin.Z + 0.02);
+
+                world.SpawnParticles(
+                    1,
+                    GetMortarParticleColor(),
+                    minPos,
+                    maxPos,
+                    velocity,
+                    velocity,
+                    0.55f,
+                    0.45f,
+                    scale,
+                    EnumParticleModel.Cube,
+                    null
+                );
+            }
+        }
+
+        private Vec3d OffsetFromCenter(Vec3d centerPos, Random rand, double radius)
+        {
+            double angle = rand.NextDouble() * GameMath.TWOPI;
+            double distance = Math.Sqrt(rand.NextDouble()) * radius;
+
+            return new Vec3d(
+                centerPos.X + Math.Cos(angle) * distance,
+                centerPos.Y,
+                centerPos.Z + Math.Sin(angle) * distance
+            );
+        }
+
+        private Vec3f DirectionalVelocity(
+            Vec3d centerPos,
+            Vec3d origin,
+            Random rand,
+            float minHorizontal,
+            float maxHorizontal,
+            float minVertical,
+            float maxVertical)
+        {
+            double x = origin.X - centerPos.X;
+            double z = origin.Z - centerPos.Z;
+            double length = Math.Sqrt(x * x + z * z);
+
+            if (length < 0.001)
+            {
+                double angle = rand.NextDouble() * GameMath.TWOPI;
+                x = Math.Cos(angle);
+                z = Math.Sin(angle);
+                length = 1;
+            }
+
+            float horizontal = minHorizontal + (float)rand.NextDouble() * (maxHorizontal - minHorizontal);
+
+            return new Vec3f(
+                (float)(x / length) * horizontal,
+                minVertical + (float)rand.NextDouble() * (maxVertical - minVertical),
+                (float)(z / length) * horizontal
+            );
+        }
+
+        private int GetMortarParticleColor()
+        {
+            return ColorUtil.ToRgba(255, 198, 190, 168);
+        }
+
+        private int GetFallbackBrickParticleColor(string color)
+        {
+            return color switch
+            {
+                "brown" => ColorUtil.ToRgba(255, 113, 68, 43),
+                "darkbrown" => ColorUtil.ToRgba(255, 75, 48, 34),
+                "fire" => ColorUtil.ToRgba(255, 127, 60, 41),
+                "gray" => ColorUtil.ToRgba(255, 112, 105, 96),
+                "orange" => ColorUtil.ToRgba(255, 173, 82, 39),
+                "red" => ColorUtil.ToRgba(255, 139, 54, 39),
+                "tan" => ColorUtil.ToRgba(255, 181, 143, 95),
+                _ => ColorUtil.ToRgba(255, 142, 92, 64)
+            };
+        }
+
         private static void ConsumeOffhand(ItemSlot slot, int quantity)
         {
             if (slot == null || quantity <= 0) return;
@@ -688,6 +966,14 @@ namespace brickbybrick.items
             }
 
             return placeBlock;
+        }
+
+        private ItemStack CreateCourseStack(IWorldAccessor world, Variants variants)
+        {
+            ItemStack stack = new ItemStack(world.BlockAccessor.GetBlock(new AssetLocation(MasonryCourseCode)));
+            variants.ToStack(stack);
+
+            return stack;
         }
 
         private Variants CreatePlacementVariants(
@@ -927,8 +1213,7 @@ namespace brickbybrick.items
                 blockEntity?.GetBehavior<BlockEntityBehaviorShapeTexturesFromAttributes>();
             if (behavior == null) return;
 
-            ItemStack courseStack = new ItemStack(world.BlockAccessor.GetBlock(new AssetLocation(MasonryCourseCode)));
-            variants.ToStack(courseStack);
+            ItemStack courseStack = CreateCourseStack(world, variants);
             behavior.OnBlockPlaced(courseStack);
             blockEntity.MarkDirty(true);
         }
@@ -959,6 +1244,20 @@ namespace brickbybrick.items
             }
 
             return null;
+        }
+
+        private ItemStack GetCourseMaterialStack(IWorldAccessor world, BlockPos pos, Block block)
+        {
+            if (world == null || pos == null) return null;
+
+            Variants variants = GetCourseVariants(world, pos, block);
+            string materialDomain = variants.Get("materialDomain");
+            string materialPath = variants.Get("materialPath");
+
+            if (string.IsNullOrEmpty(materialDomain) || string.IsNullOrEmpty(materialPath)) return null;
+
+            Item item = world.GetItem(new AssetLocation(materialDomain, materialPath));
+            return item == null ? null : new ItemStack(item);
         }
 
         // Prefer the item variant, then fall back to the final code part.
