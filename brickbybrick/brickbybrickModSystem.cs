@@ -1,5 +1,6 @@
 using brickbybrick.Blocks;
 using brickbybrick.items;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
@@ -33,13 +34,18 @@ namespace brickbybrick
 
         }
 
-        // Loads one shared settings object on each side. Vintage Story writes
-        // the default file only when none exists, then validation guards edits.
+        // Rebuilds the saved object from the current schema. Valid values are
+        // retained while missing, malformed, and obsolete fields are replaced.
         private void LoadConfig(ICoreAPI api)
         {
             try
             {
-                Config = api.LoadModConfig<BrickByBrickConfig>(ConfigFileName) ?? new BrickByBrickConfig();
+                BrickByBrickConfig defaults = new();
+                JObject defaultObject = JObject.FromObject(defaults);
+                JObject? savedObject = api.LoadModConfig<JObject>(ConfigFileName);
+                JObject normalizedObject = NormalizeConfigObject(savedObject, defaultObject);
+
+                Config = normalizedObject.ToObject<BrickByBrickConfig>() ?? defaults;
             }
             catch (Exception exception)
             {
@@ -49,6 +55,59 @@ namespace brickbybrick
 
             Config.Validate();
             api.StoreModConfig(Config, ConfigFileName);
+        }
+
+        // Walks only known properties so stale settings are removed whenever
+        // the normalized configuration is written back to disk.
+        private static JObject NormalizeConfigObject(JObject? savedObject, JObject defaultObject, string path = "")
+        {
+            JObject normalizedObject = new();
+
+            foreach (JProperty defaultProperty in defaultObject.Properties())
+            {
+                string propertyPath = string.IsNullOrEmpty(path)
+                    ? defaultProperty.Name
+                    : $"{path}.{defaultProperty.Name}";
+                JToken? savedValue = savedObject?[defaultProperty.Name];
+
+                if (defaultProperty.Value is JObject defaultChild)
+                {
+                    normalizedObject[defaultProperty.Name] = NormalizeConfigObject(
+                        savedValue as JObject,
+                        defaultChild,
+                        propertyPath);
+                    continue;
+                }
+
+                normalizedObject[defaultProperty.Name] = IsValidConfigValue(savedValue, defaultProperty.Value, propertyPath)
+                    ? savedValue!.DeepClone()
+                    : defaultProperty.Value.DeepClone();
+            }
+
+            return normalizedObject;
+        }
+
+        // JSON numbers may be stored as either integers or decimals. All other
+        // settings must retain their exact schema type before deserialization.
+        private static bool IsValidConfigValue(JToken? savedValue, JToken defaultValue, string path)
+        {
+            if (savedValue == null || savedValue.Type == JTokenType.Null) return false;
+
+            if (path == "Construction.Mode")
+            {
+                return savedValue.Type == JTokenType.String
+                    && Enum.TryParse(savedValue.Value<string>(), true, out ConstructionMode _);
+            }
+
+            if (defaultValue.Type == JTokenType.Float)
+            {
+                if (savedValue.Type != JTokenType.Float && savedValue.Type != JTokenType.Integer) return false;
+
+                double numericValue = savedValue.Value<double>();
+                return !double.IsNaN(numericValue) && !double.IsInfinity(numericValue);
+            }
+
+            return savedValue.Type == defaultValue.Type;
         }
 
         public override void StartServerSide(ICoreServerAPI api)

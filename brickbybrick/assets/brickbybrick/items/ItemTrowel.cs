@@ -198,6 +198,13 @@ namespace brickbybrick.items
             // is not trowelable because they place into the adjacent position.
             if (IsPlacementMode(toolMode))
             {
+                BlockPos targetPos = ResolvePlacementTarget(blockSel);
+                if (!ValidateStructuralSupport(world, targetPos, byPlayer))
+                {
+                    handling = EnumHandHandling.PreventDefault;
+                    return;
+                }
+
                 if (!HasEnoughMortar(slot, byEntity))
                 {
                     handling = EnumHandHandling.PreventDefault;
@@ -216,6 +223,12 @@ namespace brickbybrick.items
             }
 
             if (!IsTrowelable(block))
+            {
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
+            if (!ValidateStructuralSupport(world, pos, byPlayer))
             {
                 handling = EnumHandHandling.PreventDefault;
                 return;
@@ -315,6 +328,10 @@ namespace brickbybrick.items
             Block placeBlock = ResolvePlacementBlock(byEntity.World, byEntity, blockSel, toolMode, color);
             if (placeBlock == null) return false;
 
+            // Support is checked after the timed action so cave-ins or other
+            // neighbour changes cannot leave a newly placed course floating.
+            if (!ValidateStructuralSupport(byEntity.World, targetPos, player)) return false;
+
             Block existingBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
             if (existingBlock == null || !existingBlock.IsReplacableBy(placeBlock))
             {
@@ -362,6 +379,10 @@ namespace brickbybrick.items
             if (!IsTrowelable(currentBlock)) return false;
             if (GetBlockStage(currentBlock, byEntity.World, pos) != currentStage) return false;
             block = currentBlock;
+
+            // Unsupported construction never advances. This is deliberately
+            // checked again after the timed action because its support may move.
+            if (!ValidateStructuralSupport(byEntity.World, pos, player)) return false;
 
             // Determine the next block before consuming any resources so finished
             // staged blocks simply stop progressing without wasting materials.
@@ -1519,6 +1540,42 @@ namespace brickbybrick.items
                 && block?.Code?.Path == "masonrycourse";
         }
 
+        // A full upward face is the normal support rule. Attributes provide a
+        // stable hook for wet finished masonry and compatibility scaffolding.
+        internal static bool HasStructuralSupport(IWorldAccessor world, BlockPos pos, IPlayer player)
+        {
+            if (!brickbybrickModSystem.Config.Construction.RequireStructuralSupport) return true;
+            if (player?.WorldData?.CurrentGameMode == EnumGameMode.Creative) return true;
+            if (world?.BlockAccessor == null || pos == null) return false;
+
+            BlockPos supportPos = pos.DownCopy();
+            Block supportBlock = world.BlockAccessor.GetBlock(supportPos);
+            if (supportBlock?.Code == null || supportBlock.IsLiquid()) return false;
+
+            if (supportBlock.Attributes?["structuralSupport"].AsBool(false) == true) return true;
+            if (supportBlock.Attributes?["completeWetMasonry"].AsBool(false) == true) return true;
+
+            // Scaffolding is optional. Domain recognition avoids assembly or
+            // API dependencies and supports every block variant from the mod.
+            if (supportBlock.Code.Domain == "scaffolding") return true;
+
+            return world.BlockAccessor.IsSideSolid(
+                supportPos.X,
+                supportPos.Y,
+                supportPos.Z,
+                BlockFacing.UP);
+        }
+
+        // Reports the same failed support check used by placement and build
+        // actions while keeping preview validation quiet.
+        private bool ValidateStructuralSupport(IWorldAccessor world, BlockPos pos, IPlayer player)
+        {
+            if (HasStructuralSupport(world, pos, player)) return true;
+
+            NotifyPlayerDebug(player, world, Lang.Get("brickbybrick:notice-trowel-unsupported"));
+            return false;
+        }
+
         private sealed class TrowelPlacementPreviewRenderer : IRenderer, IDisposable
         {
             private const float ContactFaceOffset = 0.015625f;
@@ -1540,14 +1597,16 @@ namespace brickbybrick.items
             public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
             {
                 if (!brickbybrickModSystem.Config.Trowels.EnablePlacementPreview) return;
-                if (!TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)) return;
+                if (!TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace, out bool hasSupport)) return;
 
                 MeshRef meshRef = GetOrCreateMeshRef(finalBlock);
                 if (meshRef == null) return;
 
                 IRenderAPI rpi = capi.Render;
                 float previewAlpha = brickbybrickModSystem.Config.Trowels.PlacementPreviewOpacity;
-                Vec4f ghostTint = new Vec4f(1f, 1f, 1f, previewAlpha);
+                Vec4f ghostTint = hasSupport
+                    ? new Vec4f(1f, 1f, 1f, previewAlpha)
+                    : new Vec4f(1f, 0.15f, 0.08f, previewAlpha);
                 Vec3d cameraPos = capi.World.Player.Entity.CameraPos;
                 IStandardShaderProgram shader = rpi.PreparedStandardShader(targetPos.X, targetPos.Y, targetPos.Z, ghostTint);
                 Vec3f faceOffset = GetFaceOffset(selectedFace);
@@ -1596,11 +1655,12 @@ namespace brickbybrick.items
                 return meshRef;
             }
 
-            private bool TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)
+            private bool TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace, out bool hasSupport)
             {
                 targetPos = null;
                 finalBlock = null;
                 selectedFace = BlockFacing.UP;
+                hasSupport = false;
 
                 IClientPlayer player = capi.World.Player;
                 ItemSlot activeSlot = player?.InventoryManager?.ActiveHotbarSlot;
@@ -1612,6 +1672,7 @@ namespace brickbybrick.items
                 if (!TryResolveMaterial(player, out ItemStack materialStack, out string family, out string color)) return false;
 
                 targetPos = trowel.ResolvePlacementTarget(blockSel);
+                hasSupport = HasStructuralSupport(capi.World, targetPos, player);
                 selectedFace = blockSel.Face ?? BlockFacing.UP;
                 Block placeBlock = trowel.ResolvePlacementBlock(capi.World, player.Entity, blockSel, toolMode, color);
                 Block existingBlock = capi.World.BlockAccessor.GetBlock(targetPos);
