@@ -1,4 +1,5 @@
 using AttributeRenderingLibrary;
+using brickbybrick.RealisticConstruction;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
@@ -194,6 +195,22 @@ namespace brickbybrick.items
 
             int toolMode = GetToolMode(slot, byPlayer, blockSel);
 
+            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                bool mortarAction = byEntity.Controls.Sneak || !TryGetOffhandStack(byPlayer, out _, out _);
+                if (mortarAction)
+                {
+                    if (HasEnoughMortar(slot, byEntity)) UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
+                }
+                else if (byEntity.World.Side == EnumAppSide.Server)
+                {
+                    TryPlaceRealisticUnit(slot, byEntity, byPlayer, blockSel);
+                }
+
+                handling = EnumHandHandling.PreventDefault;
+                return;
+            }
+
             // Placement modes own the interaction even when the selected block
             // is not trowelable because they place into the adjacent position.
             if (IsPlacementMode(toolMode))
@@ -259,6 +276,11 @@ namespace brickbybrick.items
             if (block == null) return false;
 
             int toolMode = GetToolMode(slot, player, blockSel);
+
+            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                return HandleRealisticMortar(secondsUsed, slot, byEntity, player, blockSel);
+            }
 
             if (!IsTrowelable(block) && toolMode != 1 && toolMode != 2 && toolMode != 3)
             {
@@ -425,6 +447,83 @@ namespace brickbybrick.items
             ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
             SetInteracted(slot.Itemstack, true);
 
+            return false;
+        }
+
+        private void TryPlaceRealisticUnit(ItemSlot trowelSlot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
+        {
+            if (!TryGetOffhandStack(player, out ItemSlot materialSlot, out ItemStack materialStack)) return;
+
+            string path = materialStack.Collectible?.Code?.Path ?? string.Empty;
+            MasonryUnitKind kind = path switch
+            {
+                "burnedbrick-cream" => MasonryUnitKind.WholeBrick,
+                "halfbrick-cream" => MasonryUnitKind.HalfBrick,
+                "testrammedearth" => MasonryUnitKind.RammedEarth,
+                _ => (MasonryUnitKind)(-1)
+            };
+            if ((int)kind < 0) return;
+
+            BlockPos targetPos = byEntity.World.BlockAccessor.GetBlock(blockSel.Position).Code?.Path == "realisticmasonry"
+                ? blockSel.Position.Copy()
+                : ResolvePlacementTarget(blockSel);
+            Block targetBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
+
+            if (targetBlock.Code?.Path != "realisticmasonry")
+            {
+                Block constructionBlock = byEntity.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+                if (constructionBlock == null || !targetBlock.IsReplacableBy(constructionBlock)) return;
+                byEntity.World.BlockAccessor.SetBlock(constructionBlock.Id, targetPos);
+            }
+
+            if (byEntity.World.BlockAccessor.GetBlockEntity(targetPos) is not BlockEntityRealisticMasonry entity) return;
+
+            int gridX = GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.X * 4), 0, 3);
+            int gridZ = GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Z * 4), 0, 3);
+            int layer = targetPos.Equals(blockSel.Position)
+                ? GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Y * 4) + (blockSel.Face == BlockFacing.UP ? 1 : 0), 0, 255)
+                : 0;
+            MasonryUnitPlacement unit = new()
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                Kind = kind,
+                MaterialCode = path,
+                Orientation = trowelSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0) == 0
+                    ? MasonryOrientation.EastWest
+                    : MasonryOrientation.NorthSouth,
+                Origin = new MasonryGridPosition(gridX, layer, gridZ)
+            };
+
+            if (!entity.TryPlace(unit)) return;
+
+            materialSlot.TakeOut(1);
+            materialSlot.MarkDirty();
+            PlayRandomSound(byEntity.World, targetPos, player, BrickSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
+        }
+
+        private bool HandleRealisticMortar(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
+        {
+            if (!byEntity.Controls.Sneak && TryGetOffhandStack(player, out _, out _)) return false;
+            if (!HasEnoughMortar(slot, byEntity)) return false;
+
+            float duration = brickbybrickModSystem.Config.GetConstructionActionSeconds() / Math.Max(1, slot.Itemstack.Collectible.ToolTier);
+            PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, TrowelSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
+            if (secondsUsed < duration) return true;
+            if (byEntity.World.Side != EnumAppSide.Server || HasInteracted(slot.Itemstack)) return false;
+            if (byEntity.World.BlockAccessor.GetBlockEntity(blockSel.Position) is not BlockEntityRealisticMasonry entity) return false;
+
+            MasonryGridPosition position = new(
+                GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.X * 4), 0, 3),
+                GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Y * 4), 0, 255),
+                GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Z * 4), 0, 3));
+            MasonryUnitPlacement unit = entity.FindUnit(position);
+            if (unit == null) return false;
+
+            int changed = entity.ApplyMortar(unit);
+            if (changed <= 0) return false;
+
+            ConsumeConfiguredMortar(slot, changed * brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            SetInteracted(slot.Itemstack, true);
             return false;
         }
 
@@ -1516,6 +1615,7 @@ namespace brickbybrick.items
         private sealed class TrowelPlacementPreviewRenderer : IRenderer, IDisposable
         {
             private const float ContactFaceOffset = 0.015625f;
+            private const float RealisticJointInset = 0.0078125f;
             private const string DefaultPreviewColor = "red";
 
             private readonly ICoreClientAPI capi;
@@ -1534,6 +1634,12 @@ namespace brickbybrick.items
             public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
             {
                 if (!brickbybrickModSystem.Config.Trowels.EnablePlacementPreview) return;
+                if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+                {
+                    RenderRealisticPreview();
+                    return;
+                }
+
                 if (!TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace)) return;
 
                 MeshRef meshRef = GetOrCreateMeshRef(finalBlock);
@@ -1568,6 +1674,140 @@ namespace brickbybrick.items
                 shader.Stop();
             }
 
+            private void RenderRealisticPreview()
+            {
+                if (!TryResolveRealisticPreview(
+                    out BlockPos targetPos,
+                    out MasonryUnitPlacement unit,
+                    out MeshRef meshRef,
+                    out bool valid)) return;
+
+                IRenderAPI rpi = capi.Render;
+                float alpha = brickbybrickModSystem.Config.Trowels.PlacementPreviewOpacity;
+                Vec4f tint = valid ? new Vec4f(1f, 1f, 1f, alpha) : new Vec4f(1f, 0.12f, 0.12f, alpha);
+                Vec3d cameraPos = capi.World.Player.Entity.CameraPos;
+                float width = unit.Kind == MasonryUnitKind.HalfBrick ? 0.25f : 0.5f;
+                float depth = unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
+                if (unit.Orientation == MasonryOrientation.NorthSouth && unit.Kind != MasonryUnitKind.RammedEarth)
+                {
+                    (width, depth) = (depth, width);
+                }
+
+                IStandardShaderProgram shader = rpi.PreparedStandardShader(targetPos.X, targetPos.Y, targetPos.Z, tint);
+                shader.Tex2D = capi.BlockTextureAtlas.AtlasTextures[0].TextureId;
+                shader.RgbaTint = tint;
+                shader.AlphaTest = 0.01f;
+                shader.ExtraGlow = valid ? 72 : 128;
+                shader.SsaoAttn = 0f;
+                shader.OverlayOpacity = 0f;
+                shader.ModelMatrix = Matrixf.Create()
+                    .Translate(
+                        (float)(targetPos.X - cameraPos.X),
+                        (float)(targetPos.Y - cameraPos.Y),
+                        (float)(targetPos.Z - cameraPos.Z))
+                    .Translate(
+                        unit.Origin.X * 0.25f + RealisticJointInset,
+                        unit.Origin.Y * 0.25f + RealisticJointInset,
+                        unit.Origin.Z * 0.25f + RealisticJointInset)
+                    .Scale(
+                        width - RealisticJointInset * 2,
+                        0.25f - RealisticJointInset * 2,
+                        depth - RealisticJointInset * 2)
+                    .Values;
+
+                rpi.GlToggleBlend(true);
+                rpi.GLDepthMask(false);
+                rpi.GlEnableCullFace();
+                rpi.RenderMesh(meshRef);
+                rpi.GLDepthMask(true);
+                rpi.GlToggleBlend(false);
+                shader.Stop();
+            }
+
+            private bool TryResolveRealisticPreview(
+                out BlockPos targetPos,
+                out MasonryUnitPlacement unit,
+                out MeshRef meshRef,
+                out bool valid)
+            {
+                targetPos = null;
+                unit = null;
+                meshRef = null;
+                valid = false;
+
+                IClientPlayer player = capi.World.Player;
+                ItemSlot activeSlot = player?.InventoryManager?.ActiveHotbarSlot;
+                BlockSelection blockSel = player?.CurrentBlockSelection;
+                if (activeSlot?.Itemstack?.Collectible != trowel || blockSel == null || player.Entity.Controls.Sneak) return false;
+                if (!trowel.TryGetOffhandStack(player, out _, out ItemStack materialStack)) return false;
+
+                string path = materialStack.Collectible?.Code?.Path ?? string.Empty;
+                MasonryUnitKind kind = path switch
+                {
+                    "burnedbrick-cream" => MasonryUnitKind.WholeBrick,
+                    "halfbrick-cream" => MasonryUnitKind.HalfBrick,
+                    "testrammedearth" => MasonryUnitKind.RammedEarth,
+                    _ => (MasonryUnitKind)(-1)
+                };
+                if ((int)kind < 0) return false;
+
+                Block selectedBlock = capi.World.BlockAccessor.GetBlock(blockSel.Position);
+                bool targetsExistingCell = selectedBlock?.Code?.Path == "realisticmasonry";
+                targetPos = targetsExistingCell ? blockSel.Position.Copy() : trowel.ResolvePlacementTarget(blockSel);
+                int gridX = GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.X * 4), 0, 3);
+                int gridZ = GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Z * 4), 0, 3);
+                int layer = targetsExistingCell
+                    ? GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Y * 4) + (blockSel.Face == BlockFacing.UP ? 1 : 0), 0, 255)
+                    : 0;
+
+                unit = new MasonryUnitPlacement
+                {
+                    Id = "preview",
+                    Kind = kind,
+                    MaterialCode = path,
+                    Orientation = activeSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0) == 0
+                        ? MasonryOrientation.EastWest
+                        : MasonryOrientation.NorthSouth,
+                    Origin = new MasonryGridPosition(gridX, layer, gridZ)
+                };
+
+                Block targetBlock = capi.World.BlockAccessor.GetBlock(targetPos);
+                if (targetBlock?.Code?.Path == "realisticmasonry"
+                    && capi.World.BlockAccessor.GetBlockEntity(targetPos) is BlockEntityRealisticMasonry entity)
+                {
+                    valid = entity.CanPlace(unit);
+                }
+                else
+                {
+                    Block constructionBlock = capi.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+                    valid = constructionBlock != null && targetBlock != null && targetBlock.IsReplacableBy(constructionBlock);
+                }
+
+                meshRef = GetOrCreateRealisticMeshRef(kind);
+                return meshRef != null;
+            }
+
+            private MeshRef GetOrCreateRealisticMeshRef(MasonryUnitKind kind)
+            {
+                string key = $"realistic-{kind}";
+                if (meshRefs.TryGetValue(key, out MeshRef meshRef)) return meshRef;
+
+                Block block = capi.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+                BlockBehaviorShapeTexturesFromAttributes behavior = block?.GetBehavior<BlockBehaviorShapeTexturesFromAttributes>();
+                if (behavior == null) return null;
+
+                CompositeShape shape = new()
+                {
+                    Base = new AssetLocation(kind == MasonryUnitKind.RammedEarth
+                        ? "brickbybrick:shapes/block/realistic/rammedearth.json"
+                        : "brickbybrick:shapes/block/realistic/brick.json")
+                };
+                MeshData meshData = behavior.GetOrCreateMesh(new Variants(), shape, new BlockPos(0), key).Clone();
+                meshRef = capi.Render.UploadMesh(meshData);
+                meshRefs[key] = meshRef;
+                return meshRef;
+            }
+
             public void Dispose()
             {
                 foreach (MeshRef meshRef in meshRefs.Values)
@@ -1600,6 +1840,7 @@ namespace brickbybrick.items
                 ItemSlot activeSlot = player?.InventoryManager?.ActiveHotbarSlot;
                 BlockSelection blockSel = player?.CurrentBlockSelection;
                 if (activeSlot?.Itemstack?.Collectible != trowel || blockSel == null) return false;
+                if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled()) return false;
 
                 int toolMode = trowel.GetToolMode(activeSlot, player, blockSel);
                 if (!IsPlacementMode(toolMode)) return false;

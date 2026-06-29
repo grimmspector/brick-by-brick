@@ -1,0 +1,13 @@
+{
+  "textureWidth": 16,
+  "textureHeight": 16,
+  "textures": { "earth": "game:block/soil/rammed/light/plain1" },
+  "elements": [{
+    "name": "RammedEarth", "from": [0, 0, 0], "to": [16, 16, 16],
+    "faces": {
+      "north": { "texture": "#earth" }, "east": { "texture": "#earth" },
+      "south": { "texture": "#earth" }, "west": { "texture": "#earth" },
+      "up": { "texture": "#earth" }, "down": { "texture": "#earth" }
+    }
+  }]
+}

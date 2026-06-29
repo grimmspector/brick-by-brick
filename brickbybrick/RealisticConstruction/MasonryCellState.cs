@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace brickbybrick.RealisticConstruction
 {
@@ -13,6 +14,8 @@ namespace brickbybrick.RealisticConstruction
         public HashSet<string> MortaredSlots { get; set; } = new();
 
         public int FillUnits { get; set; }
+
+        public List<MasonryUnitPlacement> Units { get; set; } = new();
 
         public bool IsSlotPlaced(string slotCode)
         {
@@ -47,6 +50,117 @@ namespace brickbybrick.RealisticConstruction
         public bool TryApplyMortar(string slotCode)
         {
             return PlacedSlots.Contains(slotCode) && MortaredSlots.Add(slotCode);
+        }
+
+        // Mortar belongs to the occupied footprint in this cell. Calling this
+        // twice returns zero so an already covered unit is never charged again.
+        public int ApplyMortar(IEnumerable<MasonryGridPosition> positions)
+        {
+            int changed = 0;
+
+            foreach (MasonryGridPosition position in positions.Distinct())
+            {
+                MasonryUnitPlacement? unit = Units.FirstOrDefault(candidate => candidate.Occupies(position));
+                if (unit == null || unit.Kind == MasonryUnitKind.RammedEarth || unit.MortaredPositions.Contains(position)) continue;
+
+                unit.MortaredPositions.Add(position);
+                changed++;
+            }
+
+            return changed;
+        }
+    }
+
+    public enum MasonryUnitKind
+    {
+        WholeBrick,
+        HalfBrick,
+        RammedEarth
+    }
+
+    public enum MasonryOrientation
+    {
+        EastWest,
+        NorthSouth
+    }
+
+    // Coordinates are quarter-block cells matching one half-brick footprint.
+    // X and Z may cross a block boundary;
+    // ownership stays with the origin cell while touched neighbors mirror only
+    // their local footprint for collision, mortar, and support checks.
+    public sealed class MasonryUnitPlacement
+    {
+        public string Id { get; set; } = string.Empty;
+
+        public string MaterialCode { get; set; } = "game:burnedbrick-cream";
+
+        public MasonryUnitKind Kind { get; set; }
+
+        public MasonryOrientation Orientation { get; set; }
+
+        public MasonryGridPosition Origin { get; set; } = new();
+
+        public HashSet<MasonryGridPosition> MortaredPositions { get; set; } = new();
+
+        public IEnumerable<MasonryGridPosition> GetFootprint()
+        {
+            int width = Kind == MasonryUnitKind.HalfBrick ? 1 : 2;
+            int depth = Kind == MasonryUnitKind.RammedEarth ? 2 : 1;
+
+            if (Orientation == MasonryOrientation.NorthSouth && Kind != MasonryUnitKind.RammedEarth)
+            {
+                (width, depth) = (depth, width);
+            }
+
+            for (int x = 0; x < width; x++)
+            {
+                for (int z = 0; z < depth; z++)
+                {
+                    yield return new MasonryGridPosition(Origin.X + x, Origin.Y, Origin.Z + z);
+                }
+            }
+        }
+
+        public bool Occupies(MasonryGridPosition position)
+        {
+            return GetFootprint().Contains(position);
+        }
+
+        public bool Supports(MasonryGridPosition position)
+        {
+            return Kind == MasonryUnitKind.RammedEarth
+                ? Occupies(position)
+                : Occupies(position) && MortaredPositions.Contains(position);
+        }
+    }
+
+    public sealed class MasonryGridPosition
+    {
+        public MasonryGridPosition()
+        {
+        }
+
+        public MasonryGridPosition(int x, int y, int z)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+        }
+
+        public int X { get; set; }
+
+        public int Y { get; set; }
+
+        public int Z { get; set; }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is MasonryGridPosition other && X == other.X && Y == other.Y && Z == other.Z;
+        }
+
+        public override int GetHashCode()
+        {
+            return System.HashCode.Combine(X, Y, Z);
         }
     }
 }

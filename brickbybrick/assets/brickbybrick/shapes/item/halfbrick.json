@@ -1,0 +1,20 @@
+{
+  "textureWidth": 16,
+  "textureHeight": 16,
+  "textures": {},
+  "elements": [
+    {
+      "name": "HalfBrick",
+      "from": [4, 5, 4],
+      "to": [12, 11, 12],
+      "faces": {
+        "north": { "texture": "#material", "uv": [0, 4, 7, 8] },
+        "east": { "texture": "#material", "uv": [8, 8, 12, 12] },
+        "south": { "texture": "#material", "uv": [8.5, 0, 15.5, 4] },
+        "west": { "texture": "#material", "uv": [8, 12, 12, 16] },
+        "up": { "texture": "#material", "uv": [0, 12, 7, 16] },
+        "down": { "texture": "#material", "uv": [0, 12, 7, 16] }
+      }
+    }
+  ]
+}

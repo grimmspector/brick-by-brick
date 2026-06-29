@@ -1,0 +1,32 @@
+{
+  "code": "realisticmasonry",
+  "class": "brickbybrick.realisticmasonry",
+  "entityClass": "brickbybrick.realisticmasonry",
+  "shape": { "base": "brickbybrick:shapes/block/empty" },
+  "attributes": {
+    "trowelable": true,
+    "handbook": { "ignore": true }
+  },
+  "behaviors": [
+    {
+      "name": "AttributeRenderingLibrary.BlockShapeTexturesFromAttributes",
+      "properties": {
+        "shape": {
+          "*": { "base": "brickbybrick:shapes/block/realistic/brick" }
+        },
+        "textures": {
+          "*": {
+            "colour": { "base": "game:block/clay/brickpile/burned/cream-brick1" },
+            "mortar": { "base": "game:block/wood/barrel/mortar" },
+            "earth": { "base": "game:block/soil/rammed/light/plain1" }
+          }
+        }
+      }
+    }
+  ],
+  "blockmaterial": "Ceramic",
+  "replaceable": 140,
+  "sideopaque": { "all": false },
+  "lightAbsorption": 0,
+  "creativeinventory": {}
+}

@@ -1,0 +1,13 @@
+{
+  "textureWidth": 16,
+  "textureHeight": 16,
+  "textures": { "all": "#mortar" },
+  "elements": [{
+    "name": "Mortar", "from": [0, 0, 0], "to": [16, 16, 16],
+    "faces": {
+      "north": { "texture": "#all" }, "east": { "texture": "#all" },
+      "south": { "texture": "#all" }, "west": { "texture": "#all" },
+      "up": { "texture": "#all" }, "down": { "texture": "#all" }
+    }
+  }]
+}

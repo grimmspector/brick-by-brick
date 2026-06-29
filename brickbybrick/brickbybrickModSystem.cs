@@ -1,5 +1,6 @@
 using brickbybrick.Blocks;
 using brickbybrick.items;
+using brickbybrick.RealisticConstruction;
 using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
@@ -20,6 +21,8 @@ namespace brickbybrick
         internal static BrickByBrickConfig Config { get; private set; } = new();
 
         private ModSystemSurvivalHandbook? survivalHandbook;
+        private ICoreClientAPI? clientApi;
+        private IClientNetworkChannel? realisticClientChannel;
 
         // Registers the item and block classes referenced by the JSON assets.
         public override void Start(ICoreAPI api)
@@ -30,6 +33,11 @@ namespace brickbybrick
             api.RegisterItemClass(Mod.Info.ModID + ".trowel", typeof(ItemTrowel));
             api.RegisterBlockClass(Mod.Info.ModID + ".cobbleblock", typeof(BlockStone));
             api.RegisterBlockClass(Mod.Info.ModID + ".brickblock", typeof(BlockBrick));
+            api.RegisterBlockClass(Mod.Info.ModID + ".realisticmasonry", typeof(BlockRealisticMasonry));
+            api.RegisterBlockEntityClass(Mod.Info.ModID + ".realisticmasonry", typeof(BlockEntityRealisticMasonry));
+
+            api.Network.RegisterChannel("brickbybrick-realistic")
+                .RegisterMessageType<int>();
 
         }
 
@@ -53,6 +61,8 @@ namespace brickbybrick
 
         public override void StartServerSide(ICoreServerAPI api)
         {
+            api.Network.GetChannel("brickbybrick-realistic")
+                .SetMessageHandler<int>(OnRealisticOrientationPacket);
             ValidateConstructionRegistry(api);
         }
 
@@ -73,6 +83,9 @@ namespace brickbybrick
 
         public override void StartClientSide(ICoreClientAPI api)
         {
+            clientApi = api;
+            realisticClientChannel = api.Network.GetChannel("brickbybrick-realistic");
+            api.Event.MouseWheelMove += OnRealisticPlacementMouseWheel;
             survivalHandbook = api.ModLoader.GetModSystem<ModSystemSurvivalHandbook>();
             if (survivalHandbook != null)
             {
@@ -82,12 +95,44 @@ namespace brickbybrick
 
         public override void Dispose()
         {
+            if (clientApi != null)
+            {
+                clientApi.Event.MouseWheelMove -= OnRealisticPlacementMouseWheel;
+                clientApi = null;
+                realisticClientChannel = null;
+            }
+
             if (survivalHandbook != null)
             {
                 survivalHandbook.OnInitCustomPages -= MoveMasonryGuideAfterVanillaGuides;
             }
 
             base.Dispose();
+        }
+
+        // Sneak-wheel is scoped to a held trowel in Realistic mode. All other
+        // wheel input remains available to the hotbar and other mods.
+        private void OnRealisticPlacementMouseWheel(MouseWheelEventArgs args)
+        {
+            if (!Config.IsRealisticConstructionEnabled() || clientApi?.World?.Player?.Entity?.Controls?.Sneak != true) return;
+
+            ItemSlot slot = clientApi.World.Player.InventoryManager.ActiveHotbarSlot;
+            if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
+
+            int orientation = slot.Itemstack.Attributes.GetInt("realisticOrientation", 0);
+            slot.Itemstack.Attributes.SetInt("realisticOrientation", orientation == 0 ? 1 : 0);
+            slot.MarkDirty();
+            realisticClientChannel?.SendPacket(orientation == 0 ? 1 : 0);
+            args.SetHandled(true);
+        }
+
+        private static void OnRealisticOrientationPacket(IPlayer fromPlayer, int orientation)
+        {
+            ItemSlot? slot = fromPlayer?.InventoryManager?.ActiveHotbarSlot;
+            if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
+
+            slot.Itemstack.Attributes.SetInt("realisticOrientation", orientation == 0 ? 0 : 1);
+            slot.MarkDirty();
         }
 
         private static void MoveMasonryGuideAfterVanillaGuides(List<GuiHandbookPage> pages)
