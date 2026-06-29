@@ -50,12 +50,14 @@ namespace brickbybrick
             Realism.Validate();
         }
 
-        // Realistic currently uses Immersive behavior.
         public ConstructionMode GetEffectiveMode()
         {
-            return Construction.Mode == ConstructionMode.Realistic
-                ? ConstructionMode.Immersive
-                : Construction.Mode;
+            return Construction.Mode;
+        }
+
+        public bool IsRealisticConstructionEnabled()
+        {
+            return Construction.Mode == ConstructionMode.Realistic;
         }
 
         public float GetConstructionActionSeconds()
@@ -180,6 +182,10 @@ namespace brickbybrick
 
     public sealed class RealismSettings
     {
+        public int MortarCapacityMultiplier { get; set; } = 4;
+
+        public int FillUnitsPerItem { get; set; } = 2;
+
         public bool EnableGroundPlacedStacks { get; set; } = true;
 
         public bool EnablePathmaking { get; set; } = true;
@@ -190,6 +196,8 @@ namespace brickbybrick
 
         internal void Validate()
         {
+            MortarCapacityMultiplier = ConfigRange.Clamp(MortarCapacityMultiplier, 1, 64);
+            FillUnitsPerItem = ConfigRange.Clamp(FillUnitsPerItem, 1, 64);
             SledgehammerRecoveryMultiplier = ConfigRange.Clamp(SledgehammerRecoveryMultiplier, 0.0f, 1.0f);
         }
     }

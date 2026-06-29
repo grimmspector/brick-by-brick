@@ -432,7 +432,16 @@ namespace brickbybrick.items
         public static int GetMaxCapacity(ItemStack stack)
         {
             int toolTier = stack.Collectible.ToolTier;
-            return toolTier * brickbybrickModSystem.Config.Trowels.CapacityPerTier;
+            int capacity = toolTier * brickbybrickModSystem.Config.Trowels.CapacityPerTier;
+
+            // Realistic construction mortars individual units instead of one
+            // abstract course, so scale capacity without changing recipe yield.
+            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                capacity *= brickbybrickModSystem.Config.Realism.MortarCapacityMultiplier;
+            }
+
+            return capacity;
         }
 
         public static int GetStoredAmount(ItemStack stack)

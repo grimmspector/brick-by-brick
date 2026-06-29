@@ -1,0 +1,22 @@
+{
+  "code": "testrammedearth",
+  "class": "Item",
+  "attributes": {
+    "realisticConstructionFill": true,
+    "handbook": {
+      "ignore": true
+    }
+  },
+  "shape": {
+    "base": "game:item/basic/cube"
+  },
+  "texture": {
+    "base": "game:block/soil/fertile"
+  },
+  "creativeinventory": {
+    "brickbybrick": [
+      "*"
+    ]
+  },
+  "maxstacksize": 64
+}
