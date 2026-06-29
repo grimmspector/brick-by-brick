@@ -80,6 +80,9 @@ namespace brickbybrick
         public bool DisableVanillaBlockRecipes { get; set; } = false;
 
         public bool EnableBloomeryConstruction { get; set; } = false;
+
+        // Keep enabled for development and testing; default to false for release.
+        public bool RequireStructuralSupport { get; set; } = true;
     }
 
     public sealed class TrowelSettings
