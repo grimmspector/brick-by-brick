@@ -16,7 +16,7 @@
       "containable": true,
       "itemsPerLitre": 14,
       "texture": {
-        "base": "game:block/liquid/waterportion"
+        "base": "brickbybrick:block/liquid/refractory-mortar"
       },
       "tintIndex": 2,
       "whenSpilled": {
@@ -32,7 +32,7 @@
     "base": "game:item/liquid"
   },
   "texture": {
-    "base": "game:block/liquid/waterportion"
+    "base": "brickbybrick:block/liquid/refractory-mortar"
   },
   "creativeinventoryStacks": [
     {

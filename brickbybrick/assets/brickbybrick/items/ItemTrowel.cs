@@ -305,7 +305,7 @@ namespace brickbybrick.items
 
             PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, BrickSounds, 20f);
             SpawnPlacementParticlesDuringAction(secondsUsed, slot, byEntity, blockSel, toolMode);
-            if (secondsUsed < brickbybrickModSystem.Config.GetConstructionActionSeconds()) return true;
+            if (secondsUsed < GetInteractionSeconds(slot)) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
             if (!HasEnoughMortar(slot, byEntity)) return false;
@@ -353,7 +353,7 @@ namespace brickbybrick.items
 
             PlayStageSoundAtMidpoint(secondsUsed, slot, byEntity, pos, player, action);
             SpawnStageParticlesDuringAction(secondsUsed, slot, byEntity, pos, block, action, color);
-            if (secondsUsed < brickbybrickModSystem.Config.GetConstructionActionSeconds()) return true;
+            if (secondsUsed < GetInteractionSeconds(slot)) return true;
             if (byEntity.World.Side != EnumAppSide.Server) return false;
 
             // Re-read the target after the timed action. Another player or a
@@ -672,11 +672,26 @@ namespace brickbybrick.items
             float range)
         {
             if (slot?.Itemstack == null || byEntity?.World?.Side != EnumAppSide.Client) return;
-            if (secondsUsed < brickbybrickModSystem.Config.GetConstructionActionSeconds() / 2f) return;
+            if (secondsUsed < GetInteractionSeconds(slot) / 2f) return;
             if (slot.Itemstack.Attributes.GetBool("soundPlayed", false)) return;
 
             PlayRandomSound(byEntity.World, pos, player, sounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
             slot.Itemstack.Attributes.SetBool("soundPlayed", true);
+        }
+
+        // Scales the configured duration uniformly from copper through steel.
+        // Wood and copper retain the baseline while steel completes in half the time.
+        private float GetInteractionSeconds(ItemSlot slot)
+        {
+            const int baselineTier = 2;
+            const int steelTier = 5;
+            const float steelDurationMultiplier = 0.5f;
+
+            int toolTier = GameMath.Clamp(slot?.Itemstack?.Collectible?.ToolTier ?? baselineTier, baselineTier, steelTier);
+            float tierProgress = (toolTier - baselineTier) / (float)(steelTier - baselineTier);
+            float durationMultiplier = GameMath.Lerp(1f, steelDurationMultiplier, tierProgress);
+
+            return brickbybrickModSystem.Config.GetConstructionActionSeconds() * durationMultiplier;
         }
 
         private void PlayStageSoundAtMidpoint(
