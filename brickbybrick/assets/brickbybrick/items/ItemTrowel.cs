@@ -3,6 +3,7 @@ using brickbybrick.RealisticConstruction;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -455,13 +456,13 @@ namespace brickbybrick.items
             if (!TryGetOffhandStack(player, out ItemSlot materialSlot, out ItemStack materialStack)) return;
 
             string path = materialStack.Collectible?.Code?.Path ?? string.Empty;
-            MasonryUnitKind kind = path switch
-            {
-                "burnedbrick-cream" => MasonryUnitKind.WholeBrick,
-                "halfbrick-cream" => MasonryUnitKind.HalfBrick,
-                "testrammedearth" => MasonryUnitKind.RammedEarth,
-                _ => (MasonryUnitKind)(-1)
-            };
+            MasonryUnitKind kind = path == "testrammedearth"
+                ? MasonryUnitKind.RammedEarth
+                : path.StartsWith("halfbrick-", StringComparison.Ordinal)
+                    ? MasonryUnitKind.HalfBrick
+                    : path.StartsWith("burnedbrick-", StringComparison.Ordinal) && path != "burnedbrick-fire"
+                        ? MasonryUnitKind.WholeBrick
+                        : (MasonryUnitKind)(-1);
             if ((int)kind < 0) return;
 
             BlockPos targetPos = byEntity.World.BlockAccessor.GetBlock(blockSel.Position).Code?.Path == "realisticmasonry"
@@ -471,9 +472,9 @@ namespace brickbybrick.items
 
             if (targetBlock.Code?.Path != "realisticmasonry")
             {
-                Block constructionBlock = byEntity.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
-                if (constructionBlock == null || !targetBlock.IsReplacableBy(constructionBlock)) return;
-                byEntity.World.BlockAccessor.SetBlock(constructionBlock.Id, targetPos);
+                Block initialConstructionBlock = byEntity.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+                if (initialConstructionBlock == null || !targetBlock.IsReplacableBy(initialConstructionBlock)) return;
+                byEntity.World.BlockAccessor.SetBlock(initialConstructionBlock.Id, targetPos);
             }
 
             if (byEntity.World.BlockAccessor.GetBlockEntity(targetPos) is not BlockEntityRealisticMasonry entity) return;
@@ -488,11 +489,61 @@ namespace brickbybrick.items
                 Id = Guid.NewGuid().ToString("N"),
                 Kind = kind,
                 MaterialCode = path,
-                Orientation = trowelSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0) == 0
-                    ? MasonryOrientation.EastWest
-                    : MasonryOrientation.NorthSouth,
+                Orientation = (MasonryOrientation)GameMath.Mod(trowelSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0), 4),
                 Origin = new MasonryGridPosition(gridX, layer, gridZ)
             };
+
+            if (!entity.CanPlace(unit)) return;
+
+            Dictionary<(int X, int Z), List<MasonryGridPosition>> neighborReservations = new();
+            foreach (MasonryGridPosition position in unit.GetFootprint())
+            {
+                int offsetX = (int)Math.Floor(position.X / 4d);
+                int offsetZ = (int)Math.Floor(position.Z / 4d);
+                if (offsetX == 0 && offsetZ == 0) continue;
+
+                (int X, int Z) key = (offsetX, offsetZ);
+                if (!neighborReservations.TryGetValue(key, out List<MasonryGridPosition> positions))
+                {
+                    positions = new List<MasonryGridPosition>();
+                    neighborReservations[key] = positions;
+                }
+
+                positions.Add(new MasonryGridPosition(
+                    GameMath.Mod(position.X, 4),
+                    position.Y,
+                    GameMath.Mod(position.Z, 4)));
+            }
+
+            Block constructionBlock = byEntity.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+            foreach (KeyValuePair<(int X, int Z), List<MasonryGridPosition>> reservation in neighborReservations)
+            {
+                BlockPos neighborPos = targetPos.AddCopy(reservation.Key.X, 0, reservation.Key.Z);
+                Block neighborBlock = byEntity.World.BlockAccessor.GetBlock(neighborPos);
+                if (neighborBlock.Code?.Path == "realisticmasonry")
+                {
+                    if (byEntity.World.BlockAccessor.GetBlockEntity(neighborPos) is not BlockEntityRealisticMasonry neighborEntity
+                        || !neighborEntity.CanReserve(reservation.Value)) return;
+                }
+                else if (constructionBlock == null || !neighborBlock.IsReplacableBy(constructionBlock))
+                {
+                    return;
+                }
+            }
+
+            foreach (KeyValuePair<(int X, int Z), List<MasonryGridPosition>> reservation in neighborReservations)
+            {
+                BlockPos neighborPos = targetPos.AddCopy(reservation.Key.X, 0, reservation.Key.Z);
+                if (byEntity.World.BlockAccessor.GetBlock(neighborPos).Code?.Path != "realisticmasonry")
+                {
+                    byEntity.World.BlockAccessor.SetBlock(constructionBlock.Id, neighborPos);
+                }
+
+                if (byEntity.World.BlockAccessor.GetBlockEntity(neighborPos) is BlockEntityRealisticMasonry neighborEntity)
+                {
+                    neighborEntity.Reserve(reservation.Value);
+                }
+            }
 
             if (!entity.TryPlace(unit)) return;
 
@@ -1686,12 +1737,11 @@ namespace brickbybrick.items
                 float alpha = brickbybrickModSystem.Config.Trowels.PlacementPreviewOpacity;
                 Vec4f tint = valid ? new Vec4f(1f, 1f, 1f, alpha) : new Vec4f(1f, 0.12f, 0.12f, alpha);
                 Vec3d cameraPos = capi.World.Player.Entity.CameraPos;
-                float width = unit.Kind == MasonryUnitKind.HalfBrick ? 0.25f : 0.5f;
-                float depth = unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
-                if (unit.Orientation == MasonryOrientation.NorthSouth && unit.Kind != MasonryUnitKind.RammedEarth)
-                {
-                    (width, depth) = (depth, width);
-                }
+                MasonryGridPosition[] footprint = unit.GetFootprint().ToArray();
+                int minimumX = footprint.Min(position => position.X);
+                int minimumZ = footprint.Min(position => position.Z);
+                float width = (footprint.Max(position => position.X) - minimumX + 1) * 0.25f;
+                float depth = (footprint.Max(position => position.Z) - minimumZ + 1) * 0.25f;
 
                 IStandardShaderProgram shader = rpi.PreparedStandardShader(targetPos.X, targetPos.Y, targetPos.Z, tint);
                 shader.Tex2D = capi.BlockTextureAtlas.AtlasTextures[0].TextureId;
@@ -1706,9 +1756,9 @@ namespace brickbybrick.items
                         (float)(targetPos.Y - cameraPos.Y),
                         (float)(targetPos.Z - cameraPos.Z))
                     .Translate(
-                        unit.Origin.X * 0.25f + RealisticJointInset,
+                        minimumX * 0.25f + RealisticJointInset,
                         unit.Origin.Y * 0.25f + RealisticJointInset,
-                        unit.Origin.Z * 0.25f + RealisticJointInset)
+                        minimumZ * 0.25f + RealisticJointInset)
                     .Scale(
                         width - RealisticJointInset * 2,
                         0.25f - RealisticJointInset * 2,
@@ -1742,13 +1792,13 @@ namespace brickbybrick.items
                 if (!trowel.TryGetOffhandStack(player, out _, out ItemStack materialStack)) return false;
 
                 string path = materialStack.Collectible?.Code?.Path ?? string.Empty;
-                MasonryUnitKind kind = path switch
-                {
-                    "burnedbrick-cream" => MasonryUnitKind.WholeBrick,
-                    "halfbrick-cream" => MasonryUnitKind.HalfBrick,
-                    "testrammedearth" => MasonryUnitKind.RammedEarth,
-                    _ => (MasonryUnitKind)(-1)
-                };
+                MasonryUnitKind kind = path == "testrammedearth"
+                    ? MasonryUnitKind.RammedEarth
+                    : path.StartsWith("halfbrick-", StringComparison.Ordinal)
+                        ? MasonryUnitKind.HalfBrick
+                        : path.StartsWith("burnedbrick-", StringComparison.Ordinal) && path != "burnedbrick-fire"
+                            ? MasonryUnitKind.WholeBrick
+                            : (MasonryUnitKind)(-1);
                 if ((int)kind < 0) return false;
 
                 Block selectedBlock = capi.World.BlockAccessor.GetBlock(blockSel.Position);
@@ -1765,9 +1815,7 @@ namespace brickbybrick.items
                     Id = "preview",
                     Kind = kind,
                     MaterialCode = path,
-                    Orientation = activeSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0) == 0
-                        ? MasonryOrientation.EastWest
-                        : MasonryOrientation.NorthSouth,
+                    Orientation = (MasonryOrientation)GameMath.Mod(activeSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0), 4),
                     Origin = new MasonryGridPosition(gridX, layer, gridZ)
                 };
 
@@ -1775,21 +1823,55 @@ namespace brickbybrick.items
                 if (targetBlock?.Code?.Path == "realisticmasonry"
                     && capi.World.BlockAccessor.GetBlockEntity(targetPos) is BlockEntityRealisticMasonry entity)
                 {
-                    valid = entity.CanPlace(unit);
+                    valid = entity.CanPlace(unit) && CanReserveNeighborFootprints(targetPos, unit);
                 }
                 else
                 {
                     Block constructionBlock = capi.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
-                    valid = constructionBlock != null && targetBlock != null && targetBlock.IsReplacableBy(constructionBlock);
+                    valid = constructionBlock != null
+                        && targetBlock != null
+                        && targetBlock.IsReplacableBy(constructionBlock)
+                        && CanReserveNeighborFootprints(targetPos, unit);
                 }
 
-                meshRef = GetOrCreateRealisticMeshRef(kind);
+                meshRef = GetOrCreateRealisticMeshRef(kind, path);
                 return meshRef != null;
             }
 
-            private MeshRef GetOrCreateRealisticMeshRef(MasonryUnitKind kind)
+            private bool CanReserveNeighborFootprints(BlockPos ownerPos, MasonryUnitPlacement unit)
             {
-                string key = $"realistic-{kind}";
+                Block constructionBlock = capi.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+                foreach (IGrouping<(int X, int Z), MasonryGridPosition> group in unit.GetFootprint()
+                    .Where(position => position.X < 0 || position.X > 3 || position.Z < 0 || position.Z > 3)
+                    .GroupBy(position => (
+                        (int)Math.Floor(position.X / 4d),
+                        (int)Math.Floor(position.Z / 4d))))
+                {
+                    BlockPos neighborPos = ownerPos.AddCopy(group.Key.X, 0, group.Key.Z);
+                    Block neighborBlock = capi.World.BlockAccessor.GetBlock(neighborPos);
+                    List<MasonryGridPosition> localPositions = group.Select(position => new MasonryGridPosition(
+                        GameMath.Mod(position.X, 4),
+                        position.Y,
+                        GameMath.Mod(position.Z, 4))).ToList();
+
+                    if (neighborBlock?.Code?.Path == "realisticmasonry")
+                    {
+                        if (capi.World.BlockAccessor.GetBlockEntity(neighborPos) is not BlockEntityRealisticMasonry neighborEntity
+                            || !neighborEntity.CanReserve(localPositions)) return false;
+                    }
+                    else if (constructionBlock == null || neighborBlock == null || !neighborBlock.IsReplacableBy(constructionBlock))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            private MeshRef GetOrCreateRealisticMeshRef(MasonryUnitKind kind, string materialCode)
+            {
+                string color = materialCode[(materialCode.LastIndexOf('-') + 1)..];
+                string key = $"realistic-{kind}-{color}";
                 if (meshRefs.TryGetValue(key, out MeshRef meshRef)) return meshRef;
 
                 Block block = capi.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
@@ -1802,7 +1884,9 @@ namespace brickbybrick.items
                         ? "brickbybrick:shapes/block/realistic/rammedearth.json"
                         : "brickbybrick:shapes/block/realistic/brick.json")
                 };
-                MeshData meshData = behavior.GetOrCreateMesh(new Variants(), shape, new BlockPos(0), key).Clone();
+                Variants variants = new();
+                variants.Set("color", color);
+                MeshData meshData = behavior.GetOrCreateMesh(variants, shape, new BlockPos(0), key).Clone();
                 meshRef = capi.Render.UploadMesh(meshData);
                 meshRefs[key] = meshRef;
                 return meshRef;

@@ -36,6 +36,17 @@ namespace brickbybrick.RealisticConstruction
                 }
             }
 
+            foreach (MasonryGridPosition cell in entity.State.ReservedPositions)
+            {
+                boxes.Add(new Cuboidf(
+                    cell.X * 0.25f + JointInset,
+                    cell.Y * 0.25f + JointInset,
+                    cell.Z * 0.25f + JointInset,
+                    (cell.X + 1) * 0.25f - JointInset,
+                    (cell.Y + 1) * 0.25f - JointInset,
+                    (cell.Z + 1) * 0.25f - JointInset));
+            }
+
             return boxes.Count == 0 ? new[] { new Cuboidf(0, 0, 0, 1, 0.01f, 1) } : boxes.ToArray();
         }
     }

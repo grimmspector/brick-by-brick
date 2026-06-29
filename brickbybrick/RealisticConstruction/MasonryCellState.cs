@@ -17,6 +17,8 @@ namespace brickbybrick.RealisticConstruction
 
         public List<MasonryUnitPlacement> Units { get; set; } = new();
 
+        public HashSet<MasonryGridPosition> ReservedPositions { get; set; } = new();
+
         public bool IsSlotPlaced(string slotCode)
         {
             return PlacedSlots.Contains(slotCode);
@@ -80,8 +82,10 @@ namespace brickbybrick.RealisticConstruction
 
     public enum MasonryOrientation
     {
-        EastWest,
-        NorthSouth
+        East,
+        South,
+        West,
+        North
     }
 
     // Coordinates are quarter-block cells matching one half-brick footprint.
@@ -104,21 +108,31 @@ namespace brickbybrick.RealisticConstruction
 
         public IEnumerable<MasonryGridPosition> GetFootprint()
         {
-            int width = Kind == MasonryUnitKind.HalfBrick ? 1 : 2;
-            int depth = Kind == MasonryUnitKind.RammedEarth ? 2 : 1;
-
-            if (Orientation == MasonryOrientation.NorthSouth && Kind != MasonryUnitKind.RammedEarth)
+            if (Kind == MasonryUnitKind.HalfBrick)
             {
-                (width, depth) = (depth, width);
+                yield return Origin;
+                yield break;
             }
 
-            for (int x = 0; x < width; x++)
+            if (Kind == MasonryUnitKind.RammedEarth)
             {
-                for (int z = 0; z < depth; z++)
+                int xStep = Orientation == MasonryOrientation.West || Orientation == MasonryOrientation.North ? -1 : 1;
+                int zStep = Orientation == MasonryOrientation.North || Orientation == MasonryOrientation.East ? -1 : 1;
+                for (int x = 0; x < 2; x++)
                 {
-                    yield return new MasonryGridPosition(Origin.X + x, Origin.Y, Origin.Z + z);
+                    for (int z = 0; z < 2; z++)
+                    {
+                        yield return new MasonryGridPosition(Origin.X + x * xStep, Origin.Y, Origin.Z + z * zStep);
+                    }
                 }
+
+                yield break;
             }
+
+            int unitX = Orientation == MasonryOrientation.East ? 1 : Orientation == MasonryOrientation.West ? -1 : 0;
+            int unitZ = Orientation == MasonryOrientation.South ? 1 : Orientation == MasonryOrientation.North ? -1 : 0;
+            yield return Origin;
+            yield return new MasonryGridPosition(Origin.X + unitX, Origin.Y, Origin.Z + unitZ);
         }
 
         public bool Occupies(MasonryGridPosition position)

@@ -120,9 +120,10 @@ namespace brickbybrick
             if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
 
             int orientation = slot.Itemstack.Attributes.GetInt("realisticOrientation", 0);
-            slot.Itemstack.Attributes.SetInt("realisticOrientation", orientation == 0 ? 1 : 0);
+            int nextOrientation = GameMath.Mod(orientation + (args.delta > 0 ? 1 : -1), 4);
+            slot.Itemstack.Attributes.SetInt("realisticOrientation", nextOrientation);
             slot.MarkDirty();
-            realisticClientChannel?.SendPacket(orientation == 0 ? 1 : 0);
+            realisticClientChannel?.SendPacket(nextOrientation);
             args.SetHandled(true);
         }
 
@@ -131,7 +132,7 @@ namespace brickbybrick
             ItemSlot? slot = fromPlayer?.InventoryManager?.ActiveHotbarSlot;
             if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
 
-            slot.Itemstack.Attributes.SetInt("realisticOrientation", orientation == 0 ? 0 : 1);
+            slot.Itemstack.Attributes.SetInt("realisticOrientation", GameMath.Mod(orientation, 4));
             slot.MarkDirty();
         }
 

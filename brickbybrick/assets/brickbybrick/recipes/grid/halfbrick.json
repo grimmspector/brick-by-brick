@@ -3,7 +3,9 @@
   "ingredients": {
     "B": {
       "type": "item",
-      "code": "game:burnedbrick-cream"
+      "code": "game:burnedbrick-*",
+      "name": "color",
+      "skipVariants": ["fire"]
     },
     "C": {
       "type": "item",
@@ -16,7 +18,7 @@
   "height": 1,
   "output": {
     "type": "item",
-    "code": "brickbybrick:halfbrick-cream",
+    "code": "brickbybrick:halfbrick-{color}",
     "quantity": 2
   }
 }

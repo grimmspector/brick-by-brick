@@ -15,8 +15,8 @@
           "*": { "base": "brickbybrick:shapes/block/realistic/brick" }
         },
         "textures": {
-          "*": {
-            "colour": { "base": "game:block/clay/brickpile/burned/cream-brick1" },
+          "color-*": {
+            "colour": { "base": "game:block/clay/brickpile/burned/{color}-brick1" },
             "mortar": { "base": "game:block/wood/barrel/mortar" },
             "earth": { "base": "game:block/soil/rammed/light/plain1" }
           }

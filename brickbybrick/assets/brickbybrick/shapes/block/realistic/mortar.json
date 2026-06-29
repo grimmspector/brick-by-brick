@@ -1,13 +1,13 @@
 {
   "textureWidth": 16,
   "textureHeight": 16,
-  "textures": { "all": "#mortar" },
+  "textures": { "mortar": "game:block/wood/barrel/mortar" },
   "elements": [{
     "name": "Mortar", "from": [0, 0, 0], "to": [16, 16, 16],
     "faces": {
-      "north": { "texture": "#all" }, "east": { "texture": "#all" },
-      "south": { "texture": "#all" }, "west": { "texture": "#all" },
-      "up": { "texture": "#all" }, "down": { "texture": "#all" }
+      "north": { "texture": "#mortar" }, "east": { "texture": "#mortar" },
+      "south": { "texture": "#mortar" }, "west": { "texture": "#mortar" },
+      "up": { "texture": "#mortar" }, "down": { "texture": "#mortar" }
     }
   }]
 }

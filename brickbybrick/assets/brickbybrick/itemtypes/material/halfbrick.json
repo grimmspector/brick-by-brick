@@ -1,9 +1,15 @@
 {
-  "code": "halfbrick-cream",
+  "code": "halfbrick",
   "class": "Item",
+  "variantgroups": [
+    {
+      "code": "color",
+      "states": ["black", "brown", "cream", "gray", "orange", "red", "tan", "clinker"]
+    }
+  ],
   "attributes": {
     "masonryFamily": "brick",
-    "masonryColor": "cream",
+    "masonryColor": "{color}",
     "realisticConstructionKind": "HalfBrick"
   },
   "shape": {
@@ -11,7 +17,7 @@
   },
   "textures": {
     "material": {
-      "base": "game:block/clay/brickpile/burned/cream-brick1"
+      "base": "game:block/clay/brickpile/burned/{color}-brick1"
     }
   },
   "creativeinventory": {
