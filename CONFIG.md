@@ -18,6 +18,7 @@ Settings marked **Active** affect the current release. Settings marked **Planned
 | `Mode` | `Cosmetic`, `Immersive`, `Realistic`, `Builder` | `Immersive` | Active | Selects the overall construction experience. Realistic currently falls back to Immersive. |
 | `DisableVanillaBlockRecipes` | `true`, `false` | `false` | Active | Disables covered vanilla brick or stone block recipes when their material family is enabled. |
 | `EnableBloomeryConstruction` | `true`, `false` | `false` | Planned | Enables sequential bloomery construction when that system is available. |
+| `RequireStructuralSupport` | `true`, `false` | `true` | Active | Requires a solid upward face, completed wet masonry, or compatible scaffolding beneath construction. Creative mode bypasses this rule. |
 
 The planned construction modes are:
 
@@ -110,7 +111,8 @@ This example contains every available setting and its default value:
   "Construction": {
     "Mode": "Immersive",
     "DisableVanillaBlockRecipes": false,
-    "EnableBloomeryConstruction": false
+    "EnableBloomeryConstruction": false,
+    "RequireStructuralSupport": true
   },
   "Trowels": {
     "CapacityPerTier": 16,
