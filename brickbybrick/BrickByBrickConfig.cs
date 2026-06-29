@@ -3,8 +3,7 @@ using Newtonsoft.Json.Converters;
 
 namespace brickbybrick
 {
-    // Defines the broad construction experience. Numeric balance settings stay
-    // separate so server owners can tune a profile without changing its rules.
+    // Serialize profile names instead of numeric enum values.
     [JsonConverter(typeof(StringEnumConverter))]
     public enum ConstructionMode
     {
@@ -14,8 +13,7 @@ namespace brickbybrick
         Builder
     }
 
-    // Groups all settings written to brickbybrick.json. Validation repairs
-    // malformed manual edits before any gameplay system reads the values.
+    // Root model for brickbybrick.json.
     public sealed class BrickByBrickConfig
     {
         public ConstructionSettings Construction { get; set; } = new();
@@ -52,8 +50,7 @@ namespace brickbybrick
             Realism.Validate();
         }
 
-        // Realistic remains selectable for forward compatibility, but uses the
-        // completed Immersive rules until support and curing systems are ready.
+        // Realistic currently uses Immersive behavior.
         public ConstructionMode GetEffectiveMode()
         {
             return Construction.Mode == ConstructionMode.Realistic
