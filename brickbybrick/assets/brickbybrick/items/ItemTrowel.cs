@@ -347,7 +347,10 @@ namespace brickbybrick.items
             SpawnConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.25, true, materialStack);
 
             ConsumeOffhand(offhandSlot, brickbybrickModSystem.Config.Trowels.MasonryCostPerAction);
-            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            if (player.WorldData.CurrentGameMode != EnumGameMode.Creative)
+            {
+                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            }
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -443,7 +446,10 @@ namespace brickbybrick.items
                 ConsumeOffhand(materialSlot, brickbybrickModSystem.Config.Trowels.MasonryCostPerAction);
             }
 
-            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            if (player.WorldData.CurrentGameMode != EnumGameMode.Creative)
+            {
+                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            }
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -1088,7 +1094,7 @@ namespace brickbybrick.items
             if (toolMode == SlabMode)
             {
                 variants.Set("shape", "slab");
-                variants.Set("rotation", ResolveSlabRotationCode(blockSel));
+                variants.Set("rotation", ResolveSlabRotationCode(blockSel, byEntity));
             }
             else if (toolMode == StairMode)
             {
@@ -1107,14 +1113,70 @@ namespace brickbybrick.items
             return variants;
         }
 
-        private string ResolveSlabRotationCode(BlockSelection blockSel)
+        // Divides the selected face into the five regions shown by the slab
+        // placement template, then resolves player-relative regions to world faces.
+        private string ResolveSlabRotationCode(BlockSelection blockSel, EntityAgent byEntity)
         {
-            BlockFacing clickedFace = blockSel?.Face ?? BlockFacing.UP;
+            Vec3d hitPosition = blockSel?.HitPosition;
+            BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
+            if (hitPosition == null) return facing.Code;
 
-            if (clickedFace == BlockFacing.UP) return BlockFacing.DOWN.Code;
-            if (clickedFace == BlockFacing.DOWN) return BlockFacing.UP.Code;
+            bool horizontalFace = blockSel.Face == BlockFacing.UP || blockSel.Face == BlockFacing.DOWN;
+            if (!horizontalFace)
+            {
+                // Side-face template regions stay aligned with the selected
+                // face even when the player's yaw crosses a cardinal boundary.
+                facing = blockSel.Face.Opposite;
+            }
 
-            return clickedFace.Opposite.Code;
+            double horizontal = GetPlayerRelativeHitX(hitPosition, facing) - 0.5;
+            double vertical = horizontalFace
+                ? GetPlayerRelativeHitDepth(hitPosition, facing)
+                : hitPosition.Y - 0.5;
+
+            // The center square occupies the middle half of each axis. Outside
+            // it, diagonal corner boundaries assign the aim to the nearest edge.
+            if (Math.Abs(horizontal) <= 0.25 && Math.Abs(vertical) <= 0.25)
+            {
+                if (blockSel.Face == BlockFacing.UP) return BlockFacing.DOWN.Code;
+                if (blockSel.Face == BlockFacing.DOWN) return BlockFacing.UP.Code;
+
+                return blockSel.Face.Opposite.Code;
+            }
+
+            if (Math.Abs(vertical) >= Math.Abs(horizontal))
+            {
+                if (horizontalFace)
+                {
+                    return vertical > 0 ? facing.Code : facing.Opposite.Code;
+                }
+
+                return vertical > 0 ? BlockFacing.UP.Code : BlockFacing.DOWN.Code;
+            }
+
+            return horizontal > 0 ? facing.GetCW().Code : facing.GetCCW().Code;
+        }
+
+        // Converts world-local hit coordinates into left-to-right screen space
+        // for the player's nearest cardinal viewing direction.
+        private double GetPlayerRelativeHitX(Vec3d hitPosition, BlockFacing facing)
+        {
+            if (facing == BlockFacing.NORTH) return hitPosition.X;
+            if (facing == BlockFacing.SOUTH) return 1 - hitPosition.X;
+            if (facing == BlockFacing.EAST) return hitPosition.Z;
+
+            return 1 - hitPosition.Z;
+        }
+
+        // Converts top and bottom face hits into near-to-far screen space so
+        // each template edge selects the matching vertical slab orientation.
+        private double GetPlayerRelativeHitDepth(Vec3d hitPosition, BlockFacing facing)
+        {
+            if (facing == BlockFacing.NORTH) return 0.5 - hitPosition.Z;
+            if (facing == BlockFacing.SOUTH) return hitPosition.Z - 0.5;
+            if (facing == BlockFacing.EAST) return hitPosition.X - 0.5;
+
+            return 0.5 - hitPosition.X;
         }
 
         // Side clicks above the midpoint place an upside-down stair.
@@ -1443,9 +1505,11 @@ namespace brickbybrick.items
 
         private bool HasEnoughMortar(ItemSlot slot, EntityAgent byEntity)
         {
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            if (player?.WorldData?.CurrentGameMode == EnumGameMode.Creative) return true;
+
             if (GetStoredAmount(slot.Itemstack) <= 0)
             {
-                IPlayer player = (byEntity as EntityPlayer)?.Player;
                 NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-no-mortar"));
                 return false;
             }
@@ -1731,7 +1795,7 @@ namespace brickbybrick.items
                 if (toolMode == SlabMode)
                 {
                     variants.Set("shape", "slab");
-                    variants.Set("rotation", trowel.ResolveSlabRotationCode(blockSel));
+                    variants.Set("rotation", trowel.ResolveSlabRotationCode(blockSel, byEntity));
                 }
                 else if (toolMode == StairMode)
                 {

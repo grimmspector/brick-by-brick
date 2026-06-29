@@ -40,7 +40,7 @@
 					"texture": "#material",
 					"uv": [ 0.0, 0.0, 16.0, 16.0 ],
 					"windMode": [ -1, -1, -1, -1 ],
-					"enabled": false
+          "enabled": true
 				},
 				"down": {
 					"texture": "#material",
