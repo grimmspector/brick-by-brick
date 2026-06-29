@@ -1,0 +1,41 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "brickbybrick/1.0.0": {
+        "dependencies": {
+          "CraluminumMods.VintageStory.AttributeRenderingLibrary": "3.1.5"
+        },
+        "runtime": {
+          "brickbybrick.dll": {}
+        }
+      },
+      "CraluminumMods.VintageStory.AttributeRenderingLibrary/3.1.5": {
+        "runtime": {
+          "lib/net10.0/AttributeRenderingLibrary.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "brickbybrick/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "CraluminumMods.VintageStory.AttributeRenderingLibrary/3.1.5": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-2aZc2b/TdvC3vLZl0CgOg1w1L97uRriVShCrXIdLV6hyBt6Rn9kJfYeaB96KCPchaS7IQl0nJu+qsJwqku0Rhg==",
+      "path": "craluminummods.vintagestory.attributerenderinglibrary/3.1.5",
+      "hashPath": "craluminummods.vintagestory.attributerenderinglibrary.3.1.5.nupkg.sha512"
+    }
+  }
+}
