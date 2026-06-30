@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Threading;
+using AttributeRenderingLibrary;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
@@ -10,6 +14,12 @@ namespace brickbybrick.RealisticConstruction
     public sealed class BlockStaticMasonry : Block
     {
         private const string ShapeVariantKey = "shape";
+        private static readonly ConcurrentDictionary<string, MeshData> MeshCache = new();
+        private static long staticTessellations;
+        private static long sidecarBytes;
+        private static long exposedQuads;
+        private static long mergedQuads;
+        private static long cacheRebuilds;
 
         private static readonly IReadOnlyDictionary<FrozenMasonryShape, string> ShapeCodes =
             new Dictionary<FrozenMasonryShape, string>
@@ -80,6 +90,85 @@ namespace brickbybrick.RealisticConstruction
             FrozenMasonryChunkStore.Remove(world.BlockAccessor, pos, out _);
             brickbybrickModSystem.BroadcastStaticMasonryState(pos, Array.Empty<byte>(), true);
             return true;
+        }
+
+        public override void OnJsonTesselation(
+            ref MeshData sourceMesh,
+            ref int[] lightRgbsByCorner,
+            BlockPos pos,
+            Block[] chunkExtBlocks,
+            int extIndex3d)
+        {
+            if (!FrozenMasonryChunkStore.TryGet(api.World.BlockAccessor, pos, out byte[] packedState)) return;
+            BlockBehaviorShapeTexturesFromAttributes? behavior = GetBehavior<BlockBehaviorShapeTexturesFromAttributes>();
+            if (behavior == null) return;
+
+            string cacheKey = Convert.ToBase64String(packedState);
+            if (!MeshCache.TryGetValue(cacheKey, out MeshData? mesh))
+            {
+                MasonryCellState state = MasonryStateCodec.Decode(packedState);
+                MeshData? built = MasonryStaticMeshBuilder.Build(state, behavior, pos, out int rawQuads);
+                if (built == null) return;
+                mesh = MeshCache.GetOrAdd(cacheKey, built);
+                if (ReferenceEquals(mesh, built))
+                {
+                    Interlocked.Increment(ref cacheRebuilds);
+                    Interlocked.Add(ref exposedQuads, rawQuads);
+                    Interlocked.Add(ref mergedQuads, mesh.IndicesCount / 6);
+                }
+            }
+
+            sourceMesh = mesh;
+            Interlocked.Increment(ref staticTessellations);
+            Interlocked.Add(ref sidecarBytes, packedState.Length);
+        }
+
+        public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
+        {
+            if (world.Side != EnumAppSide.Server
+                || !FrozenMasonryChunkStore.Remove(world.BlockAccessor, pos, out byte[] packedState))
+            {
+                base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
+                return;
+            }
+
+            MasonryCellState state = MasonryStateCodec.Decode(packedState);
+            foreach (MasonryUnitPlacement unit in state.Units)
+            {
+                Item? item = world.GetItem(GetDropCode(unit));
+                if (item != null) world.SpawnItemEntity(new ItemStack(item), pos.ToVec3d().Add(0.5, 0.5, 0.5));
+            }
+
+            world.BlockAccessor.SetBlock(0, pos);
+            brickbybrickModSystem.BroadcastStaticMasonryState(pos, Array.Empty<byte>(), true);
+        }
+
+        internal static void ResetProfile()
+        {
+            Interlocked.Exchange(ref staticTessellations, 0);
+            Interlocked.Exchange(ref sidecarBytes, 0);
+            Interlocked.Exchange(ref exposedQuads, 0);
+            Interlocked.Exchange(ref mergedQuads, 0);
+            Interlocked.Exchange(ref cacheRebuilds, 0);
+        }
+
+        internal static string GetProfile()
+        {
+            return $"static cells: {Interlocked.Read(ref staticTessellations):N0}; "
+                + $"sidecar bytes: {Interlocked.Read(ref sidecarBytes):N0}; "
+                + $"exposed quads: {Interlocked.Read(ref exposedQuads):N0}; "
+                + $"merged quads: {Interlocked.Read(ref mergedQuads):N0}; "
+                + $"cache rebuilds: {Interlocked.Read(ref cacheRebuilds):N0}";
+        }
+
+        private static AssetLocation GetDropCode(MasonryUnitPlacement unit)
+        {
+            return unit.Kind switch
+            {
+                MasonryUnitKind.HalfBrick => new AssetLocation("brickbybrick", unit.MaterialCode),
+                MasonryUnitKind.RammedEarth => new AssetLocation("brickbybrick:testrammedearth"),
+                _ => new AssetLocation("game", unit.MaterialCode)
+            };
         }
 
         private Cuboidf[] GetGeometryBoxes()

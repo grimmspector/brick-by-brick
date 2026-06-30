@@ -28,6 +28,23 @@
     "handbook": { "ignore": true },
     "staticMasonry": true
   },
+  "behaviors": [
+    {
+      "name": "AttributeRenderingLibrary.BlockShapeTexturesFromAttributes",
+      "properties": {
+        "shape": {
+          "*": { "base": "brickbybrick:shapes/block/realistic/brick" }
+        },
+        "textures": {
+          "color-*": {
+            "colour": { "base": "game:block/clay/brickpile/burned/{color}-brick1" },
+            "mortar": { "base": "game:block/wood/barrel/mortar" },
+            "earth": { "base": "game:block/soil/rammed/light/plain1" }
+          }
+        }
+      }
+    }
+  ],
   "blockmaterial": "Ceramic",
   "replaceable": 0,
   "sideopaque": { "all": false },

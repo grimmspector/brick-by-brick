@@ -235,6 +235,17 @@ namespace brickbybrick.RealisticConstruction
                 return false;
             }
 
+            if (State.Frozen && State.FrozenShape == FrozenMasonryShape.Arbitrary)
+            {
+                MeshData? arbitraryMesh = MasonryStaticMeshBuilder.Build(State, behavior, Pos, out _);
+                if (arbitraryMesh != null)
+                {
+                    mesher.AddMeshData(arbitraryMesh);
+                    RecordTessellation(started, unitCount, 1);
+                    return true;
+                }
+            }
+
             if (State.Frozen)
             {
                 MeshData? cachedFrozenMesh;
@@ -340,6 +351,7 @@ namespace brickbybrick.RealisticConstruction
 
         public static void ResetTessellationProfile()
         {
+            BlockStaticMasonry.ResetProfile();
             Interlocked.Exchange(ref tessellationCalls, 0);
             Interlocked.Exchange(ref frozenTessellationCalls, 0);
             Interlocked.Exchange(ref tessellatedUnits, 0);
@@ -380,6 +392,7 @@ namespace brickbybrick.RealisticConstruction
                 + $"mesh cache: {cacheHits:N0} hits, {cacheMisses:N0} misses, {TransformedMeshCache.Count:N0} entries; "
                 + $"consolidated: {combinedBuilds:N0} builds, {combinedReuses:N0} reuses; "
                 + $"{MasonryFrozenMeshCache.GetProfile()}; "
+                + $"{BlockStaticMasonry.GetProfile()}; "
                 + $"GC: gen0 +{GC.CollectionCount(0) - baselineGenerationZeroCollections}, "
                 + $"gen1 +{GC.CollectionCount(1) - baselineGenerationOneCollections}, "
                 + $"gen2 +{GC.CollectionCount(2) - baselineGenerationTwoCollections}.";
