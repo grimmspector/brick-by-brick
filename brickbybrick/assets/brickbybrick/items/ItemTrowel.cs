@@ -465,6 +465,14 @@ namespace brickbybrick.items
                         : (MasonryUnitKind)(-1);
             if ((int)kind < 0) return;
 
+            // A matching brick in the off-hand acts as a pickup filter when
+            // the player points at an existing, completely unmortared brick.
+            if (kind != MasonryUnitKind.RammedEarth
+                && TryPickupMatchingRealisticBrick(byEntity, player, blockSel, path))
+            {
+                return;
+            }
+
             BlockPos targetPos = byEntity.World.BlockAccessor.GetBlock(blockSel.Position).Code?.Path == "realisticmasonry"
                 ? blockSel.Position.Copy()
                 : ResolvePlacementTarget(blockSel);
@@ -493,7 +501,20 @@ namespace brickbybrick.items
                 Origin = new MasonryGridPosition(gridX, layer, gridZ)
             };
 
-            if (!entity.CanPlace(unit)) return;
+            MasonryPlacementFailure placementFailure = entity.GetPlacementFailure(unit);
+            if (placementFailure != MasonryPlacementFailure.None)
+            {
+                if (placementFailure == MasonryPlacementFailure.Frozen)
+                {
+                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-frozen"));
+                }
+                else if (placementFailure == MasonryPlacementFailure.Unsupported)
+                {
+                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-unsupported"));
+                }
+
+                return;
+            }
 
             Dictionary<(int X, int Z), List<MasonryGridPosition>> neighborReservations = new();
             foreach (MasonryGridPosition position in unit.GetFootprint())
@@ -552,6 +573,29 @@ namespace brickbybrick.items
             PlayRandomSound(byEntity.World, targetPos, player, BrickSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
         }
 
+        private static bool TryPickupMatchingRealisticBrick(EntityAgent byEntity, IPlayer player, BlockSelection blockSel, string heldPath)
+        {
+            if (byEntity.World.BlockAccessor.GetBlock(blockSel.Position).Code?.Path != "realisticmasonry") return false;
+            if (byEntity.World.BlockAccessor.GetBlockEntity(blockSel.Position) is not BlockEntityRealisticMasonry entity) return false;
+
+            MasonryGridPosition cell = new(
+                GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.X - blockSel.Face.Normali.X * 0.001) * 4), 0, 3),
+                GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Y - blockSel.Face.Normali.Y * 0.001) * 4), 0, 255),
+                GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Z - blockSel.Face.Normali.Z * 0.001) * 4), 0, 3));
+            string color = heldPath[(heldPath.LastIndexOf('-') + 1)..];
+            if (!entity.IsUnmortaredBrickOfColor(cell, color)) return false;
+
+            ItemStack recovered = entity.TryRemoveUnmortaredUnit(cell);
+            if (recovered == null) return false;
+
+            if (!player.InventoryManager.TryGiveItemstack(recovered, true))
+            {
+                byEntity.World.SpawnItemEntity(recovered, blockSel.Position.ToVec3d().Add(0.5, 0.5, 0.5));
+            }
+
+            return true;
+        }
+
         private bool HandleRealisticMortar(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
         {
             if (!byEntity.Controls.Sneak && TryGetOffhandStack(player, out _, out _)) return false;
@@ -562,6 +606,27 @@ namespace brickbybrick.items
             if (secondsUsed < duration) return true;
             if (byEntity.World.Side != EnumAppSide.Server || HasInteracted(slot.Itemstack)) return false;
             if (byEntity.World.BlockAccessor.GetBlockEntity(blockSel.Position) is not BlockEntityRealisticMasonry entity) return false;
+
+            if (entity.State.Frozen)
+            {
+                entity.Reopen();
+                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+                SetInteracted(slot.Itemstack, true);
+                return false;
+            }
+
+            if (blockSel.Face?.IsHorizontal == true)
+            {
+                MasonryGridPosition sideCell = new(
+                    GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.X - blockSel.Face.Normali.X * 0.001) * 4), 0, 3),
+                    GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Y * 4), 0, 255),
+                    GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Z - blockSel.Face.Normali.Z * 0.001) * 4), 0, 3));
+                if (!entity.ApplySideMortar(sideCell, blockSel.Face)) return false;
+
+                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+                SetInteracted(slot.Itemstack, true);
+                return false;
+            }
 
             MasonryGridPosition position = new(
                 GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.X * 4), 0, 3),
@@ -1310,6 +1375,10 @@ namespace brickbybrick.items
             if (world.Side == EnumAppSide.Client && player is IClientPlayer clientPlayer)
             {
                 clientPlayer.ShowChatNotification(message);
+            }
+            else if (world.Side == EnumAppSide.Server && player is IServerPlayer serverPlayer)
+            {
+                serverPlayer.SendMessage(GlobalConstants.GeneralChatGroup, message, EnumChatType.Notification);
             }
         }
 

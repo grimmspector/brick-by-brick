@@ -161,7 +161,9 @@ namespace brickbybrick
 
         public float MortarCuringHours { get; set; } = 24.0f;
 
-        public float CuringSpeedMultiplier { get; set; } = 1.0f;
+        public float CuringSpeedMultiplier { get; set; } = 0.1f;
+
+        public float InactiveFreezeSeconds { get; set; } = 60.0f;
 
         public bool AllowWetBlockPickup { get; set; } = false;
 
@@ -175,6 +177,7 @@ namespace brickbybrick
         {
             MortarCuringHours = ConfigRange.Clamp(MortarCuringHours, 0.0f, 720.0f);
             CuringSpeedMultiplier = ConfigRange.Clamp(CuringSpeedMultiplier, 0.01f, 100.0f);
+            InactiveFreezeSeconds = ConfigRange.Clamp(InactiveFreezeSeconds, 1.0f, 300.0f);
             DismantlingMortarRecovery = ConfigRange.Clamp(DismantlingMortarRecovery, 0.0f, 1.0f);
             DismantlingMasonryRecovery = ConfigRange.Clamp(DismantlingMasonryRecovery, 0.0f, 1.0f);
         }
@@ -182,6 +185,8 @@ namespace brickbybrick
 
     public sealed class RealismSettings
     {
+        public int FrozenMeshCacheMiB { get; set; } = 256;
+
         public int MortarCapacityMultiplier { get; set; } = 4;
 
         public int FillUnitsPerItem { get; set; } = 2;
@@ -196,6 +201,7 @@ namespace brickbybrick
 
         internal void Validate()
         {
+            FrozenMeshCacheMiB = ConfigRange.Clamp(FrozenMeshCacheMiB, 32, 1024);
             MortarCapacityMultiplier = ConfigRange.Clamp(MortarCapacityMultiplier, 1, 64);
             FillUnitsPerItem = ConfigRange.Clamp(FillUnitsPerItem, 1, 64);
             SledgehammerRecoveryMultiplier = ConfigRange.Clamp(SledgehammerRecoveryMultiplier, 0.0f, 1.0f);

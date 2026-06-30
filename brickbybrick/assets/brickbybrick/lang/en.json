@@ -83,5 +83,11 @@
   "notice-trowel-could-not-resolve-slab": "Could not resolve slab block {0}.",
   "notice-trowel-could-not-read-brick-color": "Could not determine brick color from offhand item: {0}",
   "notice-trowel-nothing": "nothing",
-  "notice-trowel-no-mortar": "No mortar left in the trowel. Refill it before building."
+  "notice-trowel-no-mortar": "No mortar left in the trowel. Refill it before building.",
+  "notice-realistic-unsupported": "That brick needs mortared masonry or rammed earth beneath it for support.",
+  "notice-realistic-frozen": "That masonry has closed. Apply mortar with the trowel to reopen it.",
+  "blockinfo-realistic-frozen": "Cured masonry ({0})",
+  "blockinfo-realistic-wet": "Wet masonry - approximately {0} real time remaining",
+  "blockinfo-realistic-wet-curing-disabled": "Wet masonry - curing disabled",
+  "blockinfo-realistic-paused": "paused"
 }

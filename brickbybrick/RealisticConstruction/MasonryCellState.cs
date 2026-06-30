@@ -3,6 +3,26 @@ using System.Linq;
 
 namespace brickbybrick.RealisticConstruction
 {
+    public enum FrozenMasonryShape
+    {
+        Arbitrary,
+        Block,
+        SlabDown,
+        SlabUp,
+        SlabNorth,
+        SlabEast,
+        SlabSouth,
+        SlabWest,
+        StairNorth,
+        StairEast,
+        StairSouth,
+        StairWest,
+        StairDownNorth,
+        StairDownEast,
+        StairDownSouth,
+        StairDownWest
+    }
+
     // Stores construction progress by slot instead of forcing a block through
     // a linear sequence. A future block entity will persist this state.
     public sealed class MasonryCellState
@@ -18,6 +38,14 @@ namespace brickbybrick.RealisticConstruction
         public List<MasonryUnitPlacement> Units { get; set; } = new();
 
         public HashSet<MasonryGridPosition> ReservedPositions { get; set; } = new();
+
+        public HashSet<string> MortaredSideJoints { get; set; } = new();
+
+        public bool Frozen { get; set; }
+
+        public FrozenMasonryShape FrozenShape { get; set; }
+
+        public double LastModifiedTotalHours { get; set; }
 
         public bool IsSlotPlaced(string slotCode)
         {
@@ -86,6 +114,14 @@ namespace brickbybrick.RealisticConstruction
         South,
         West,
         North
+    }
+
+    public enum MasonryPlacementFailure
+    {
+        None,
+        Frozen,
+        Occupied,
+        Unsupported
     }
 
     // Coordinates are quarter-block cells matching one half-brick footprint.

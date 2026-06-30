@@ -77,7 +77,8 @@ Setting a material or mortar cost to zero makes that resource free, but the play
 | --- | ---: | ---: | --- | --- |
 | `EnableMortarCuring` | `true`, `false` | `false` | Planned | Enables wet masonry and curing time. |
 | `MortarCuringHours` | 0.0–720.0 | 24.0 | Planned | Base in-game hours required for mortar to cure. |
-| `CuringSpeedMultiplier` | 0.01–100.0 | 1.0 | Planned | Multiplies curing speed. Higher values cure faster. |
+| `CuringSpeedMultiplier` | 0.01–100.0 | 0.1 | Active | Multiplies curing speed. Higher values cure faster. |
+| `InactiveFreezeSeconds` | 1.0–300.0 | 60.0 | Active | Real-time inactivity before Realistic masonry closes when curing is disabled. |
 | `AllowWetBlockPickup` | `true`, `false` | `false` | Planned | Allows wet masonry blocks to be picked up intact. |
 | `AllowWetBlockDismantling` | `true`, `false` | `true` | Planned | Allows wet masonry to be dismantled into components. |
 | `DismantlingMortarRecovery` | 0.0–1.0 | 0.0 | Planned | Fraction of mortar recovered while dismantling. |
@@ -89,6 +90,7 @@ Recovery values are fractions: `0.25` is 25%, `0.5` is 50%, and `1.0` is 100%.
 
 | Setting | Range | Default | Status | Description |
 | --- | ---: | ---: | --- | --- |
+| `FrozenMeshCacheMiB` | 32–1024 | 256 | Active | Maximum estimated client memory retained for reusable frozen masonry meshes. |
 | `EnableGroundPlacedStacks` | `true`, `false` | `true` | Planned | Allows loose bricks and stones to form visible ground stacks. |
 | `EnablePathmaking` | `true`, `false` | `true` | Planned | Allows supported loose masonry materials to create paths. |
 | `EnableSledgehammer` | `true`, `false` | `true` | Planned | Enables the masonry dismantling tool. |
@@ -142,13 +144,15 @@ This example contains every available setting and its default value:
   "Curing": {
     "EnableMortarCuring": false,
     "MortarCuringHours": 24.0,
-    "CuringSpeedMultiplier": 1.0,
+    "CuringSpeedMultiplier": 0.1,
+    "InactiveFreezeSeconds": 60.0,
     "AllowWetBlockPickup": false,
     "AllowWetBlockDismantling": true,
     "DismantlingMortarRecovery": 0.0,
     "DismantlingMasonryRecovery": 1.0
   },
-  "Realism": {
+    "Realism": {
+      "FrozenMeshCacheMiB": 256,
     "EnableGroundPlacedStacks": true,
     "EnablePathmaking": true,
     "EnableSledgehammer": true,
