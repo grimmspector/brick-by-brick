@@ -112,7 +112,7 @@ namespace brickbybrick.RealisticConstruction
             return boxes.Count == 0 ? new[] { new Cuboidf(0, 0, 0, 1, 0.01f, 1) } : boxes.ToArray();
         }
 
-        private static Cuboidf[]? GetFrozenBoxes(FrozenMasonryShape shape)
+        internal static Cuboidf[]? GetFrozenBoxes(FrozenMasonryShape shape)
         {
             return shape switch
             {

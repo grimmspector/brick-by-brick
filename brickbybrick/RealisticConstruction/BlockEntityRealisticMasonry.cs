@@ -41,6 +41,16 @@ namespace brickbybrick.RealisticConstruction
 
         public MasonryCellState State { get; private set; } = new();
 
+        internal void RestorePackedState(byte[] packedState)
+        {
+            State = MasonryStateCodec.Decode(packedState);
+            State.Frozen = false;
+            State.FrozenShape = FrozenMasonryShape.Arbitrary;
+            Touch();
+            MarkDirty(true);
+            Api.World.BlockAccessor.MarkBlockDirty(Pos);
+        }
+
         public override void Initialize(ICoreAPI api)
         {
             base.Initialize(api);
@@ -608,6 +618,20 @@ namespace brickbybrick.RealisticConstruction
         {
             State.FrozenShape = InferFrozenShape();
             State.Frozen = true;
+
+            if (BlockStaticMasonry.TryGetBlockCode(State.FrozenShape, out AssetLocation staticCode))
+            {
+                Block? staticBlock = Api.World.GetBlock(staticCode);
+                if (staticBlock != null)
+                {
+                    byte[] packedState = MasonryStateCodec.Encode(State);
+                    FrozenMasonryChunkStore.Set(Api.World.BlockAccessor, Pos, packedState);
+                    Api.World.BlockAccessor.ExchangeBlock(staticBlock.Id, Pos);
+                    brickbybrickModSystem.BroadcastStaticMasonryState(Pos, packedState, false);
+                    return;
+                }
+            }
+
             MarkDirty(true);
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
         }

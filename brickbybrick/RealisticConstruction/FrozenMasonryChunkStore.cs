@@ -20,7 +20,7 @@ namespace brickbybrick.RealisticConstruction
             if (chunk == null) return;
 
             Dictionary<int, byte[]> records = GetRecords(chunk);
-            records[GetLocalIndex(pos)] = state;
+            records[GetLocalIndex(pos)] = (byte[])state.Clone();
             Save(chunk, records);
         }
 
@@ -28,7 +28,10 @@ namespace brickbybrick.RealisticConstruction
         {
             state = System.Array.Empty<byte>();
             IWorldChunk? chunk = accessor.GetChunkAtBlockPos(pos);
-            return chunk != null && GetRecords(chunk).TryGetValue(GetLocalIndex(pos), out state!);
+            if (chunk == null || !GetRecords(chunk).TryGetValue(GetLocalIndex(pos), out byte[]? stored)) return false;
+
+            state = (byte[])stored.Clone();
+            return true;
         }
 
         internal static bool Remove(IBlockAccessor accessor, BlockPos pos, out byte[] state)
@@ -38,7 +41,8 @@ namespace brickbybrick.RealisticConstruction
             if (chunk == null) return false;
 
             Dictionary<int, byte[]> records = GetRecords(chunk);
-            if (!records.Remove(GetLocalIndex(pos), out state!)) return false;
+            if (!records.Remove(GetLocalIndex(pos), out byte[]? stored)) return false;
+            state = (byte[])stored.Clone();
             Save(chunk, records);
             return true;
         }
@@ -84,14 +88,27 @@ namespace brickbybrick.RealisticConstruction
             Dictionary<int, byte[]> records = new();
             if (data == null || data.Length == 0) return records;
 
-            using MemoryStream stream = new(data, false);
-            using BinaryReader reader = new(stream);
-            int count = reader.ReadInt32();
-            for (int index = 0; index < count; index++)
+            try
             {
-                int localIndex = reader.ReadInt32();
-                int length = reader.ReadInt32();
-                records[localIndex] = reader.ReadBytes(length);
+                using MemoryStream stream = new(data, false);
+                using BinaryReader reader = new(stream);
+                int count = reader.ReadInt32();
+                if (count < 0 || count > GlobalConstants.ChunkSize * GlobalConstants.ChunkSize * GlobalConstants.ChunkSize)
+                {
+                    return records;
+                }
+
+                for (int index = 0; index < count; index++)
+                {
+                    int localIndex = reader.ReadInt32();
+                    int length = reader.ReadInt32();
+                    if (localIndex < 0 || length < 0 || length > stream.Length - stream.Position) return new();
+                    records[localIndex] = reader.ReadBytes(length);
+                }
+            }
+            catch (EndOfStreamException)
+            {
+                return new();
             }
 
             return records;

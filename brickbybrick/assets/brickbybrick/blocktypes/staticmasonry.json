@@ -1,0 +1,36 @@
+{
+  "code": "staticmasonry",
+  "class": "brickbybrick.staticmasonry",
+  "variantgroups": [
+    {
+      "code": "shape",
+      "states": [
+        "block",
+        "slab-down",
+        "slab-up",
+        "slab-north",
+        "slab-east",
+        "slab-south",
+        "slab-west",
+        "stair-north",
+        "stair-east",
+        "stair-south",
+        "stair-west",
+        "stair-down-north",
+        "stair-down-east",
+        "stair-down-south",
+        "stair-down-west"
+      ]
+    }
+  ],
+  "shape": { "base": "brickbybrick:shapes/block/empty" },
+  "attributes": {
+    "handbook": { "ignore": true },
+    "staticMasonry": true
+  },
+  "blockmaterial": "Ceramic",
+  "replaceable": 0,
+  "sideopaque": { "all": false },
+  "lightAbsorption": 0,
+  "creativeinventory": {}
+}

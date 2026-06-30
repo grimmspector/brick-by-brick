@@ -29,6 +29,7 @@ namespace brickbybrick
         private ModSystemSurvivalHandbook? survivalHandbook;
         private ICoreClientAPI? clientApi;
         private IClientNetworkChannel? realisticClientChannel;
+        private static ICoreServerAPI? serverApi;
         private static readonly Dictionary<string, List<BlockPos>> ProfileCellsByPlayer = new();
         private static readonly Dictionary<string, ProfileExerciseSession> ProfileExercisesByPlayer = new();
         private static readonly object ProfileLogSync = new();
@@ -43,11 +44,13 @@ namespace brickbybrick
             api.RegisterBlockClass(Mod.Info.ModID + ".cobbleblock", typeof(BlockStone));
             api.RegisterBlockClass(Mod.Info.ModID + ".brickblock", typeof(BlockBrick));
             api.RegisterBlockClass(Mod.Info.ModID + ".realisticmasonry", typeof(BlockRealisticMasonry));
+            api.RegisterBlockClass(Mod.Info.ModID + ".staticmasonry", typeof(BlockStaticMasonry));
             api.RegisterBlockEntityClass(Mod.Info.ModID + ".realisticmasonry", typeof(BlockEntityRealisticMasonry));
 
             api.Network.RegisterChannel("brickbybrick-realistic")
                 .RegisterMessageType<int>()
-                .RegisterMessageType<RealisticControlPacket>();
+                .RegisterMessageType<RealisticControlPacket>()
+                .RegisterMessageType<StaticMasonryStatePacket>();
 
         }
 
@@ -71,6 +74,7 @@ namespace brickbybrick
 
         public override void StartServerSide(ICoreServerAPI api)
         {
+            serverApi = api;
             api.Network.GetChannel("brickbybrick-realistic")
                 .SetMessageHandler<int>((player, packet) => OnRealisticServerPacket(api, player, packet));
             api.Event.RegisterGameTickListener(_ => MasonryFreezeScheduler.DrainReady(), 100);
@@ -379,6 +383,7 @@ namespace brickbybrick
             clientApi = api;
             realisticClientChannel = api.Network.GetChannel("brickbybrick-realistic");
             realisticClientChannel.SetMessageHandler<RealisticControlPacket>(packet => OnProfileControlPacket(api, packet.Code));
+            realisticClientChannel.SetMessageHandler<StaticMasonryStatePacket>(packet => OnStaticMasonryStatePacket(api, packet));
             api.Event.MouseWheelMove += OnRealisticPlacementMouseWheel;
             RegisterClientProfilingCommands(api);
             survivalHandbook = api.ModLoader.GetModSystem<ModSystemSurvivalHandbook>();
@@ -386,6 +391,29 @@ namespace brickbybrick
             {
                 survivalHandbook.OnInitCustomPages += MoveMasonryGuideAfterVanillaGuides;
             }
+        }
+
+        internal static void BroadcastStaticMasonryState(BlockPos pos, byte[] state, bool remove)
+        {
+            if (serverApi == null) return;
+
+            StaticMasonryStatePacket packet = new()
+            {
+                X = pos.X,
+                Y = pos.InternalY,
+                Z = pos.Z,
+                State = state,
+                Remove = remove
+            };
+            serverApi.Network.GetChannel("brickbybrick-realistic").BroadcastPacket(packet);
+        }
+
+        private static void OnStaticMasonryStatePacket(ICoreClientAPI api, StaticMasonryStatePacket packet)
+        {
+            BlockPos pos = new(packet.X, packet.Y, packet.Z);
+            if (packet.Remove) FrozenMasonryChunkStore.Remove(api.World.BlockAccessor, pos, out _);
+            else FrozenMasonryChunkStore.Set(api.World.BlockAccessor, pos, packet.State);
+            api.World.BlockAccessor.MarkBlockDirty(pos);
         }
 
         private void OnProfileControlPacket(ICoreClientAPI api, int packet)
@@ -470,6 +498,8 @@ namespace brickbybrick
             {
                 survivalHandbook.OnInitCustomPages -= MoveMasonryGuideAfterVanillaGuides;
             }
+
+            serverApi = null;
 
             base.Dispose();
         }

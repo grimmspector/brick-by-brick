@@ -605,7 +605,17 @@ namespace brickbybrick.items
             PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, TrowelSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
             if (secondsUsed < duration) return true;
             if (byEntity.World.Side != EnumAppSide.Server || HasInteracted(slot.Itemstack)) return false;
-            if (byEntity.World.BlockAccessor.GetBlockEntity(blockSel.Position) is not BlockEntityRealisticMasonry entity) return false;
+            BlockEntityRealisticMasonry entity = byEntity.World.BlockAccessor.GetBlockEntity(blockSel.Position) as BlockEntityRealisticMasonry;
+            if (entity == null
+                && byEntity.World.BlockAccessor.GetBlock(blockSel.Position) is BlockStaticMasonry
+                && BlockStaticMasonry.TryRestoreEntity(byEntity.World, blockSel.Position, out entity))
+            {
+                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+                SetInteracted(slot.Itemstack, true);
+                return false;
+            }
+
+            if (entity == null) return false;
 
             if (entity.State.Frozen)
             {
