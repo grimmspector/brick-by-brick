@@ -41,8 +41,15 @@ namespace brickbybrick.RealisticConstruction
                 || State.Units.Any(existing => existing.Occupies(position)))) return false;
             if (unit.Origin.Y == 0) return true;
 
-            return unit.GetFootprint().All(position => State.Units.Any(existing =>
+            MasonryGridPosition[] footprint = unit.GetFootprint().ToArray();
+            int supportedCells = footprint.Count(position => State.Units.Any(existing =>
                 existing.Supports(new MasonryGridPosition(position.X, position.Y - 1, position.Z))));
+
+            // A whole brick may cantilever by one half-brick cell in any
+            // direction. Half bricks and rammed earth require full support.
+            return unit.Kind == MasonryUnitKind.WholeBrick
+                ? supportedCells >= 1
+                : supportedCells == footprint.Length;
         }
 
         public bool TryPlace(MasonryUnitPlacement unit)
