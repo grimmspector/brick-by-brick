@@ -90,7 +90,9 @@ Recovery values are fractions: `0.25` is 25%, `0.5` is 50%, and `1.0` is 100%.
 
 | Setting | Range | Default | Status | Description |
 | --- | ---: | ---: | --- | --- |
-| `FrozenMeshCacheMiB` | 32–1024 | 256 | Active | Maximum estimated client memory retained for reusable frozen masonry meshes. |
+| `EnableOptimizedFrozenMeshes` | `true`, `false` | `false` | Experimental | Uses validated exposed-face and greedy-merged meshes for frozen masonry, with automatic component-renderer fallback. |
+| `FrozenMeshCacheMiB` | 32–1024 | 128 | Active | Maximum estimated client memory retained for reusable frozen masonry meshes. |
+| `TransformedMeshCacheMiB` | 8–256 | 16 | Active | Maximum estimated client memory retained for shared transformed masonry components. |
 | `EnableGroundPlacedStacks` | `true`, `false` | `true` | Planned | Allows loose bricks and stones to form visible ground stacks. |
 | `EnablePathmaking` | `true`, `false` | `true` | Planned | Allows supported loose masonry materials to create paths. |
 | `EnableSledgehammer` | `true`, `false` | `true` | Planned | Enables the masonry dismantling tool. |
@@ -152,7 +154,9 @@ This example contains every available setting and its default value:
     "DismantlingMasonryRecovery": 1.0
   },
     "Realism": {
-      "FrozenMeshCacheMiB": 256,
+      "EnableOptimizedFrozenMeshes": false,
+      "FrozenMeshCacheMiB": 128,
+      "TransformedMeshCacheMiB": 16,
     "EnableGroundPlacedStacks": true,
     "EnablePathmaking": true,
     "EnableSledgehammer": true,

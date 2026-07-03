@@ -32,7 +32,9 @@ namespace brickbybrick
         private static ICoreServerAPI? serverApi;
         private static readonly Dictionary<string, List<BlockPos>> ProfileCellsByPlayer = new();
         private static readonly Dictionary<string, ProfileExerciseSession> ProfileExercisesByPlayer = new();
+        private static readonly HashSet<string> ActiveBenchmarks = new();
         private static readonly object ProfileLogSync = new();
+        private static string profileSessionId = "not-started";
 
         // Registers the item and block classes referenced by the JSON assets.
         public override void Start(ICoreAPI api)
@@ -74,12 +76,37 @@ namespace brickbybrick
 
         public override void StartServerSide(ICoreServerAPI api)
         {
+            ResetWorldScopedProfileState();
             serverApi = api;
+            profileSessionId = $"{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}"[..24];
+            AppendProfileLog(
+                api,
+                "PROFILE SESSION START",
+                $"Session: {profileSessionId}; mod version: {Mod.Info.Version}; "
+                + $"optimized frozen meshes: {Config.Realism.EnableOptimizedFrozenMeshes}; "
+                + $"frozen cache: {Config.Realism.FrozenMeshCacheMiB} MiB; "
+                + $"transformed cache: {Config.Realism.TransformedMeshCacheMiB} MiB; "
+                + $"curing enabled: {Config.Curing.EnableMortarCuring}; "
+                + $"inactive freeze: {Config.Curing.InactiveFreezeSeconds:N1} seconds.");
             api.Network.GetChannel("brickbybrick-realistic")
                 .SetMessageHandler<int>((player, packet) => OnRealisticServerPacket(api, player, packet));
             api.Event.RegisterGameTickListener(_ => MasonryFreezeScheduler.DrainReady(), 100);
             RegisterProfilingCommands(api);
             ValidateConstructionRegistry(api);
+        }
+
+        // Static profiling collections survive integrated-server world swaps.
+        // Reset them before the new world can accept profiling commands.
+        private static void ResetWorldScopedProfileState()
+        {
+            foreach (ProfileExerciseSession session in ProfileExercisesByPlayer.Values)
+            {
+                session.Active = false;
+            }
+
+            ProfileCellsByPlayer.Clear();
+            ProfileExercisesByPlayer.Clear();
+            ActiveBenchmarks.Clear();
         }
 
         private static void RegisterProfilingCommands(ICoreServerAPI api)
@@ -91,6 +118,18 @@ namespace brickbybrick
                     .WithArgs(api.ChatCommands.Parsers.Int("count"))
                     .HandleWith(args => SpawnProfileCells(api, args))
                 .EndSubCommand()
+                .BeginSubCommand("duplicates")
+                    .WithArgs(
+                        api.ChatCommands.Parsers.Int("arrangements"),
+                        api.ChatCommands.Parsers.Int("copies"))
+                    .HandleWith(args => SpawnDuplicateProfileCells(api, args))
+                .EndSubCommand()
+                .BeginSubCommand("geometryquick")
+                    .HandleWith(args => SpawnGeometryCorpus(api, args, false))
+                .EndSubCommand()
+                .BeginSubCommand("geometrycorpus")
+                    .HandleWith(args => SpawnGeometryCorpus(api, args, true))
+                .EndSubCommand()
                 .BeginSubCommand("clear")
                     .HandleWith(args => ClearProfileCells(api, args))
                 .EndSubCommand()
@@ -99,6 +138,13 @@ namespace brickbybrick
                 .EndSubCommand()
                 .BeginSubCommand("exercise")
                     .HandleWith(args => StartProfileExercise(api, args))
+                .EndSubCommand()
+                .BeginSubCommand("benchmark")
+                    .HandleWith(args => StartTrackedBenchmark(api, args))
+                .EndSubCommand()
+                .BeginSubCommand("random")
+                    .WithArgs(api.ChatCommands.Parsers.Int("actions"))
+                    .HandleWith(args => RunRandomProfileActions(api, args))
                 .EndSubCommand()
                 .BeginSubCommand("stop")
                     .HandleWith(args => StopProfileExercise(api, args))
@@ -317,6 +363,105 @@ namespace brickbybrick
             return TextCommandResult.Success($"Removed {removed:N0} profiling cells.");
         }
 
+        private static TextCommandResult SpawnDuplicateProfileCells(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+
+            int arrangementCount = GameMath.Clamp((int)args[0], 1, 1000);
+            int copiesPerArrangement = GameMath.Clamp((int)args[1], 2, 10000);
+            int requested = Math.Min(100000, arrangementCount * copiesPerArrangement);
+            ClearTrackedProfileCells(api, player.PlayerUID);
+            ResetClientProfile(api, player);
+
+            Block? constructionBlock = api.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+            if (constructionBlock == null) return TextCommandResult.Error("Realistic masonry block is unavailable.");
+
+            BlockPos center = player.Entity.Pos.AsBlockPos;
+            Random random = new(center.X ^ center.Z ^ arrangementCount ^ copiesPerArrangement);
+            List<byte[]> arrangements = new(arrangementCount);
+            List<BlockPos> created = new(requested);
+            int horizontalRadius = (int)Math.Ceiling(Math.Sqrt(requested / 4d)) + 2;
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            for (int radius = 2; radius <= horizontalRadius && created.Count < requested; radius++)
+            for (int x = -radius; x <= radius && created.Count < requested; x++)
+            for (int z = -radius; z <= radius && created.Count < requested; z++)
+            {
+                if (Math.Max(Math.Abs(x), Math.Abs(z)) != radius || Math.Abs(x) <= 1 && Math.Abs(z) <= 1) continue;
+
+                for (int y = 0; y < 4 && created.Count < requested; y++)
+                {
+                    BlockPos pos = center.AddCopy(x, y, z);
+                    Block existing = api.World.BlockAccessor.GetBlock(pos);
+                    if (!existing.IsReplacableBy(constructionBlock)) continue;
+
+                    api.World.BlockAccessor.SetBlock(constructionBlock.Id, pos);
+                    if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
+
+                    int arrangementIndex = created.Count / copiesPerArrangement;
+                    if (arrangementIndex >= arrangements.Count)
+                    {
+                        entity.PopulateDuplicatePrototypeForProfiling(random, arrangementIndex);
+                        arrangements.Add(MasonryStateCodec.Encode(entity.State));
+                    }
+                    else
+                    {
+                        entity.RestorePackedState(arrangements[arrangementIndex]);
+                        entity.ForceFreezeForProfiling();
+                    }
+
+                    created.Add(pos.Copy());
+                }
+            }
+
+            stopwatch.Stop();
+            ProfileCellsByPlayer[player.PlayerUID] = created;
+            AppendProfileLog(api, "DETERMINISTIC DUPLICATE SPAWN", $"Arrangements: {arrangements.Count:N0}; copies each: {copiesPerArrangement:N0}; cells: {created.Count:N0}; generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.");
+            api.Event.RegisterCallback(_ => RequestClientProfile(api, player), 5000);
+            return TextCommandResult.Success($"Created {created.Count:N0} cells from {arrangements.Count:N0} deterministic arrangements in {stopwatch.ElapsedMilliseconds:N0} ms.");
+        }
+
+        private static TextCommandResult SpawnGeometryCorpus(ICoreServerAPI api, TextCommandCallingArgs args, bool exhaustive)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+
+            int requested = exhaustive ? ushort.MaxValue : 2048;
+            ClearTrackedProfileCells(api, player.PlayerUID);
+            ResetClientProfile(api, player);
+            Block? constructionBlock = api.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+            if (constructionBlock == null) return TextCommandResult.Error("Realistic masonry block is unavailable.");
+
+            BlockPos center = player.Entity.Pos.AsBlockPos;
+            List<BlockPos> created = new(requested);
+            int horizontalRadius = (int)Math.Ceiling(Math.Sqrt(requested / 4d)) + 2;
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            for (int radius = 2; radius <= horizontalRadius && created.Count < requested; radius++)
+            for (int x = -radius; x <= radius && created.Count < requested; x++)
+            for (int z = -radius; z <= radius && created.Count < requested; z++)
+            {
+                if (Math.Max(Math.Abs(x), Math.Abs(z)) != radius || Math.Abs(x) <= 1 && Math.Abs(z) <= 1) continue;
+
+                for (int y = 0; y < 4 && created.Count < requested; y++)
+                {
+                    BlockPos pos = center.AddCopy(x, y, z);
+                    if (!api.World.BlockAccessor.GetBlock(pos).IsReplacableBy(constructionBlock)) continue;
+                    api.World.BlockAccessor.SetBlock(constructionBlock.Id, pos);
+                    if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
+                    entity.PopulateGeometryCorpusForProfiling(created.Count, exhaustive);
+                    created.Add(pos.Copy());
+                }
+            }
+
+            stopwatch.Stop();
+            ProfileCellsByPlayer[player.PlayerUID] = created;
+            string corpus = exhaustive ? "exhaustive single-layer" : "quick deterministic 3D";
+            AppendProfileLog(api, "GEOMETRY CORPUS SPAWN", $"Corpus: {corpus}; cells: {created.Count:N0}; generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.");
+            api.Event.RegisterCallback(_ => RequestClientProfile(api, player), exhaustive ? 30000 : 10000);
+            return TextCommandResult.Success($"Created the {corpus} corpus with {created.Count:N0} cells in {stopwatch.ElapsedMilliseconds:N0} ms.");
+        }
+
         private static int ClearTrackedProfileCells(ICoreServerAPI api, string playerUid)
         {
             if (!ProfileCellsByPlayer.TryGetValue(playerUid, out List<BlockPos>? positions)) return 0;
@@ -324,8 +469,15 @@ namespace brickbybrick
             int removed = 0;
             foreach (BlockPos pos in positions)
             {
-                if (api.World.BlockAccessor.GetBlock(pos).Code?.Path != "realisticmasonry") continue;
+                Block block = api.World.BlockAccessor.GetBlock(pos);
+                if (block.Code?.Path != "realisticmasonry" && block is not BlockStaticMasonry) continue;
+                if (block is BlockStaticMasonry)
+                {
+                    FrozenMasonryChunkStore.Remove(api.World.BlockAccessor, pos, out _);
+                    BroadcastStaticMasonryState(pos, Array.Empty<byte>(), true);
+                }
                 api.World.BlockAccessor.SetBlock(0, pos);
+                api.World.BlockAccessor.MarkBlockDirty(pos);
                 removed++;
             }
 
@@ -342,25 +494,155 @@ namespace brickbybrick
                 return TextCommandResult.Success("No profiling cells are tracked for this player.");
             }
 
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            int entities = 0;
-            int frozen = 0;
-            int units = 0;
-            long serializedBytes = 0;
-            foreach (BlockPos pos in positions)
+            string report = BuildTrackedStateReport(api, positions);
+            AppendProfileLog(api, "SERVER CELL REPORT", report);
+            return TextCommandResult.Success($"{report} Written to {GetProfileLogPath()}.");
+        }
+
+        private static TextCommandResult StartTrackedBenchmark(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+            if (!ProfileCellsByPlayer.TryGetValue(player.PlayerUID, out List<BlockPos>? positions) || positions.Count == 0)
             {
-                if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
-                entities++;
-                if (entity.State.Frozen) frozen++;
-                units += entity.State.Units.Count;
-                serializedBytes += MasonryStateCodec.Encode(entity.State).Length;
+                return TextCommandResult.Error("Generate cells first with /bbbprofile spawn <count>.");
+            }
+            if (!ActiveBenchmarks.Add(player.PlayerUID)) return TextCommandResult.Error("A tracked benchmark is already settling for this player.");
+
+            ResetClientProfile(api, player);
+            AppendProfileLog(api, "TRACKED BENCHMARK BASELINE", BuildTrackedStateReport(api, positions));
+            foreach (BlockPos pos in positions) api.World.BlockAccessor.MarkBlockDirty(pos);
+
+            api.Event.RegisterCallback(_ =>
+            {
+                string report = BuildTrackedStateReport(api, positions);
+                AppendProfileLog(api, "TRACKED BENCHMARK SETTLED", report);
+                RequestClientProfile(api, player);
+                ActiveBenchmarks.Remove(player.PlayerUID);
+                player.SendMessage(GlobalConstants.GeneralChatGroup, $"Tracked benchmark complete. {report}", EnumChatType.Notification);
+            }, 5000);
+            return TextCommandResult.Success($"Started a deterministic rebuild benchmark for {positions.Count:N0} tracked cells.");
+        }
+
+        private static TextCommandResult RunRandomProfileActions(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+            if (!ProfileCellsByPlayer.TryGetValue(player.PlayerUID, out List<BlockPos>? positions) || positions.Count == 0)
+            {
+                return TextCommandResult.Error("Generate cells first with /bbbprofile spawn <count>.");
+            }
+            if (ActiveBenchmarks.Contains(player.PlayerUID)) return TextCommandResult.Error("Wait for the tracked benchmark to finish before running random stress.");
+
+            int requested = GameMath.Clamp((int)args[0], 1, 100000);
+            Random random = new(player.Entity.Pos.AsBlockPos.X ^ Environment.TickCount ^ requested);
+            Block? liveBlock = api.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+            if (liveBlock == null) return TextCommandResult.Error("Realistic masonry block is unavailable.");
+
+            ResetClientProfile(api, player);
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            int rebuilt = 0;
+            int reopened = 0;
+            int regenerated = 0;
+            for (int action = 0; action < requested; action++)
+            {
+                BlockPos pos = positions[random.Next(positions.Count)];
+                Block block = api.World.BlockAccessor.GetBlock(pos);
+                int operation = random.Next(3);
+                if (operation == 0)
+                {
+                    api.World.BlockAccessor.MarkBlockDirty(pos);
+                    rebuilt++;
+                }
+                else if (block is BlockStaticMasonry && BlockStaticMasonry.TryRestoreEntity(api.World, pos, out _))
+                {
+                    reopened++;
+                }
+                else
+                {
+                    if (block.Code?.Path != "realisticmasonry") api.World.BlockAccessor.SetBlock(liveBlock.Id, pos);
+                    if (api.World.BlockAccessor.GetBlockEntity(pos) is BlockEntityRealisticMasonry entity)
+                    {
+                        entity.PopulateForProfiling(random, false);
+                        if (random.NextDouble() < 0.7) entity.ForceFreezeForProfiling();
+                        regenerated++;
+                    }
+                }
             }
 
             stopwatch.Stop();
-            string report = $"Cells: {entities:N0}; frozen: {frozen:N0}; units: {units:N0}; "
-                + $"packed state: {serializedBytes / 1048576d:N2} MiB; scan: {stopwatch.ElapsedMilliseconds:N0} ms.";
-            AppendProfileLog(api, "SERVER CELL REPORT", report);
-            return TextCommandResult.Success($"{report} Written to {GetProfileLogPath()}.");
+            string report = $"Actions: {requested:N0}; dirty rebuilds: {rebuilt:N0}; reopened: {reopened:N0}; "
+                + $"regenerated/frozen: {regenerated:N0}; server action time: {stopwatch.Elapsed.TotalMilliseconds:N2} ms; "
+                + $"{BuildTrackedStateReport(api, positions)}";
+            AppendProfileLog(api, "RANDOM TRACKED STRESS", report);
+            api.Event.RegisterCallback(_ => RequestClientProfile(api, player), 5000);
+            return TextCommandResult.Success($"Random tracked-cell stress complete. {report}");
+        }
+
+        private static string BuildTrackedStateReport(ICoreServerAPI api, List<BlockPos> positions)
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            int liveEntities = 0;
+            int frozenEntities = 0;
+            int staticCells = 0;
+            int arbitraryCells = 0;
+            int units = 0;
+            int orphanedSidecars = 0;
+            int missingSidecars = 0;
+            int corruptSidecars = 0;
+            long residentSidecarBytes = 0;
+            long livePackedBytes = 0;
+
+            foreach (BlockPos pos in positions)
+            {
+                Block block = api.World.BlockAccessor.GetBlock(pos);
+                bool hasSidecar = FrozenMasonryChunkStore.TryGet(api.World.BlockAccessor, pos, out byte[] packed);
+                if (block is BlockStaticMasonry)
+                {
+                    staticCells++;
+                    if (!hasSidecar) missingSidecars++;
+                    else
+                    {
+                        residentSidecarBytes += packed.Length;
+                        try { units += MasonryStateCodec.Decode(packed).Units.Count; }
+                        catch { corruptSidecars++; }
+                    }
+                }
+                else if (hasSidecar)
+                {
+                    orphanedSidecars++;
+                    residentSidecarBytes += packed.Length;
+                }
+
+                if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
+                liveEntities++;
+                units += entity.State.Units.Count;
+                livePackedBytes += MasonryStateCodec.Encode(entity.State).Length;
+                if (entity.State.Frozen)
+                {
+                    frozenEntities++;
+                    if (entity.State.FrozenShape == FrozenMasonryShape.Arbitrary) arbitraryCells++;
+                }
+            }
+
+            stopwatch.Stop();
+            return $"tracked: {positions.Count:N0}; live entities: {liveEntities:N0}; frozen entities: {frozenEntities:N0}; "
+                + $"static cells: {staticCells:N0}; arbitrary frozen: {arbitraryCells:N0}; units: {units:N0}; "
+                + $"resident sidecar: {residentSidecarBytes:N0} bytes; live packed: {livePackedBytes:N0} bytes; "
+                + $"missing/orphaned/corrupt sidecars: {missingSidecars:N0}/{orphanedSidecars:N0}/{corruptSidecars:N0}; "
+                + $"scan: {stopwatch.Elapsed.TotalMilliseconds:N2} ms.";
+        }
+
+        private static void ResetClientProfile(ICoreServerAPI api, IServerPlayer player)
+        {
+            if (api.Server.IsDedicated) api.Network.GetChannel("brickbybrick-realistic").SendPacket(new RealisticControlPacket { Code = ProfileResetPacket }, player);
+            else BlockEntityRealisticMasonry.ResetTessellationProfile();
+        }
+
+        private static void RequestClientProfile(ICoreServerAPI api, IServerPlayer player)
+        {
+            if (api.Server.IsDedicated) api.Network.GetChannel("brickbybrick-realistic").SendPacket(new RealisticControlPacket { Code = ProfileReportPacket }, player);
+            else AppendProfileLog(api, "INTEGRATED CLIENT PROFILE", BlockEntityRealisticMasonry.GetTessellationProfile());
         }
 
         public override void AssetsFinalize(ICoreAPI api)
@@ -380,6 +662,7 @@ namespace brickbybrick
 
         public override void StartClientSide(ICoreClientAPI api)
         {
+            BlockEntityRealisticMasonry.ResetOptimizedMeshRuntimeGuard();
             clientApi = api;
             realisticClientChannel = api.Network.GetChannel("brickbybrick-realistic");
             realisticClientChannel.SetMessageHandler<RealisticControlPacket>(packet => OnProfileControlPacket(api, packet.Code));
@@ -476,7 +759,7 @@ namespace brickbybrick
                 {
                     File.AppendAllText(
                         GetProfileLogPath(),
-                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {heading}{Environment.NewLine}{report}{Environment.NewLine}{Environment.NewLine}");
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{profileSessionId}] {heading}{Environment.NewLine}{report}{Environment.NewLine}{Environment.NewLine}");
                 }
             }
             catch (Exception exception)
@@ -487,6 +770,9 @@ namespace brickbybrick
 
         public override void Dispose()
         {
+            ResetWorldScopedProfileState();
+            MasonryFrozenMeshCache.Clear();
+            BlockEntityRealisticMasonry.ClearTransformedMeshCache();
             if (clientApi != null)
             {
                 clientApi.Event.MouseWheelMove -= OnRealisticPlacementMouseWheel;

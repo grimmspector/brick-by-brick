@@ -185,7 +185,13 @@ namespace brickbybrick
 
     public sealed class RealismSettings
     {
-        public int FrozenMeshCacheMiB { get; set; } = 256;
+        // Experimental until visually validated across every masonry shape.
+        // Invalid meshes automatically fall back to component rendering.
+        public bool EnableOptimizedFrozenMeshes { get; set; } = false;
+
+        public int FrozenMeshCacheMiB { get; set; } = 128;
+
+        public int TransformedMeshCacheMiB { get; set; } = 16;
 
         public int MortarCapacityMultiplier { get; set; } = 4;
 
@@ -202,6 +208,7 @@ namespace brickbybrick
         internal void Validate()
         {
             FrozenMeshCacheMiB = ConfigRange.Clamp(FrozenMeshCacheMiB, 32, 1024);
+            TransformedMeshCacheMiB = ConfigRange.Clamp(TransformedMeshCacheMiB, 8, 256);
             MortarCapacityMultiplier = ConfigRange.Clamp(MortarCapacityMultiplier, 1, 64);
             FillUnitsPerItem = ConfigRange.Clamp(FillUnitsPerItem, 1, 64);
             SledgehammerRecoveryMultiplier = ConfigRange.Clamp(SledgehammerRecoveryMultiplier, 0.0f, 1.0f);

@@ -20,6 +20,7 @@ namespace brickbybrick.RealisticConstruction
         private static long exposedQuads;
         private static long mergedQuads;
         private static long cacheRebuilds;
+        private static long rejectedBuilds;
 
         private static readonly IReadOnlyDictionary<FrozenMasonryShape, string> ShapeCodes =
             new Dictionary<FrozenMasonryShape, string>
@@ -112,9 +113,7 @@ namespace brickbybrick.RealisticConstruction
                 mesh = MeshCache.GetOrAdd(cacheKey, built);
                 if (ReferenceEquals(mesh, built))
                 {
-                    Interlocked.Increment(ref cacheRebuilds);
-                    Interlocked.Add(ref exposedQuads, rawQuads);
-                    Interlocked.Add(ref mergedQuads, mesh.IndicesCount / 6);
+                    RecordMeshBuild(rawQuads, mesh.IndicesCount / 6);
                 }
             }
 
@@ -150,15 +149,29 @@ namespace brickbybrick.RealisticConstruction
             Interlocked.Exchange(ref exposedQuads, 0);
             Interlocked.Exchange(ref mergedQuads, 0);
             Interlocked.Exchange(ref cacheRebuilds, 0);
+            Interlocked.Exchange(ref rejectedBuilds, 0);
+        }
+
+        internal static void RecordMeshBuild(int rawExposedQuads, int finalMergedQuads)
+        {
+            Interlocked.Increment(ref cacheRebuilds);
+            Interlocked.Add(ref exposedQuads, rawExposedQuads);
+            Interlocked.Add(ref mergedQuads, finalMergedQuads);
+        }
+
+        internal static void RecordRejectedBuild()
+        {
+            Interlocked.Increment(ref rejectedBuilds);
         }
 
         internal static string GetProfile()
         {
-            return $"static cells: {Interlocked.Read(ref staticTessellations):N0}; "
-                + $"sidecar bytes: {Interlocked.Read(ref sidecarBytes):N0}; "
+            return $"static tessellations: {Interlocked.Read(ref staticTessellations):N0}; "
+                + $"tessellated sidecar bytes: {Interlocked.Read(ref sidecarBytes):N0}; "
                 + $"exposed quads: {Interlocked.Read(ref exposedQuads):N0}; "
                 + $"merged quads: {Interlocked.Read(ref mergedQuads):N0}; "
-                + $"cache rebuilds: {Interlocked.Read(ref cacheRebuilds):N0}";
+                + $"cache rebuilds: {Interlocked.Read(ref cacheRebuilds):N0}; "
+                + $"rejected optimized builds: {Interlocked.Read(ref rejectedBuilds):N0}";
         }
 
         private static AssetLocation GetDropCode(MasonryUnitPlacement unit)

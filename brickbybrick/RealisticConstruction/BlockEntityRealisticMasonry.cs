@@ -25,19 +25,18 @@ namespace brickbybrick.RealisticConstruction
         private static long tessellatedMeshParts;
         private static long tessellationStopwatchTicks;
         private static long slowestTessellationTicks;
-        private static long transformedMeshCacheHits;
-        private static long transformedMeshCacheMisses;
         private static long consolidatedMeshBuilds;
         private static long consolidatedMeshReuses;
+        private static readonly ConcurrentDictionary<string, byte> RejectedOptimizedMeshKeys = new();
         private static int baselineGenerationZeroCollections;
         private static int baselineGenerationOneCollections;
         private static int baselineGenerationTwoCollections;
         private static long baselineManagedBytes;
         private static string slowestTessellationCell = "none";
         private static readonly object TessellationProfileSync = new();
-        private static readonly ConcurrentDictionary<string, MeshData> TransformedMeshCache = new();
         private readonly object frozenMeshSync = new();
         private MeshData? frozenCombinedMesh;
+        private bool frozenMeshWasEvicted;
 
         public MasonryCellState State { get; private set; } = new();
 
@@ -84,13 +83,22 @@ namespace brickbybrick.RealisticConstruction
             if (packed?.Length > 0)
             {
                 State = MasonryStateCodec.Decode(packed);
-                return;
+            }
+            else
+            {
+                // Read the prototype JSON format so existing test worlds
+                // migrate automatically when the chunk is saved again.
+                string json = tree.GetString("masonryState", string.Empty);
+                State = string.IsNullOrEmpty(json) ? new MasonryCellState() : JsonConvert.DeserializeObject<MasonryCellState>(json) ?? new MasonryCellState();
             }
 
-            // Read the prototype JSON format so existing test worlds migrate
-            // automatically when the chunk is saved again.
-            string json = tree.GetString("masonryState", string.Empty);
-            State = string.IsNullOrEmpty(json) ? new MasonryCellState() : JsonConvert.DeserializeObject<MasonryCellState>(json) ?? new MasonryCellState();
+            // State packets may arrive after the chunk's first tessellation.
+            // Requeue the cell after clearing its retained frozen mesh so the
+            // client never keeps the initial empty construction mesh.
+            if (worldForResolving.Side == EnumAppSide.Client)
+            {
+                worldForResolving.BlockAccessor.MarkBlockDirty(Pos);
+            }
         }
 
         public bool CanPlace(MasonryUnitPlacement unit)
@@ -235,14 +243,59 @@ namespace brickbybrick.RealisticConstruction
                 return false;
             }
 
-            if (State.Frozen && State.FrozenShape == FrozenMasonryShape.Arbitrary)
+            if (State.Frozen && brickbybrickModSystem.Config.Realism.EnableOptimizedFrozenMeshes)
             {
-                MeshData? arbitraryMesh = MasonryStaticMeshBuilder.Build(State, behavior, Pos, out _);
-                if (arbitraryMesh != null)
+                string optimizedMeshKey = MasonryMeshKey.Create(State, true);
+                MeshData? optimizedMesh;
+                lock (frozenMeshSync) optimizedMesh = frozenCombinedMesh;
+                if (RejectedOptimizedMeshKeys.ContainsKey(optimizedMeshKey))
                 {
-                    mesher.AddMeshData(arbitraryMesh);
-                    RecordTessellation(started, unitCount, 1);
-                    return true;
+                    if (optimizedMesh != null) ReleaseFrozenMesh(optimizedMesh, false);
+                    optimizedMesh = null;
+                }
+                else if (optimizedMesh != null)
+                {
+                    if (TryAddOptimizedMesh(mesher, optimizedMesh, optimizedMeshKey))
+                    {
+                        Interlocked.Increment(ref consolidatedMeshReuses);
+                        MasonryFrozenMeshCache.Touch(this);
+                        RecordTessellation(started, unitCount, 1);
+                        return true;
+                    }
+                }
+
+                int exposedQuadCount = 0;
+                string rejectionReason = string.Empty;
+                if (!RejectedOptimizedMeshKeys.ContainsKey(optimizedMeshKey)
+                    && MasonryStaticMeshBuilder.TryBuildValidated(
+                    State,
+                    behavior,
+                    Pos,
+                    out optimizedMesh,
+                    out exposedQuadCount,
+                    out rejectionReason))
+                {
+                    lock (frozenMeshSync) frozenCombinedMesh ??= optimizedMesh;
+                    optimizedMesh = frozenCombinedMesh;
+                    Interlocked.Increment(ref consolidatedMeshBuilds);
+                    BlockStaticMasonry.RecordMeshBuild(exposedQuadCount, optimizedMesh!.IndicesCount / 6);
+                    if (frozenMeshWasEvicted)
+                    {
+                        MasonryFrozenMeshCache.RecordEvictionRebuild(Stopwatch.GetTimestamp() - started, optimizedMesh);
+                        frozenMeshWasEvicted = false;
+                    }
+                    if (TryAddOptimizedMesh(mesher, optimizedMesh, optimizedMeshKey))
+                    {
+                        bool retained = MasonryFrozenMeshCache.Store(this, optimizedMeshKey, optimizedMesh);
+                        if (!retained) ReleaseFrozenMesh(optimizedMesh, false);
+                        RecordTessellation(started, unitCount, 1);
+                        return true;
+                    }
+                }
+                else if (!RejectedOptimizedMeshKeys.ContainsKey(optimizedMeshKey))
+                {
+                    BlockStaticMasonry.RecordRejectedBuild();
+                    Api.Logger.Warning($"Rejected optimized masonry mesh at {Pos}: {rejectionReason}. Using component fallback.");
                 }
             }
 
@@ -339,8 +392,15 @@ namespace brickbybrick.RealisticConstruction
                 }
 
                 Interlocked.Increment(ref consolidatedMeshBuilds);
-                MasonryFrozenMeshCache.Store(this, combinedMesh);
+                if (frozenMeshWasEvicted)
+                {
+                    MasonryFrozenMeshCache.RecordEvictionRebuild(Stopwatch.GetTimestamp() - started, combinedMesh);
+                    frozenMeshWasEvicted = false;
+                }
+                string meshKey = MasonryMeshKey.Create(State, false);
+                bool retained = MasonryFrozenMeshCache.Store(this, meshKey, combinedMesh);
                 mesher.AddMeshData(combinedMesh);
+                if (!retained) ReleaseFrozenMesh(combinedMesh, false);
                 meshPartCount = 1;
             }
 
@@ -352,14 +412,14 @@ namespace brickbybrick.RealisticConstruction
         public static void ResetTessellationProfile()
         {
             BlockStaticMasonry.ResetProfile();
+            MasonryFrozenMeshCache.ResetProfile();
             Interlocked.Exchange(ref tessellationCalls, 0);
             Interlocked.Exchange(ref frozenTessellationCalls, 0);
             Interlocked.Exchange(ref tessellatedUnits, 0);
             Interlocked.Exchange(ref tessellatedMeshParts, 0);
             Interlocked.Exchange(ref tessellationStopwatchTicks, 0);
             Interlocked.Exchange(ref slowestTessellationTicks, 0);
-            Interlocked.Exchange(ref transformedMeshCacheHits, 0);
-            Interlocked.Exchange(ref transformedMeshCacheMisses, 0);
+            MasonryTransformedMeshCache.ResetProfile();
             Interlocked.Exchange(ref consolidatedMeshBuilds, 0);
             Interlocked.Exchange(ref consolidatedMeshReuses, 0);
             baselineManagedBytes = GC.GetTotalMemory(false);
@@ -377,8 +437,6 @@ namespace brickbybrick.RealisticConstruction
             long meshParts = Interlocked.Read(ref tessellatedMeshParts);
             double elapsedMilliseconds = Interlocked.Read(ref tessellationStopwatchTicks) * 1000d / Stopwatch.Frequency;
             double slowestMilliseconds = Interlocked.Read(ref slowestTessellationTicks) * 1000d / Stopwatch.Frequency;
-            long cacheHits = Interlocked.Read(ref transformedMeshCacheHits);
-            long cacheMisses = Interlocked.Read(ref transformedMeshCacheMisses);
             long combinedBuilds = Interlocked.Read(ref consolidatedMeshBuilds);
             long combinedReuses = Interlocked.Read(ref consolidatedMeshReuses);
             long managedBytes = GC.GetTotalMemory(false);
@@ -389,7 +447,7 @@ namespace brickbybrick.RealisticConstruction
                 + $"tessellation: {elapsedMilliseconds:N1} ms total, {(calls == 0 ? 0 : elapsedMilliseconds / calls):N3} ms/cell; "
                 + $"slowest: {slowestMilliseconds:N2} ms at {slowestCell}; managed memory: {managedBytes / 1048576d:N1} MiB "
                 + $"({(managedBytes - baselineManagedBytes) / 1048576d:+0.0;-0.0;0.0} MiB); "
-                + $"mesh cache: {cacheHits:N0} hits, {cacheMisses:N0} misses, {TransformedMeshCache.Count:N0} entries; "
+                + $"{MasonryTransformedMeshCache.GetProfile()}; "
                 + $"consolidated: {combinedBuilds:N0} builds, {combinedReuses:N0} reuses; "
                 + $"{MasonryFrozenMeshCache.GetProfile()}; "
                 + $"{BlockStaticMasonry.GetProfile()}; "
@@ -400,30 +458,52 @@ namespace brickbybrick.RealisticConstruction
 
         public static void ClearTransformedMeshCache()
         {
-            TransformedMeshCache.Clear();
+            MasonryTransformedMeshCache.Clear();
         }
 
-        internal void ReleaseFrozenMesh(MeshData mesh)
+        internal static void ResetOptimizedMeshRuntimeGuard()
+        {
+            RejectedOptimizedMeshKeys.Clear();
+        }
+
+        private bool TryAddOptimizedMesh(ITerrainMeshPool mesher, MeshData mesh, string meshKey)
+        {
+            try
+            {
+                mesher.AddMeshData(mesh);
+                return true;
+            }
+            catch (IndexOutOfRangeException exception)
+            {
+                if (RejectedOptimizedMeshKeys.TryAdd(meshKey, 0))
+                {
+                    BlockStaticMasonry.RecordRejectedBuild();
+                    Api.Logger.Warning($"Vintage Story rejected optimized masonry arrangement {meshKey} at {Pos}: {exception.Message}. This arrangement will use component fallback.");
+                }
+
+                MasonryFrozenMeshCache.Remove(this);
+                ReleaseFrozenMesh(mesh, false);
+                return false;
+            }
+        }
+
+        internal void ReleaseFrozenMesh(MeshData mesh, bool evicted = true)
         {
             lock (frozenMeshSync)
             {
                 if (ReferenceEquals(frozenCombinedMesh, mesh)) frozenCombinedMesh = null;
+                if (evicted) frozenMeshWasEvicted = true;
             }
+        }
+
+        internal void AdoptFrozenMesh(MeshData mesh)
+        {
+            lock (frozenMeshSync) frozenCombinedMesh = mesh;
         }
 
         private static MeshData GetTransformedMesh(string key, Func<MeshData> createMesh)
         {
-            if (TransformedMeshCache.TryGetValue(key, out MeshData? cached))
-            {
-                Interlocked.Increment(ref transformedMeshCacheHits);
-                return cached;
-            }
-
-            MeshData created = createMesh();
-            MeshData selected = TransformedMeshCache.GetOrAdd(key, created);
-            if (ReferenceEquals(selected, created)) Interlocked.Increment(ref transformedMeshCacheMisses);
-            else Interlocked.Increment(ref transformedMeshCacheHits);
-            return selected;
+            return MasonryTransformedMeshCache.GetOrCreate(key, createMesh);
         }
 
         private void RecordTessellation(long started, int unitCount, int meshPartCount)
@@ -580,11 +660,12 @@ namespace brickbybrick.RealisticConstruction
         {
             string[] colors = { "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" };
             State = new MasonryCellState();
+            bool fillRecognizedBlock = frozen && random.NextDouble() < 0.5;
             for (int y = 0; y < 4; y++)
             for (int x = 0; x < 4; x++)
             for (int z = 0; z < 4; z++)
             {
-                if (random.NextDouble() > 0.42) continue;
+                if (!fillRecognizedBlock && random.NextDouble() > 0.42) continue;
 
                 MasonryUnitPlacement unit = new()
                 {
@@ -600,11 +681,111 @@ namespace brickbybrick.RealisticConstruction
 
             State.LastModifiedTotalHours = Api.World.Calendar.TotalHours;
             State.FrozenShape = InferFrozenShape();
-            State.Frozen = frozen;
+            State.Frozen = false;
             freezeRevision++;
+            if (frozen)
+            {
+                Freeze();
+                return;
+            }
+
             ScheduleFreeze();
             MarkDirty(true);
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
+        }
+
+        internal void PopulateDuplicatePrototypeForProfiling(Random random, int prototypeIndex)
+        {
+            string[] colors = { "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" };
+            State = new MasonryCellState();
+            int shape = prototypeIndex % 10;
+            for (int y = 0; y < 4; y++)
+            for (int x = 0; x < 4; x++)
+            for (int z = 0; z < 4; z++)
+            {
+                bool occupied = shape switch
+                {
+                    0 => true,
+                    1 => y < 2,
+                    2 => y >= 2,
+                    3 => z < 2 || y < 2,
+                    4 => x >= 2 || y < 2,
+                    5 => z >= 2 || y >= 2,
+                    _ => random.NextDouble() < 0.35 + (shape - 6) * 0.08
+                };
+                if (!occupied) continue;
+
+                MasonryUnitPlacement unit = new()
+                {
+                    Id = $"d{x}{y}{z}",
+                    Kind = MasonryUnitKind.HalfBrick,
+                    MaterialCode = $"burnedbrick-{colors[random.Next(colors.Length)]}",
+                    Orientation = MasonryOrientation.East,
+                    Origin = new MasonryGridPosition(x, y, z)
+                };
+                if (random.NextDouble() < 0.75) unit.MortaredPositions.Add(unit.Origin);
+                State.Units.Add(unit);
+            }
+
+            State.LastModifiedTotalHours = Api.World.Calendar.TotalHours;
+            State.FrozenShape = InferFrozenShape();
+            State.Frozen = true;
+            freezeRevision++;
+            MarkDirty(true);
+            Api.World.BlockAccessor.MarkBlockDirty(Pos);
+        }
+
+        internal void PopulateGeometryCorpusForProfiling(int caseIndex, bool exhaustive)
+        {
+            State = new MasonryCellState();
+            if (!exhaustive && caseIndex < 10)
+            {
+                PopulateDuplicatePrototypeForProfiling(new Random(7919 + caseIndex), caseIndex);
+                return;
+            }
+
+            ulong occupancy;
+            if (exhaustive)
+            {
+                occupancy = (ulong)(caseIndex + 1);
+            }
+            else
+            {
+                Random random = new(104729 + caseIndex * 7919);
+                occupancy = ((ulong)(uint)random.Next() << 32) | (uint)random.Next();
+                occupancy |= 1UL << (caseIndex % 64);
+            }
+
+            for (int bit = 0; bit < 64; bit++)
+            {
+                if ((occupancy & (1UL << bit)) == 0) continue;
+                int x = bit & 3;
+                int z = bit >> 2 & 3;
+                int y = exhaustive ? 0 : bit >> 4;
+                MasonryGridPosition position = new(x, y, z);
+                MasonryUnitPlacement unit = new()
+                {
+                    Id = $"c{caseIndex}-{bit}",
+                    Kind = MasonryUnitKind.HalfBrick,
+                    MaterialCode = "burnedbrick-cream",
+                    Orientation = MasonryOrientation.East,
+                    Origin = position
+                };
+                if ((bit + caseIndex) % 3 != 0) unit.MortaredPositions.Add(position);
+                State.Units.Add(unit);
+            }
+
+            State.LastModifiedTotalHours = Api.World.Calendar.TotalHours;
+            State.FrozenShape = InferFrozenShape();
+            State.Frozen = true;
+            freezeRevision++;
+            MarkDirty(true);
+            Api.World.BlockAccessor.MarkBlockDirty(Pos);
+        }
+
+        internal void ForceFreezeForProfiling()
+        {
+            if (Api?.Side == EnumAppSide.Server && !State.Frozen) Freeze();
         }
 
         internal void TryApplyScheduledFreeze(int revision)
@@ -631,20 +812,6 @@ namespace brickbybrick.RealisticConstruction
         {
             State.FrozenShape = InferFrozenShape();
             State.Frozen = true;
-
-            if (BlockStaticMasonry.TryGetBlockCode(State.FrozenShape, out AssetLocation staticCode))
-            {
-                Block? staticBlock = Api.World.GetBlock(staticCode);
-                if (staticBlock != null)
-                {
-                    byte[] packedState = MasonryStateCodec.Encode(State);
-                    FrozenMasonryChunkStore.Set(Api.World.BlockAccessor, Pos, packedState);
-                    Api.World.BlockAccessor.ExchangeBlock(staticBlock.Id, Pos);
-                    brickbybrickModSystem.BroadcastStaticMasonryState(Pos, packedState, false);
-                    return;
-                }
-            }
-
             MarkDirty(true);
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
         }
