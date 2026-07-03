@@ -86,6 +86,8 @@
   "notice-trowel-no-mortar": "No mortar left in the trowel. Refill it before building.",
   "notice-realistic-unsupported": "That brick needs mortared masonry or rammed earth beneath it for support.",
   "notice-realistic-frozen": "That masonry has closed. Apply mortar with the trowel to reopen it.",
+  "notice-realistic-reopened": "The masonry has been reopened for editing.",
+  "notice-realistic-reopen-failed": "That masonry could not be reopened: {0}. Check the game log for details.",
   "blockinfo-realistic-frozen": "Cured masonry ({0})",
   "blockinfo-realistic-wet": "Wet masonry - approximately {0} real time remaining",
   "blockinfo-realistic-wet-curing-disabled": "Wet masonry - curing disabled",

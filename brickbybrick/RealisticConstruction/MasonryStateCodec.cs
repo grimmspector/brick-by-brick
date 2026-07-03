@@ -9,7 +9,7 @@ namespace brickbybrick.RealisticConstruction
     // names for every loaded masonry cell.
     internal static class MasonryStateCodec
     {
-        private const byte Version = 2;
+        private const byte Version = 3;
 
         internal static byte[] Encode(MasonryCellState state)
         {
@@ -19,6 +19,7 @@ namespace brickbybrick.RealisticConstruction
             writer.Write(state.Frozen);
             writer.Write((byte)state.FrozenShape);
             writer.Write(state.LastModifiedTotalHours);
+            writer.Write(state.MortarMaterialCode);
 
             string[] palette = state.Units.Select(unit => unit.MaterialCode).Distinct().Take(255).ToArray();
             writer.Write((byte)palette.Length);
@@ -55,6 +56,7 @@ namespace brickbybrick.RealisticConstruction
                 FrozenShape = (FrozenMasonryShape)reader.ReadByte(),
                 LastModifiedTotalHours = reader.ReadDouble()
             };
+            if (version >= 3) state.MortarMaterialCode = reader.ReadString();
             string[] palette = new string[reader.ReadByte()];
             for (int index = 0; index < palette.Length; index++) palette[index] = reader.ReadString();
 
@@ -81,6 +83,26 @@ namespace brickbybrick.RealisticConstruction
                 for (int index = 0; index < sideJointCount; index++) state.MortaredSideJoints.Add(reader.ReadString());
             }
             return state;
+        }
+
+        internal static bool IsFrozen(byte[] data)
+        {
+            return data.Length > 1 && data[0] is >= 1 and <= Version && data[1] != 0;
+        }
+
+        internal static (bool Frozen, FrozenMasonryShape Shape, int Units) ReadSummary(byte[] data)
+        {
+            using MemoryStream stream = new(data, false);
+            using BinaryReader reader = new(stream);
+            byte version = reader.ReadByte();
+            if (version is < 1 or > Version) throw new InvalidDataException("Unsupported masonry state version.");
+            bool frozen = reader.ReadBoolean();
+            FrozenMasonryShape shape = (FrozenMasonryShape)reader.ReadByte();
+            reader.ReadDouble();
+            if (version >= 3) reader.ReadString();
+            int paletteCount = reader.ReadByte();
+            for (int index = 0; index < paletteCount; index++) reader.ReadString();
+            return (frozen, shape, reader.ReadUInt16());
         }
 
         private static void WritePositions(BinaryWriter writer, IEnumerable<MasonryGridPosition> positions)

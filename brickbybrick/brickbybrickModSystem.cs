@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -23,6 +24,7 @@ namespace brickbybrick
         private const int ProfileReportPacket = -101;
         private const int ProfileResetAcknowledgementPacket = -102;
         private const int ProfileReportAcknowledgementPacket = -103;
+        private const int ProfileBatchSize = 256;
 
         internal static BrickByBrickConfig Config { get; private set; } = new();
 
@@ -129,6 +131,10 @@ namespace brickbybrick
                 .EndSubCommand()
                 .BeginSubCommand("geometrycorpus")
                     .HandleWith(args => SpawnGeometryCorpus(api, args, true))
+                .EndSubCommand()
+                .BeginSubCommand("realistic")
+                    .WithArgs(api.ChatCommands.Parsers.Int("count"))
+                    .HandleWith(args => SpawnRealisticBaseCorpus(api, args))
                 .EndSubCommand()
                 .BeginSubCommand("clear")
                     .HandleWith(args => ClearProfileCells(api, args))
@@ -436,30 +442,144 @@ namespace brickbybrick
             BlockPos center = player.Entity.Pos.AsBlockPos;
             List<BlockPos> created = new(requested);
             int horizontalRadius = (int)Math.Ceiling(Math.Sqrt(requested / 4d)) + 2;
+            ProfileCellsByPlayer[player.PlayerUID] = created;
+            string corpus = exhaustive ? "exhaustive single-layer" : "quick deterministic 3D";
             Stopwatch stopwatch = Stopwatch.StartNew();
-            for (int radius = 2; radius <= horizontalRadius && created.Count < requested; radius++)
-            for (int x = -radius; x <= radius && created.Count < requested; x++)
-            for (int z = -radius; z <= radius && created.Count < requested; z++)
-            {
-                if (Math.Max(Math.Abs(x), Math.Abs(z)) != radius || Math.Abs(x) <= 1 && Math.Abs(z) <= 1) continue;
+            IEnumerator<BlockPos> candidates = EnumerateProfilePositions(center, horizontalRadius).GetEnumerator();
 
-                for (int y = 0; y < 4 && created.Count < requested; y++)
+            void GenerateBatch(float _)
+            {
+                int attempted = 0;
+                while (created.Count < requested && attempted++ < ProfileBatchSize && candidates.MoveNext())
                 {
-                    BlockPos pos = center.AddCopy(x, y, z);
+                    BlockPos pos = candidates.Current;
                     if (!api.World.BlockAccessor.GetBlock(pos).IsReplacableBy(constructionBlock)) continue;
                     api.World.BlockAccessor.SetBlock(constructionBlock.Id, pos);
                     if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
                     entity.PopulateGeometryCorpusForProfiling(created.Count, exhaustive);
                     created.Add(pos.Copy());
                 }
+
+                if (created.Count < requested && attempted >= ProfileBatchSize)
+                {
+                    api.Event.RegisterCallback(GenerateBatch, 1);
+                    return;
+                }
+
+                candidates.Dispose();
+                stopwatch.Stop();
+                AppendProfileLog(api, "GEOMETRY CORPUS SPAWN", $"Corpus: {corpus}; cells: {created.Count:N0}; batched generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.");
+                api.Event.RegisterCallback(_ => RequestClientProfile(api, player), exhaustive ? 30000 : 10000);
+                player.SendMessage(GlobalConstants.GeneralChatGroup, $"Created the {corpus} corpus with {created.Count:N0} cells in {stopwatch.ElapsedMilliseconds:N0} ms.", EnumChatType.Notification);
             }
 
-            stopwatch.Stop();
+            api.Event.RegisterCallback(GenerateBatch, 1);
+            return TextCommandResult.Success($"Started batched generation of the {corpus} corpus ({requested:N0} cells, {ProfileBatchSize:N0} attempts per tick).");
+        }
+
+        // Produces the same compact four-layer rings used by profiling while
+        // allowing large corpora to pause cleanly between server ticks.
+        private static IEnumerable<BlockPos> EnumerateProfilePositions(BlockPos center, int horizontalRadius)
+        {
+            for (int radius = 2; radius <= horizontalRadius; radius++)
+            for (int x = -radius; x <= radius; x++)
+            for (int z = -radius; z <= radius; z++)
+            {
+                if (Math.Max(Math.Abs(x), Math.Abs(z)) != radius || Math.Abs(x) <= 1 && Math.Abs(z) <= 1) continue;
+                for (int y = 0; y < 4; y++) yield return center.AddCopy(x, y, z);
+            }
+        }
+
+        private static TextCommandResult SpawnRealisticBaseCorpus(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+
+            int requested = GameMath.Clamp((int)args[0], 1, 10000);
+            ClearTrackedProfileCells(api, player.PlayerUID);
+            ResetClientProfile(api, player);
+            Block? constructionBlock = api.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+            if (constructionBlock == null) return TextCommandResult.Error("Realistic masonry block is unavailable.");
+
+            BlockPos center = player.Entity.Pos.AsBlockPos;
+            Random random = new(center.X ^ center.Z ^ requested ^ 486187739);
+            List<BlockPos> candidates = BuildRealisticBasePositions(center, requested, random);
+            List<BlockPos> created = new(requested);
             ProfileCellsByPlayer[player.PlayerUID] = created;
-            string corpus = exhaustive ? "exhaustive single-layer" : "quick deterministic 3D";
-            AppendProfileLog(api, "GEOMETRY CORPUS SPAWN", $"Corpus: {corpus}; cells: {created.Count:N0}; generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.");
-            api.Event.RegisterCallback(_ => RequestClientProfile(api, player), exhaustive ? 30000 : 10000);
-            return TextCommandResult.Success($"Created the {corpus} corpus with {created.Count:N0} cells in {stopwatch.ElapsedMilliseconds:N0} ms.");
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            int nextCandidate = 0;
+
+            void GenerateBatch(float _)
+            {
+                int attempted = 0;
+                while (created.Count < requested
+                    && nextCandidate < candidates.Count
+                    && attempted++ < ProfileBatchSize)
+                {
+                    BlockPos pos = candidates[nextCandidate++];
+                    if (!api.World.BlockAccessor.GetBlock(pos).IsReplacableBy(constructionBlock)) continue;
+                    api.World.BlockAccessor.SetBlock(constructionBlock.Id, pos);
+                    if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
+                    entity.PopulateRealisticBaseCellForProfiling(random, created.Count);
+                    created.Add(pos.Copy());
+                }
+
+                if (created.Count < requested && nextCandidate < candidates.Count)
+                {
+                    api.Event.RegisterCallback(GenerateBatch, 1);
+                    return;
+                }
+
+                stopwatch.Stop();
+                AppendProfileLog(api, "REALISTIC BASE CORPUS SPAWN", $"Requested: {requested:N0}; cells: {created.Count:N0}; candidate footprint: {candidates.Count:N0}; batched generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.");
+                api.Event.RegisterCallback(_ => RequestClientProfile(api, player), 10000);
+                player.SendMessage(GlobalConstants.GeneralChatGroup, $"Created {created.Count:N0} realistic-base cells in {stopwatch.ElapsedMilliseconds:N0} ms.", EnumChatType.Notification);
+            }
+
+            api.Event.RegisterCallback(GenerateBatch, 1);
+            return TextCommandResult.Success($"Started a batched realistic-base corpus of {requested:N0} cells.");
+        }
+
+        // Builds separated room shells instead of solid profiling rings. The
+        // result crosses chunks naturally and resembles walls, floors, and
+        // corners that an established player base would keep loaded together.
+        private static List<BlockPos> BuildRealisticBasePositions(BlockPos center, int requested, Random random)
+        {
+            List<BlockPos> positions = new(requested * 2);
+            HashSet<(int X, int Y, int Z)> unique = new();
+            int building = 0;
+            while (positions.Count < requested * 2)
+            {
+                int width = random.Next(7, 16);
+                int depth = random.Next(7, 16);
+                int height = random.Next(3, 7);
+                int column = building % 5;
+                int row = building / 5;
+                int originX = center.X + 6 + column * 22;
+                int originZ = center.Z + 6 + row * 22;
+
+                for (int x = 0; x < width; x++)
+                for (int z = 0; z < depth; z++)
+                {
+                    Add(originX + x, center.Y, originZ + z);
+                    if (x != 0 && x != width - 1 && z != 0 && z != depth - 1) continue;
+                    for (int y = 1; y <= height; y++)
+                    {
+                        bool doorway = z == 0 && x is >= 2 and <= 3 && y <= 2;
+                        bool window = y is 2 or 3 && ((x + z + building) % 5 == 0);
+                        if (!doorway && !window) Add(originX + x, center.Y + y, originZ + z);
+                    }
+                }
+
+                building++;
+            }
+
+            return positions;
+
+            void Add(int x, int y, int z)
+            {
+                if (unique.Add((x, y, z))) positions.Add(new BlockPos(x, y, z));
+            }
         }
 
         private static int ClearTrackedProfileCells(ICoreServerAPI api, string playerUid)
@@ -494,9 +614,12 @@ namespace brickbybrick
                 return TextCommandResult.Success("No profiling cells are tracked for this player.");
             }
 
-            string report = BuildTrackedStateReport(api, positions);
-            AppendProfileLog(api, "SERVER CELL REPORT", report);
-            return TextCommandResult.Success($"{report} Written to {GetProfileLogPath()}.");
+            BuildTrackedStateReportBatched(api, positions, report =>
+            {
+                AppendProfileLog(api, "SERVER CELL REPORT", report);
+                player.SendMessage(GlobalConstants.GeneralChatGroup, $"{report} Written to {GetProfileLogPath()}.", EnumChatType.Notification);
+            });
+            return TextCommandResult.Success($"Started a batched scan of {positions.Count:N0} profiling cells.");
         }
 
         private static TextCommandResult StartTrackedBenchmark(ICoreServerAPI api, TextCommandCallingArgs args)
@@ -510,18 +633,40 @@ namespace brickbybrick
             if (!ActiveBenchmarks.Add(player.PlayerUID)) return TextCommandResult.Error("A tracked benchmark is already settling for this player.");
 
             ResetClientProfile(api, player);
-            AppendProfileLog(api, "TRACKED BENCHMARK BASELINE", BuildTrackedStateReport(api, positions));
-            foreach (BlockPos pos in positions) api.World.BlockAccessor.MarkBlockDirty(pos);
-
-            api.Event.RegisterCallback(_ =>
+            BuildTrackedStateReportBatched(api, positions, baselineReport =>
             {
-                string report = BuildTrackedStateReport(api, positions);
-                AppendProfileLog(api, "TRACKED BENCHMARK SETTLED", report);
-                RequestClientProfile(api, player);
-                ActiveBenchmarks.Remove(player.PlayerUID);
-                player.SendMessage(GlobalConstants.GeneralChatGroup, $"Tracked benchmark complete. {report}", EnumChatType.Notification);
-            }, 5000);
+                AppendProfileLog(api, "TRACKED BENCHMARK BASELINE", baselineReport);
+                MarkTrackedCellsDirtyInBatches(api, positions, 0, () => api.Event.RegisterCallback(_ =>
+                    BuildTrackedStateReportBatched(api, positions, report =>
+                    {
+                        AppendProfileLog(api, "TRACKED BENCHMARK SETTLED", report);
+                        RequestClientProfile(api, player);
+                        ActiveBenchmarks.Remove(player.PlayerUID);
+                        player.SendMessage(GlobalConstants.GeneralChatGroup, $"Tracked benchmark complete. {report}", EnumChatType.Notification);
+                    }), 5000));
+            });
             return TextCommandResult.Success($"Started a deterministic rebuild benchmark for {positions.Count:N0} tracked cells.");
+        }
+
+        private static void MarkTrackedCellsDirtyInBatches(
+            ICoreServerAPI api,
+            List<BlockPos> positions,
+            int startIndex,
+            Action completed)
+        {
+            int endIndex = Math.Min(startIndex + ProfileBatchSize, positions.Count);
+            for (int index = startIndex; index < endIndex; index++)
+            {
+                api.World.BlockAccessor.MarkBlockDirty(positions[index]);
+            }
+
+            if (endIndex < positions.Count)
+            {
+                api.Event.RegisterCallback(_ => MarkTrackedCellsDirtyInBatches(api, positions, endIndex, completed), 1);
+                return;
+            }
+
+            completed();
         }
 
         private static TextCommandResult RunRandomProfileActions(ICoreServerAPI api, TextCommandCallingArgs args)
@@ -633,6 +778,100 @@ namespace brickbybrick
                 + $"scan: {stopwatch.Elapsed.TotalMilliseconds:N2} ms.";
         }
 
+        private static void BuildTrackedStateReportBatched(
+            ICoreServerAPI api,
+            List<BlockPos> positions,
+            Action<string> completed)
+        {
+            TrackedStateScan scan = new(api, positions);
+
+            void ScanBatch(float _)
+            {
+                if (scan.Process(ProfileBatchSize))
+                {
+                    completed(scan.BuildReport());
+                    return;
+                }
+
+                api.Event.RegisterCallback(ScanBatch, 1);
+            }
+
+            api.Event.RegisterCallback(ScanBatch, 1);
+        }
+
+        private sealed class TrackedStateScan
+        {
+            private readonly ICoreServerAPI api;
+            private readonly List<BlockPos> positions;
+            private readonly Stopwatch stopwatch = Stopwatch.StartNew();
+            private int nextIndex;
+            private int liveEntities;
+            private int frozenEntities;
+            private int staticCells;
+            private int arbitraryCells;
+            private int units;
+            private int orphanedSidecars;
+            private int missingSidecars;
+            private int corruptSidecars;
+            private long residentSidecarBytes;
+            private long livePackedBytes;
+
+            internal TrackedStateScan(ICoreServerAPI api, List<BlockPos> positions)
+            {
+                this.api = api;
+                this.positions = positions;
+            }
+
+            internal bool Process(int count)
+            {
+                int endIndex = Math.Min(nextIndex + count, positions.Count);
+                for (; nextIndex < endIndex; nextIndex++) Process(positions[nextIndex]);
+                return nextIndex >= positions.Count;
+            }
+
+            internal string BuildReport()
+            {
+                stopwatch.Stop();
+                return $"tracked: {positions.Count:N0}; live entities: {liveEntities:N0}; frozen entities: {frozenEntities:N0}; "
+                    + $"static cells: {staticCells:N0}; arbitrary frozen: {arbitraryCells:N0}; units: {units:N0}; "
+                    + $"resident sidecar: {residentSidecarBytes:N0} bytes; live packed: {livePackedBytes:N0} bytes; "
+                    + $"missing/orphaned/corrupt sidecars: {missingSidecars:N0}/{orphanedSidecars:N0}/{corruptSidecars:N0}; "
+                    + $"batched scan: {stopwatch.Elapsed.TotalMilliseconds:N2} ms.";
+            }
+
+            private void Process(BlockPos pos)
+            {
+                Block block = api.World.BlockAccessor.GetBlock(pos);
+                bool hasSidecar = FrozenMasonryChunkStore.TryGet(api.World.BlockAccessor, pos, out byte[] packed);
+                if (block is BlockStaticMasonry)
+                {
+                    staticCells++;
+                    if (!hasSidecar) missingSidecars++;
+                    else
+                    {
+                        residentSidecarBytes += packed.Length;
+                        try { units += MasonryStateCodec.ReadSummary(packed).Units; }
+                        catch { corruptSidecars++; }
+                    }
+                }
+                else if (hasSidecar)
+                {
+                    orphanedSidecars++;
+                    residentSidecarBytes += packed.Length;
+                }
+
+                if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) return;
+                liveEntities++;
+                byte[] livePacked = entity.GetPackedStateForProfiling();
+                (bool frozen, FrozenMasonryShape shape, int unitCount) = MasonryStateCodec.ReadSummary(livePacked);
+                units += unitCount;
+                livePackedBytes += livePacked.Length;
+                if (!frozen) return;
+                frozenEntities++;
+                if (shape == FrozenMasonryShape.Arbitrary) arbitraryCells++;
+            }
+        }
+
         private static void ResetClientProfile(ICoreServerAPI api, IServerPlayer player)
         {
             if (api.Server.IsDedicated) api.Network.GetChannel("brickbybrick-realistic").SendPacket(new RealisticControlPacket { Code = ProfileResetPacket }, player);
@@ -742,6 +981,28 @@ namespace brickbybrick
                         BlockEntityRealisticMasonry.ClearTransformedMeshCache();
                         AppendProfileLog(api, "CLIENT MESH CACHE CLEAR", "Shared transformed-mesh cache cleared.");
                         return TextCommandResult.Success("Shared masonry mesh cache cleared. Existing chunks will rebuild it as needed.");
+                    })
+                .EndSubCommand()
+                .BeginSubCommand("rejecttest")
+                    .HandleWith(_ =>
+                    {
+                        BlockSelection? selection = api.World.Player.CurrentBlockSelection;
+                        if (selection == null) return TextCommandResult.Error("Look at a frozen, mortar-free masonry cell first.");
+                        if (api.World.BlockAccessor.GetBlockEntity(selection.Position) is not BlockEntityRealisticMasonry entity
+                            || !entity.State.Frozen)
+                        {
+                            return TextCommandResult.Error("The selected block is not a frozen masonry cell.");
+                        }
+                        if (entity.State.Units.Any(unit => unit.MortaredPositions.Count > 0)
+                            || entity.State.MortaredSideJoints.Count > 0)
+                        {
+                            return TextCommandResult.Error("Select a mortar-free cell so it reaches the optimized renderer before rejection.");
+                        }
+
+                        BlockEntityRealisticMasonry.RejectNextOptimizedMeshForProfiling();
+                        api.World.BlockAccessor.MarkBlockDirty(selection.Position);
+                        AppendProfileLog(api, "CLIENT FORCED REJECTION", $"Queued one optimized-mesh rejection at {selection.Position}.");
+                        return TextCommandResult.Success("Queued one forced rejection. The selected arrangement should use component fallback and remain rejected after later dirty rebuilds.");
                     })
                 .EndSubCommand();
         }

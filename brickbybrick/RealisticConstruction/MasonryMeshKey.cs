@@ -9,7 +9,7 @@ namespace brickbybrick.RealisticConstruction
     // masonry. Changing mesh semantics requires incrementing FormatVersion.
     internal static class MasonryMeshKey
     {
-        private const byte FormatVersion = 1;
+        private const byte FormatVersion = 3;
 
         internal static string Create(MasonryCellState state, bool optimized)
         {
@@ -18,6 +18,7 @@ namespace brickbybrick.RealisticConstruction
             writer.Write(FormatVersion);
             writer.Write(optimized);
             writer.Write((byte)state.FrozenShape);
+            writer.Write(state.MortarMaterialCode);
 
             foreach (MasonryUnitPlacement unit in state.Units
                 .OrderBy(unit => unit.Origin.Y)

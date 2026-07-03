@@ -5,6 +5,7 @@ using System.Threading;
 using AttributeRenderingLibrary;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 
 namespace brickbybrick.RealisticConstruction
@@ -76,21 +77,86 @@ namespace brickbybrick.RealisticConstruction
 
         internal static bool TryRestoreEntity(IWorldAccessor world, BlockPos pos, out BlockEntityRealisticMasonry? entity)
         {
+            return TryRestoreEntity(world, pos, out entity, out _);
+        }
+
+        internal static bool TryRestoreEntity(
+            IWorldAccessor world,
+            BlockPos pos,
+            out BlockEntityRealisticMasonry? entity,
+            out string failureReason)
+        {
             entity = null;
-            if (world.Side != EnumAppSide.Server
-                || !FrozenMasonryChunkStore.TryGet(world.BlockAccessor, pos, out byte[] packedState)) return false;
+            failureReason = string.Empty;
+            byte[] packedState = Array.Empty<byte>();
+            if (world.Side != EnumAppSide.Server) return FailRestore(world, pos, packedState, out failureReason, "restoration was requested outside the server");
+            if (!FrozenMasonryChunkStore.TryGet(world.BlockAccessor, pos, out packedState))
+            {
+                return FailRestore(world, pos, packedState, out failureReason, "the chunk sidecar record is missing");
+            }
+
+            try
+            {
+                MasonryStateCodec.ReadSummary(packedState);
+            }
+            catch (Exception exception)
+            {
+                return FailRestore(world, pos, packedState, out failureReason, $"the packed state is invalid: {exception.Message}", exception);
+            }
 
             Block? liveBlock = world.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
-            if (liveBlock == null) return false;
+            if (liveBlock == null || liveBlock.Id == 0) return FailRestore(world, pos, packedState, out failureReason, "the live masonry block is unavailable");
 
-            world.BlockAccessor.SetBlock(liveBlock.Id, pos);
-            entity = world.BlockAccessor.GetBlockEntity(pos) as BlockEntityRealisticMasonry;
-            if (entity == null) return false;
+            Block originalBlock = world.BlockAccessor.GetBlock(pos);
+            try
+            {
+                world.BlockAccessor.SetBlock(liveBlock.Id, pos);
+                Block replacedBlock = world.BlockAccessor.GetBlock(pos);
+                if (replacedBlock.Id != liveBlock.Id)
+                {
+                    return FailRestore(world, pos, packedState, out failureReason, $"block replacement produced {replacedBlock.Code} instead of {liveBlock.Code}");
+                }
 
-            entity.RestorePackedState(packedState);
-            FrozenMasonryChunkStore.Remove(world.BlockAccessor, pos, out _);
-            brickbybrickModSystem.BroadcastStaticMasonryState(pos, Array.Empty<byte>(), true);
-            return true;
+                entity = world.BlockAccessor.GetBlockEntity(pos) as BlockEntityRealisticMasonry;
+                if (entity == null)
+                {
+                    world.BlockAccessor.SetBlock(originalBlock.Id, pos);
+                    return FailRestore(world, pos, packedState, out failureReason, "the live block was placed but its block entity was not created");
+                }
+
+                entity.RestorePackedState(packedState);
+                FrozenMasonryChunkStore.Remove(world.BlockAccessor, pos, out _);
+                brickbybrickModSystem.BroadcastStaticMasonryState(pos, Array.Empty<byte>(), true);
+                world.Api.Logger.Event($"Reopened static masonry at {pos} from {packedState.Length:N0} packed bytes (version {packedState[0]}).");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                if (world.BlockAccessor.GetBlock(pos).Id == liveBlock.Id)
+                {
+                    world.BlockAccessor.SetBlock(originalBlock.Id, pos);
+                }
+                entity = null;
+                return FailRestore(world, pos, packedState, out failureReason, $"an exception interrupted restoration: {exception.Message}", exception);
+            }
+        }
+
+        private static bool FailRestore(
+            IWorldAccessor world,
+            BlockPos pos,
+            byte[] packedState,
+            out string failureReason,
+            string reason,
+            Exception? exception = null)
+        {
+            failureReason = reason;
+            Block currentBlock = world.BlockAccessor.GetBlock(pos);
+            int chunkSize = GlobalConstants.ChunkSize;
+            string details = $"Could not reopen static masonry at {pos} in chunk {pos.X / chunkSize}, {pos.InternalY / chunkSize}, {pos.Z / chunkSize}: {reason}. "
+                + $"Current block: {currentBlock?.Code}; packed bytes: {packedState.Length}; version: {(packedState.Length > 0 ? packedState[0] : -1)}.";
+            if (exception == null) world.Api.Logger.Warning(details);
+            else world.Api.Logger.Error($"{details} {exception}");
+            return false;
         }
 
         public override void OnJsonTesselation(

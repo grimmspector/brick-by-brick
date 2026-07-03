@@ -606,12 +606,17 @@ namespace brickbybrick.items
             if (secondsUsed < duration) return true;
             if (byEntity.World.Side != EnumAppSide.Server || HasInteracted(slot.Itemstack)) return false;
             BlockEntityRealisticMasonry entity = byEntity.World.BlockAccessor.GetBlockEntity(blockSel.Position) as BlockEntityRealisticMasonry;
-            if (entity == null
-                && byEntity.World.BlockAccessor.GetBlock(blockSel.Position) is BlockStaticMasonry
-                && BlockStaticMasonry.TryRestoreEntity(byEntity.World, blockSel.Position, out entity))
+            if (entity == null && byEntity.World.BlockAccessor.GetBlock(blockSel.Position) is BlockStaticMasonry)
             {
+                if (!BlockStaticMasonry.TryRestoreEntity(byEntity.World, blockSel.Position, out entity, out string failureReason))
+                {
+                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-reopen-failed", failureReason));
+                    return false;
+                }
+
                 ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
                 SetInteracted(slot.Itemstack, true);
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-reopened"));
                 return false;
             }
 
@@ -619,9 +624,10 @@ namespace brickbybrick.items
 
             if (entity.State.Frozen)
             {
-                entity.Reopen();
+                if (!entity.Reopen()) return false;
                 ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
                 SetInteracted(slot.Itemstack, true);
+                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-reopened"));
                 return false;
             }
 
@@ -1846,8 +1852,9 @@ namespace brickbybrick.items
 
                 rpi.GlToggleBlend(true);
                 rpi.GLDepthMask(false);
-                rpi.GlEnableCullFace();
+                rpi.GlDisableCullFace();
                 rpi.RenderMesh(meshRef);
+                rpi.GlEnableCullFace();
                 rpi.GLDepthMask(true);
                 rpi.GlToggleBlend(false);
                 shader.Stop();

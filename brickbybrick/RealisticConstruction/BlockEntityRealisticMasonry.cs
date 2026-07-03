@@ -31,14 +31,33 @@ namespace brickbybrick.RealisticConstruction
         private static int baselineGenerationZeroCollections;
         private static int baselineGenerationOneCollections;
         private static int baselineGenerationTwoCollections;
+        private static int rejectNextOptimizedMesh;
         private static long baselineManagedBytes;
         private static string slowestTessellationCell = "none";
         private static readonly object TessellationProfileSync = new();
         private readonly object frozenMeshSync = new();
         private MeshData? frozenCombinedMesh;
         private bool frozenMeshWasEvicted;
+        private MasonryCellState? state = new();
+        private byte[]? packedFrozenState;
 
-        public MasonryCellState State { get; private set; } = new();
+        // Frozen cells retain their compact payload until geometry or gameplay
+        // actually needs the expanded lists, sets, and unit objects.
+        public MasonryCellState State
+        {
+            get
+            {
+                if (state != null) return state;
+                state = MasonryStateCodec.Decode(packedFrozenState ?? Array.Empty<byte>());
+                packedFrozenState = null;
+                return state;
+            }
+            private set
+            {
+                state = value;
+                packedFrozenState = null;
+            }
+        }
 
         internal void RestorePackedState(byte[] packedState)
         {
@@ -55,6 +74,7 @@ namespace brickbybrick.RealisticConstruction
             base.Initialize(api);
             if (api.Side == EnumAppSide.Server)
             {
+                if (packedFrozenState != null) return;
                 if (State.LastModifiedTotalHours <= 0) State.LastModifiedTotalHours = api.World.Calendar.TotalHours;
                 ScheduleFreeze();
             }
@@ -70,8 +90,9 @@ namespace brickbybrick.RealisticConstruction
         public override void ToTreeAttributes(ITreeAttribute tree)
         {
             base.ToTreeAttributes(tree);
-            tree.SetBytes("masonryStatePacked", MasonryStateCodec.Encode(State));
-            tree.SetBool("wet", !State.Frozen);
+            byte[] packed = packedFrozenState ?? MasonryStateCodec.Encode(State);
+            tree.SetBytes("masonryStatePacked", packed);
+            tree.SetBool("wet", !MasonryStateCodec.IsFrozen(packed));
         }
 
         public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldForResolving)
@@ -82,7 +103,15 @@ namespace brickbybrick.RealisticConstruction
             byte[] packed = tree.GetBytes("masonryStatePacked");
             if (packed?.Length > 0)
             {
-                State = MasonryStateCodec.Decode(packed);
+                if (MasonryStateCodec.IsFrozen(packed))
+                {
+                    packedFrozenState = packed;
+                    state = null;
+                }
+                else
+                {
+                    State = MasonryStateCodec.Decode(packed);
+                }
             }
             else
             {
@@ -161,13 +190,10 @@ namespace brickbybrick.RealisticConstruction
             // Selection faces point toward the ray on exposed brick sides, but
             // narrow joints may resolve to either brick. Try the hit-facing
             // side first, then its opposite so both sides of a seam work.
-            MasonryGridPosition neighborPosition = new(cell.X + face.Normali.X, cell.Y, cell.Z + face.Normali.Z);
-            MasonryUnitPlacement? neighbor = FindUnit(neighborPosition);
-            if (neighbor == null || neighbor == unit || neighbor.Kind == MasonryUnitKind.RammedEarth)
-            {
-                neighborPosition = new(cell.X - face.Normali.X, cell.Y, cell.Z - face.Normali.Z);
-                neighbor = FindUnit(neighborPosition);
-            }
+            int searchX = face.Normali.X == 0 ? 1 : 0;
+            int searchZ = face.Normali.Z == 0 ? 1 : 0;
+            MasonryUnitPlacement? neighbor = FindAdjacentUnit(cell, searchX, searchZ, unit, out MasonryGridPosition neighborPosition)
+                ?? FindAdjacentUnit(cell, -searchX, -searchZ, unit, out neighborPosition);
 
             if (neighbor == null || neighbor == unit || neighbor.Kind == MasonryUnitKind.RammedEarth) return false;
 
@@ -178,6 +204,25 @@ namespace brickbybrick.RealisticConstruction
             MarkDirty(true);
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
             return true;
+        }
+
+        private MasonryUnitPlacement? FindAdjacentUnit(
+            MasonryGridPosition cell,
+            int stepX,
+            int stepZ,
+            MasonryUnitPlacement source,
+            out MasonryGridPosition position)
+        {
+            position = cell;
+            for (int distance = 1; distance < 4; distance++)
+            {
+                position = new MasonryGridPosition(cell.X + stepX * distance, cell.Y, cell.Z + stepZ * distance);
+                MasonryUnitPlacement? candidate = FindUnit(position);
+                if (candidate == null) return null;
+                if (candidate != source) return candidate;
+            }
+
+            return null;
         }
 
         public ItemStack? TryRemoveUnmortaredUnit(MasonryGridPosition cell)
@@ -231,11 +276,18 @@ namespace brickbybrick.RealisticConstruction
 
         public override bool OnTesselation(ITerrainMeshPool mesher, ITesselatorAPI tessThreadTesselator)
         {
+            try
+            {
             long started = Stopwatch.GetTimestamp();
             int unitCount = State.Units.Count;
             int meshPartCount = unitCount
                 + State.Units.Sum(unit => unit.MortaredPositions.Count)
                 + State.MortaredSideJoints.Count;
+            if (unitCount == 0)
+            {
+                RecordTessellation(started, 0, 0);
+                return true;
+            }
             BlockBehaviorShapeTexturesFromAttributes? behavior = Block.GetBehavior<BlockBehaviorShapeTexturesFromAttributes>();
             if (behavior == null)
             {
@@ -243,7 +295,8 @@ namespace brickbybrick.RealisticConstruction
                 return false;
             }
 
-            if (State.Frozen && brickbybrickModSystem.Config.Realism.EnableOptimizedFrozenMeshes)
+            if (State.Frozen
+                && brickbybrickModSystem.Config.Realism.EnableOptimizedFrozenMeshes)
             {
                 string optimizedMeshKey = MasonryMeshKey.Create(State, true);
                 MeshData? optimizedMesh;
@@ -294,8 +347,11 @@ namespace brickbybrick.RealisticConstruction
                 }
                 else if (!RejectedOptimizedMeshKeys.ContainsKey(optimizedMeshKey))
                 {
-                    BlockStaticMasonry.RecordRejectedBuild();
-                    Api.Logger.Warning($"Rejected optimized masonry mesh at {Pos}: {rejectionReason}. Using component fallback.");
+                    if (RejectedOptimizedMeshKeys.TryAdd(optimizedMeshKey, 0))
+                    {
+                        BlockStaticMasonry.RecordRejectedBuild();
+                        Api.Logger.Warning($"Rejected optimized masonry mesh at {Pos}: {rejectionReason}. Using component fallback.");
+                    }
                 }
             }
 
@@ -407,6 +463,11 @@ namespace brickbybrick.RealisticConstruction
             RecordTessellation(started, unitCount, meshPartCount);
 
             return true;
+            }
+            finally
+            {
+                ReleaseDecodedFrozenState();
+            }
         }
 
         public static void ResetTessellationProfile()
@@ -464,10 +525,29 @@ namespace brickbybrick.RealisticConstruction
         internal static void ResetOptimizedMeshRuntimeGuard()
         {
             RejectedOptimizedMeshKeys.Clear();
+            Interlocked.Exchange(ref rejectNextOptimizedMesh, 0);
+        }
+
+        internal static void RejectNextOptimizedMeshForProfiling()
+        {
+            Interlocked.Exchange(ref rejectNextOptimizedMesh, 1);
         }
 
         private bool TryAddOptimizedMesh(ITerrainMeshPool mesher, MeshData mesh, string meshKey)
         {
+            if (Interlocked.Exchange(ref rejectNextOptimizedMesh, 0) != 0)
+            {
+                if (RejectedOptimizedMeshKeys.TryAdd(meshKey, 0))
+                {
+                    BlockStaticMasonry.RecordRejectedBuild();
+                    Api.Logger.Warning($"Profiling deliberately rejected optimized masonry arrangement {meshKey} at {Pos}. This arrangement will use component fallback.");
+                }
+
+                MasonryFrozenMeshCache.Remove(this);
+                ReleaseFrozenMesh(mesh, false);
+                return false;
+            }
+
             try
             {
                 mesher.AddMeshData(mesh);
@@ -645,15 +725,16 @@ namespace brickbybrick.RealisticConstruction
             }
         }
 
-        public void Reopen()
+        public bool Reopen()
         {
-            if (!State.Frozen) return;
+            if (!State.Frozen) return false;
 
             State.Frozen = false;
             State.FrozenShape = FrozenMasonryShape.Arbitrary;
             Touch();
             MarkDirty(true);
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
+            return true;
         }
 
         public void PopulateForProfiling(Random random, bool frozen)
@@ -783,6 +864,88 @@ namespace brickbybrick.RealisticConstruction
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
         }
 
+        internal void PopulateRealisticBaseCellForProfiling(Random random, int caseIndex)
+        {
+            State = new MasonryCellState();
+            bool rammedEarth = caseIndex % 20 == 0;
+            int shape = random.Next(100);
+            bool sideMortarOnly = !rammedEarth && shape is >= 87 and < 95;
+            bool partialBuild = !rammedEarth && shape >= 95;
+            int maximumY = shape < 8 ? 1 : 3;
+            string[] colors = { "brown", "cream", "gray", "orange", "red", "tan" };
+            string color = colors[(caseIndex / 24) % colors.Length];
+
+            if (rammedEarth)
+            {
+                for (int y = 0; y <= maximumY; y++)
+                for (int x = 0; x < 4; x += 2)
+                for (int z = 0; z < 4; z += 2)
+                {
+                    State.Units.Add(new MasonryUnitPlacement
+                    {
+                        Id = $"r{caseIndex}-{x}-{y}-{z}",
+                        Kind = MasonryUnitKind.RammedEarth,
+                        MaterialCode = "rammedearth-clay",
+                        Orientation = MasonryOrientation.South,
+                        Origin = new MasonryGridPosition(x, y, z)
+                    });
+                }
+            }
+            else
+            {
+                for (int y = 0; y <= maximumY; y++)
+                for (int z = 0; z < 4; z++)
+                for (int x = 0; x < 4; x += 2)
+                {
+                    if (shape is >= 8 and < 14 && y >= 2 && z >= 2) continue;
+                    if (partialBuild && random.NextDouble() < 0.55) continue;
+                    MasonryUnitPlacement unit = new()
+                    {
+                        Id = $"b{caseIndex}-{x}-{y}-{z}",
+                        Kind = MasonryUnitKind.WholeBrick,
+                        MaterialCode = $"burnedbrick-{color}",
+                        Orientation = MasonryOrientation.East,
+                        Origin = new MasonryGridPosition(x, y, z)
+                    };
+                    if (!sideMortarOnly)
+                    {
+                        foreach (MasonryGridPosition position in unit.GetFootprint())
+                        {
+                            if (random.NextDouble() < 0.68) unit.MortaredPositions.Add(position);
+                        }
+                    }
+                    State.Units.Add(unit);
+                }
+
+                if (sideMortarOnly)
+                {
+                    foreach (MasonryUnitPlacement unit in State.Units)
+                    foreach (MasonryGridPosition position in unit.GetFootprint())
+                    {
+                        MasonryGridPosition east = new(position.X + 1, position.Y, position.Z);
+                        MasonryGridPosition south = new(position.X, position.Y, position.Z + 1);
+                        if (State.Units.Any(candidate => candidate != unit && candidate.Occupies(east))
+                            && random.NextDouble() < 0.4)
+                        {
+                            State.MortaredSideJoints.Add(GetJointKey(position, east));
+                        }
+                        if (State.Units.Any(candidate => candidate != unit && candidate.Occupies(south))
+                            && random.NextDouble() < 0.4)
+                        {
+                            State.MortaredSideJoints.Add(GetJointKey(position, south));
+                        }
+                    }
+                }
+            }
+
+            State.LastModifiedTotalHours = Api.World.Calendar.TotalHours;
+            State.FrozenShape = InferFrozenShape();
+            State.Frozen = !partialBuild;
+            freezeRevision++;
+            MarkDirty(true);
+            Api.World.BlockAccessor.MarkBlockDirty(Pos);
+        }
+
         internal void ForceFreezeForProfiling()
         {
             if (Api?.Side == EnumAppSide.Server && !State.Frozen) Freeze();
@@ -812,8 +975,22 @@ namespace brickbybrick.RealisticConstruction
         {
             State.FrozenShape = InferFrozenShape();
             State.Frozen = true;
+            packedFrozenState = MasonryStateCodec.Encode(State);
             MarkDirty(true);
+            state = null;
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
+        }
+
+        internal byte[] GetPackedStateForProfiling()
+        {
+            return packedFrozenState ?? MasonryStateCodec.Encode(State);
+        }
+
+        private void ReleaseDecodedFrozenState()
+        {
+            if (state?.Frozen != true) return;
+            packedFrozenState = MasonryStateCodec.Encode(state);
+            state = null;
         }
 
         private void Touch()

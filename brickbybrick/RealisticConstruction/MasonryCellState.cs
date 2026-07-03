@@ -41,6 +41,8 @@ namespace brickbybrick.RealisticConstruction
 
         public HashSet<string> MortaredSideJoints { get; set; } = new();
 
+        public string MortarMaterialCode { get; set; } = "default";
+
         public bool Frozen { get; set; }
 
         public FrozenMasonryShape FrozenShape { get; set; }

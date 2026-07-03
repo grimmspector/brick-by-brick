@@ -189,7 +189,7 @@ namespace brickbybrick
         // Invalid meshes automatically fall back to component rendering.
         public bool EnableOptimizedFrozenMeshes { get; set; } = false;
 
-        public int FrozenMeshCacheMiB { get; set; } = 128;
+        public int FrozenMeshCacheMiB { get; set; } = 64;
 
         public int TransformedMeshCacheMiB { get; set; } = 16;
 
