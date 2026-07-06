@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
@@ -17,6 +18,13 @@ namespace brickbybrick.RealisticConstruction
         public override Cuboidf[] GetCollisionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
             return GetBoxes(blockAccessor, pos);
+        }
+
+        public override int GetRetention(BlockPos pos, BlockFacing facing, EnumRetentionType type)
+        {
+            if (brickbybrickModSystem.Config.Realism.AllowUnmortaredRoomSealing) return base.GetRetention(pos, facing, type);
+            if (api?.World?.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) return 0;
+            return entity.HasCompleteSideMortarCoverage() ? base.GetRetention(pos, facing, type) : 0;
         }
 
         public override string GetPlacedBlockInfo(IWorldAccessor world, BlockPos pos, IPlayer forPlayer)
@@ -82,6 +90,8 @@ namespace brickbybrick.RealisticConstruction
                 Cuboidf[]? frozenBoxes = GetFrozenBoxes(entity.State.FrozenShape);
                 if (frozenBoxes != null) return frozenBoxes;
             }
+
+            if (entity.State.Units.Any(unit => unit.IsDiagonal)) return entity.GetGeometryBoxes();
 
             System.Collections.Generic.List<Cuboidf> boxes = new();
             foreach (MasonryUnitPlacement unit in entity.State.Units)

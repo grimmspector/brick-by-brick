@@ -185,6 +185,14 @@ namespace brickbybrick
 
     public sealed class RealismSettings
     {
+        // Enables the experimental 45-degree placement steps used by realistic
+        // masonry. Disabling this preserves the original four-direction cycle.
+        public bool EnableDiagonalPlacement { get; set; } = true;
+
+        // Allows mortar-free realistic masonry to seal rooms. Disabled by
+        // default so dry-laid bricks remain permeable to heat and sound.
+        public bool AllowUnmortaredRoomSealing { get; set; } = false;
+
         // Experimental until visually validated across every masonry shape.
         // Invalid meshes automatically fall back to component rendering.
         public bool EnableOptimizedFrozenMeshes { get; set; } = false;

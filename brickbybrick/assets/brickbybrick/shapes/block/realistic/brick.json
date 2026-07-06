@@ -5,12 +5,12 @@
   "elements": [{
     "name": "Brick", "from": [0, 0, 0], "to": [16, 16, 16],
     "faces": {
-      "north": { "texture": "#colour", "uv": [0, 4, 7, 8] },
-      "east": { "texture": "#colour", "uv": [8, 8, 12, 12] },
-      "south": { "texture": "#colour", "uv": [8.5, 0, 15.5, 4] },
-      "west": { "texture": "#colour", "uv": [8, 12, 12, 16] },
-      "up": { "texture": "#colour", "uv": [0, 12, 7, 16] },
-      "down": { "texture": "#colour", "uv": [0, 12, 7, 16] }
+      "north": { "texture": "#colour", "uv": [0.5, 4.5, 6.5, 7.5] },
+      "east": { "texture": "#colour", "uv": [8.5, 8.5, 11.5, 11.5] },
+      "south": { "texture": "#colour", "uv": [9, 0.5, 15, 3.5] },
+      "west": { "texture": "#colour", "uv": [8.5, 12.5, 11.5, 15.5] },
+      "up": { "texture": "#colour", "uv": [0.5, 12.5, 6.5, 15.5] },
+      "down": { "texture": "#colour", "uv": [0.5, 12.5, 6.5, 15.5] }
     }
   }]
 }

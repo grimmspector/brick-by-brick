@@ -32,6 +32,7 @@ The planned construction modes are:
 
 | Setting | Range | Default | Status | Description |
 | --- | ---: | ---: | --- | --- |
+| `EnableDiagonalPlacement` | `true`, `false` | `true` | Experimental | Adds 45-degree ground-plane steps to the realistic masonry rotation control. |
 | `CapacityPerTier` | 1–1024 | 16 | Active | Mortar capacity added for each trowel tool tier. |
 | `ConstructionActionSeconds` | 0.1–30.0 | 2.0 | Active | Seconds required in Immersive mode and the current Realistic fallback. |
 | `MortarCostPerAction` | 0–64 | 1 | Active | Mortar portions consumed by each successful action. |
@@ -91,6 +92,7 @@ Recovery values are fractions: `0.25` is 25%, `0.5` is 50%, and `1.0` is 100%.
 | Setting | Range | Default | Status | Description |
 | --- | ---: | ---: | --- | --- |
 | `EnableOptimizedFrozenMeshes` | `true`, `false` | `false` | Experimental | Uses validated exposed-face and greedy-merged meshes for frozen masonry, with automatic component-renderer fallback. |
+| `AllowUnmortaredRoomSealing` | `true`, `false` | `false` | Active | Allows realistic masonry without complete mortar coverage in every eligible vertical side joint to seal rooms. Top mortar does not affect room sealing. |
 | `FrozenMeshCacheMiB` | 32–1024 | 64 | Active | Maximum estimated client memory retained for reusable frozen masonry meshes. |
 | `TransformedMeshCacheMiB` | 8–256 | 16 | Active | Maximum estimated client memory retained for shared transformed masonry components. |
 | `EnableGroundPlacedStacks` | `true`, `false` | `true` | Planned | Allows loose bricks and stones to form visible ground stacks. |
@@ -154,6 +156,7 @@ This example contains every available setting and its default value:
     "DismantlingMasonryRecovery": 1.0
   },
     "Realism": {
+      "AllowUnmortaredRoomSealing": false,
       "EnableOptimizedFrozenMeshes": false,
       "FrozenMeshCacheMiB": 64,
       "TransformedMeshCacheMiB": 16,

@@ -9,7 +9,7 @@ namespace brickbybrick.RealisticConstruction
     // masonry. Changing mesh semantics requires incrementing FormatVersion.
     internal static class MasonryMeshKey
     {
-        private const byte FormatVersion = 3;
+        private const byte FormatVersion = 6;
 
         internal static string Create(MasonryCellState state, bool optimized)
         {
@@ -47,7 +47,23 @@ namespace brickbybrick.RealisticConstruction
             }
 
             foreach (string joint in state.MortaredSideJoints.OrderBy(value => value, StringComparer.Ordinal)) writer.Write(joint);
+            WriteGapVoxels(writer, state.EarthGapVoxels);
+            WriteGapVoxels(writer, state.MortarGapVoxels);
             return Convert.ToBase64String(SHA256.HashData(stream.ToArray()));
+        }
+
+        private static void WriteGapVoxels(BinaryWriter writer, System.Collections.Generic.IEnumerable<MasonryGridPosition> voxels)
+        {
+            foreach (MasonryGridPosition voxel in voxels
+                .OrderBy(position => position.Y)
+                .ThenBy(position => position.X)
+                .ThenBy(position => position.Z))
+            {
+                writer.Write(voxel.X);
+                writer.Write(voxel.Y);
+                writer.Write(voxel.Z);
+            }
+            writer.Write(int.MinValue);
         }
     }
 }

@@ -497,9 +497,10 @@ namespace brickbybrick.items
                 Id = Guid.NewGuid().ToString("N"),
                 Kind = kind,
                 MaterialCode = path,
-                Orientation = (MasonryOrientation)GameMath.Mod(trowelSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0), 4),
+                Orientation = ResolveRealisticOrientation(trowelSlot.Itemstack),
                 Origin = new MasonryGridPosition(gridX, layer, gridZ)
             };
+            if (kind == MasonryUnitKind.HalfBrick && unit.IsDiagonal) unit.Kind = MasonryUnitKind.TriangleBrick;
 
             MasonryPlacementFailure placementFailure = entity.GetPlacementFailure(unit);
             if (placementFailure != MasonryPlacementFailure.None)
@@ -571,6 +572,12 @@ namespace brickbybrick.items
             materialSlot.TakeOut(1);
             materialSlot.MarkDirty();
             PlayRandomSound(byEntity.World, targetPos, player, BrickSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
+        }
+
+        private static MasonryOrientation ResolveRealisticOrientation(ItemStack trowelStack)
+        {
+            int directionCount = brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement ? 8 : 4;
+            return (MasonryOrientation)GameMath.Mod(trowelStack.Attributes.GetInt("realisticOrientation", 0), directionCount);
         }
 
         private static bool TryPickupMatchingRealisticBrick(EntityAgent byEntity, IPlayer player, BlockSelection blockSel, string heldPath)
@@ -1822,11 +1829,16 @@ namespace brickbybrick.items
                 float alpha = brickbybrickModSystem.Config.Trowels.PlacementPreviewOpacity;
                 Vec4f tint = valid ? new Vec4f(1f, 1f, 1f, alpha) : new Vec4f(1f, 0.12f, 0.12f, alpha);
                 Vec3d cameraPos = capi.World.Player.Entity.CameraPos;
-                MasonryGridPosition[] footprint = unit.GetFootprint().ToArray();
-                int minimumX = footprint.Min(position => position.X);
-                int minimumZ = footprint.Min(position => position.Z);
-                float width = (footprint.Max(position => position.X) - minimumX + 1) * 0.25f;
-                float depth = (footprint.Max(position => position.Z) - minimumZ + 1) * 0.25f;
+                float length = unit.Kind == MasonryUnitKind.WholeBrick ? 0.5f : unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
+                float width = unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
+                float radians = MasonryVoxelGeometry.GetAngleDegrees(unit.Orientation) * GameMath.DEG2RAD;
+                float centerX = (unit.Origin.X + 0.5f) * 0.25f;
+                float centerZ = (unit.Origin.Z + 0.5f) * 0.25f;
+                if (unit.Kind == MasonryUnitKind.WholeBrick)
+                {
+                    centerX += MathF.Cos(radians) * 0.125f;
+                    centerZ += MathF.Sin(radians) * 0.125f;
+                }
 
                 IStandardShaderProgram shader = rpi.PreparedStandardShader(targetPos.X, targetPos.Y, targetPos.Z, tint);
                 shader.Tex2D = capi.BlockTextureAtlas.AtlasTextures[0].TextureId;
@@ -1841,13 +1853,15 @@ namespace brickbybrick.items
                         (float)(targetPos.Y - cameraPos.Y),
                         (float)(targetPos.Z - cameraPos.Z))
                     .Translate(
-                        minimumX * 0.25f + RealisticJointInset,
+                        centerX,
                         unit.Origin.Y * 0.25f + RealisticJointInset,
-                        minimumZ * 0.25f + RealisticJointInset)
+                        centerZ)
+                    .RotateY(radians)
+                    .Translate(-length * 0.5f + RealisticJointInset, 0, -width * 0.5f + RealisticJointInset)
                     .Scale(
-                        width - RealisticJointInset * 2,
+                        length - RealisticJointInset * 2,
                         0.25f - RealisticJointInset * 2,
-                        depth - RealisticJointInset * 2)
+                        width - RealisticJointInset * 2)
                     .Values;
 
                 rpi.GlToggleBlend(true);
@@ -1901,9 +1915,10 @@ namespace brickbybrick.items
                     Id = "preview",
                     Kind = kind,
                     MaterialCode = path,
-                    Orientation = (MasonryOrientation)GameMath.Mod(activeSlot.Itemstack.Attributes.GetInt("realisticOrientation", 0), 4),
+                    Orientation = ResolveRealisticOrientation(activeSlot.Itemstack),
                     Origin = new MasonryGridPosition(gridX, layer, gridZ)
                 };
+                if (kind == MasonryUnitKind.HalfBrick && unit.IsDiagonal) unit.Kind = MasonryUnitKind.TriangleBrick;
 
                 Block targetBlock = capi.World.BlockAccessor.GetBlock(targetPos);
                 if (targetBlock?.Code?.Path == "realisticmasonry"
@@ -1920,7 +1935,7 @@ namespace brickbybrick.items
                         && CanReserveNeighborFootprints(targetPos, unit);
                 }
 
-                meshRef = GetOrCreateRealisticMeshRef(kind, path);
+                meshRef = GetOrCreateRealisticMeshRef(unit.Kind, path);
                 return meshRef != null;
             }
 
@@ -1973,6 +1988,7 @@ namespace brickbybrick.items
                 Variants variants = new();
                 variants.Set("color", color);
                 MeshData meshData = behavior.GetOrCreateMesh(variants, shape, new BlockPos(0), key).Clone();
+                if (kind == MasonryUnitKind.TriangleBrick) MasonryVoxelGeometry.DeformTriangle(meshData);
                 meshRef = capi.Render.UploadMesh(meshData);
                 meshRefs[key] = meshRef;
                 return meshRef;

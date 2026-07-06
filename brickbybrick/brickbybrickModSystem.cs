@@ -94,6 +94,7 @@ namespace brickbybrick
                 .SetMessageHandler<int>((player, packet) => OnRealisticServerPacket(api, player, packet));
             api.Event.RegisterGameTickListener(_ => MasonryFreezeScheduler.DrainReady(), 100);
             RegisterProfilingCommands(api);
+            RegisterMasonryDiagnosticCommand(api);
             ValidateConstructionRegistry(api);
         }
 
@@ -136,6 +137,14 @@ namespace brickbybrick
                     .WithArgs(api.ChatCommands.Parsers.Int("count"))
                     .HandleWith(args => SpawnRealisticBaseCorpus(api, args))
                 .EndSubCommand()
+                .BeginSubCommand("diagonal")
+                    .WithArgs(api.ChatCommands.Parsers.Int("count"))
+                    .HandleWith(args => SpawnAngledCorpus(api, args, false))
+                .EndSubCommand()
+                .BeginSubCommand("mixedangles")
+                    .WithArgs(api.ChatCommands.Parsers.Int("count"))
+                    .HandleWith(args => SpawnAngledCorpus(api, args, true))
+                .EndSubCommand()
                 .BeginSubCommand("clear")
                     .HandleWith(args => ClearProfileCells(api, args))
                 .EndSubCommand()
@@ -155,6 +164,68 @@ namespace brickbybrick
                 .BeginSubCommand("stop")
                     .HandleWith(args => StopProfileExercise(api, args))
                 .EndSubCommand();
+        }
+
+        // Reports saved geometry without changing the selected masonry cell.
+        private static void RegisterMasonryDiagnosticCommand(ICoreServerAPI api)
+        {
+            api.ChatCommands.Create("bbbmeshdump")
+                .WithDescription("Reports units and overlaps in the targeted masonry cell.")
+                .RequiresPrivilege(Privilege.controlserver)
+                .HandleWith(args => DumpTargetedMasonry(api, args));
+        }
+
+        private static TextCommandResult DumpTargetedMasonry(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+            BlockSelection? selection = player.CurrentBlockSelection;
+            if (selection == null) return TextCommandResult.Error("Look directly at the affected masonry block first.");
+            if (api.World.BlockAccessor.GetBlockEntity(selection.Position) is not BlockEntityRealisticMasonry entity)
+            {
+                return TextCommandResult.Error("The targeted block is not live realistic masonry.");
+            }
+
+            MasonryCellState state = entity.State;
+            Dictionary<MasonryGridPosition, List<MasonryUnitPlacement>> occupants = new();
+            foreach (MasonryUnitPlacement unit in state.Units)
+            {
+                foreach (MasonryGridPosition position in unit.GetFootprint())
+                {
+                    if (!occupants.TryGetValue(position, out List<MasonryUnitPlacement>? units))
+                    {
+                        units = new List<MasonryUnitPlacement>();
+                        occupants[position] = units;
+                    }
+                    units.Add(unit);
+                }
+            }
+
+            List<KeyValuePair<MasonryGridPosition, List<MasonryUnitPlacement>>> overlaps = occupants
+                .Where(entry => entry.Value.Count > 1)
+                .OrderBy(entry => entry.Key.Y)
+                .ThenBy(entry => entry.Key.Z)
+                .ThenBy(entry => entry.Key.X)
+                .ToList();
+            string header = $"Masonry diagnostic at {selection.Position}: frozen={state.Frozen}, shape={state.FrozenShape}, "
+                + $"units={state.Units.Count}, occupied={occupants.Count}, overlaps={overlaps.Count}, "
+                + $"topMortar={state.Units.Sum(unit => unit.MortaredPositions.Count)}, sideMortar={state.MortaredSideJoints.Count}.";
+            api.Logger.Notification(header);
+            foreach (MasonryUnitPlacement unit in state.Units)
+            {
+                string footprint = string.Join(";", unit.GetFootprint().Select(position => $"{position.X},{position.Y},{position.Z}"));
+                string topMortar = string.Join(";", unit.MortaredPositions.Select(position => $"{position.X},{position.Y},{position.Z}"));
+                api.Logger.Notification($"Masonry unit: id={unit.Id}, kind={unit.Kind}, material={unit.MaterialCode}, "
+                    + $"orientation={unit.Orientation}, origin={unit.Origin.X},{unit.Origin.Y},{unit.Origin.Z}, "
+                    + $"footprint=[{footprint}], topMortar=[{topMortar}].");
+            }
+            foreach (KeyValuePair<MasonryGridPosition, List<MasonryUnitPlacement>> overlap in overlaps)
+            {
+                api.Logger.Warning($"Masonry overlap at {overlap.Key.X},{overlap.Key.Y},{overlap.Key.Z}: "
+                    + string.Join(", ", overlap.Value.Select(unit => $"{unit.Id}/{unit.MaterialCode}")));
+            }
+
+            return TextCommandResult.Success($"{header} Full details were written to server-main.log.");
         }
 
         private static TextCommandResult StartProfileExercise(ICoreServerAPI api, TextCommandCallingArgs args)
@@ -538,6 +609,54 @@ namespace brickbybrick
 
             api.Event.RegisterCallback(GenerateBatch, 1);
             return TextCommandResult.Success($"Started a batched realistic-base corpus of {requested:N0} cells.");
+        }
+
+        private static TextCommandResult SpawnAngledCorpus(ICoreServerAPI api, TextCommandCallingArgs args, bool mixed)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+
+            int requested = GameMath.Clamp((int)args[0], 1, 10000);
+            ClearTrackedProfileCells(api, player.PlayerUID);
+            ResetClientProfile(api, player);
+            Block? constructionBlock = api.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+            if (constructionBlock == null) return TextCommandResult.Error("Realistic masonry block is unavailable.");
+
+            BlockPos center = player.Entity.Pos.AsBlockPos;
+            List<BlockPos> created = new(requested);
+            IEnumerator<BlockPos> candidates = EnumerateProfilePositions(center, (int)Math.Ceiling(Math.Sqrt(requested / 4d)) + 2).GetEnumerator();
+            ProfileCellsByPlayer[player.PlayerUID] = created;
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            void GenerateBatch(float _)
+            {
+                int attempted = 0;
+                while (created.Count < requested && attempted++ < ProfileBatchSize && candidates.MoveNext())
+                {
+                    BlockPos pos = candidates.Current;
+                    if (!api.World.BlockAccessor.GetBlock(pos).IsReplacableBy(constructionBlock)) continue;
+                    api.World.BlockAccessor.SetBlock(constructionBlock.Id, pos);
+                    if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
+                    entity.PopulateAngledCorpusForProfiling(created.Count, mixed);
+                    created.Add(pos.Copy());
+                }
+
+                if (created.Count < requested && attempted >= ProfileBatchSize)
+                {
+                    api.Event.RegisterCallback(GenerateBatch, 1);
+                    return;
+                }
+
+                candidates.Dispose();
+                stopwatch.Stop();
+                string corpus = mixed ? "mixed straight/diagonal" : "diagonal-only";
+                AppendProfileLog(api, "ANGLED CORPUS SPAWN", $"Corpus: {corpus}; cells: {created.Count:N0}; generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.");
+                api.Event.RegisterCallback(_ => RequestClientProfile(api, player), 10000);
+                player.SendMessage(GlobalConstants.GeneralChatGroup, $"Created {created.Count:N0} {corpus} cells in {stopwatch.ElapsedMilliseconds:N0} ms.", EnumChatType.Notification);
+            }
+
+            api.Event.RegisterCallback(GenerateBatch, 1);
+            return TextCommandResult.Success($"Started a batched {(mixed ? "mixed-angle" : "diagonal-only")} corpus of {requested:N0} cells.");
         }
 
         // Builds separated room shells instead of solid profiling rings. The
@@ -1061,7 +1180,12 @@ namespace brickbybrick
             if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
 
             int orientation = slot.Itemstack.Attributes.GetInt("realisticOrientation", 0);
-            int nextOrientation = GameMath.Mod(orientation + (args.delta > 0 ? 1 : -1), 4);
+            int[] cycle = Config.Realism.EnableDiagonalPlacement
+                ? new[] { 0, 4, 1, 5, 2, 6, 3, 7 }
+                : new[] { 0, 1, 2, 3 };
+            int cycleIndex = Array.IndexOf(cycle, orientation);
+            if (cycleIndex < 0) cycleIndex = 0;
+            int nextOrientation = cycle[GameMath.Mod(cycleIndex + (args.delta > 0 ? 1 : -1), cycle.Length)];
             slot.Itemstack.Attributes.SetInt("realisticOrientation", nextOrientation);
             slot.MarkDirty();
             realisticClientChannel?.SendPacket(nextOrientation);
@@ -1073,7 +1197,8 @@ namespace brickbybrick
             ItemSlot? slot = fromPlayer?.InventoryManager?.ActiveHotbarSlot;
             if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
 
-            slot.Itemstack.Attributes.SetInt("realisticOrientation", GameMath.Mod(orientation, 4));
+            int directionCount = Config.Realism.EnableDiagonalPlacement ? 8 : 4;
+            slot.Itemstack.Attributes.SetInt("realisticOrientation", GameMath.Mod(orientation, directionCount));
             slot.MarkDirty();
         }
 

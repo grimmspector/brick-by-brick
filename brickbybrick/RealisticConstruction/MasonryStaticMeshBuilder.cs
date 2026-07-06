@@ -128,9 +128,9 @@ namespace brickbybrick.RealisticConstruction
             if (mesh == null) return "builder returned no mesh";
             if (mesh.VerticesCount <= 0 || mesh.IndicesCount <= 0) return "mesh contains no geometry";
             if (mesh.VerticesCount % 4 != 0 || mesh.IndicesCount % 6 != 0) return "mesh has incomplete quads";
-            // A face may contain brick, reveals, a two-sided cavity backing,
-            // and four two-sided seam caps; internal contacts add no geometry.
-            if (mesh.IndicesCount / 6 > exposedQuads * 16) return "mesh exceeds the exposed-face mortar budget";
+            // A face may contain brick, four reveals, one cavity backing, and
+            // four mortar strips; internal contacts add no geometry.
+            if (mesh.IndicesCount / 6 > exposedQuads * 10) return "mesh exceeds the exposed-face mortar budget";
             int quadCount = mesh.IndicesCount / 6;
             if (mesh.XyzFaces == null || mesh.XyzFacesCount != quadCount || mesh.XyzFaces.Length < quadCount)
             {
@@ -329,42 +329,11 @@ namespace brickbybrick.RealisticConstruction
                 height,
                 material,
                 material.MortarEdges);
-            if (face.Axis == 1)
-            {
-                AddReverseHorizontalSurface(brick, behavior, pos, face, slice, u, v, width, height, material);
-            }
             if (material.IsMortar || material.MortarEdges == 0) return brick;
             AddMortarReveals(brick, behavior, pos, face, slice, u, v, width, height, material);
             AddFullSeamBacking(brick, behavior, pos, face, slice, u, v, width, height, material);
             AddSeamBackings(brick, behavior, pos, face, slice, u, v, width, height, material);
             return brick;
-        }
-
-        private static void AddReverseHorizontalSurface(
-            MeshData combined,
-            BlockBehaviorShapeTexturesFromAttributes behavior,
-            BlockPos pos,
-            FaceDefinition face,
-            int slice,
-            int u,
-            int v,
-            int width,
-            int height,
-            SurfaceMaterial material)
-        {
-            GetRectangleTransform(face, slice, u, v, width, height, out float x, out float y, out float z, out float scaleX, out float scaleY, out float scaleZ);
-            ApplyMortarInsets(face.Axis, material.MortarEdges, ref x, ref y, ref z, ref scaleX, ref scaleY, ref scaleZ);
-            float[] minimum = { x, y, z };
-            float[] maximum = { x + scaleX, y + scaleY, z + scaleZ };
-            float plane = (slice + (face.Sign > 0 ? 1 : 0)) * 0.25f;
-            minimum[face.Axis] = maximum[face.Axis] = plane;
-            combined.AddMeshData(CreateBoundedFace(
-                behavior,
-                pos,
-                GetFace(face.Axis, -face.Sign),
-                material,
-                minimum,
-                maximum));
         }
 
         private static MeshData CreateSurfaceRectangle(
@@ -484,8 +453,6 @@ namespace brickbybrick.RealisticConstruction
                     ? material with { Color = material.MortarMaterial, IsMortar = true }
                     : material with { IsMortar = false };
                 combined.AddMeshData(CreateBoundedFace(behavior, pos, face, backing, minimum, maximum));
-                FaceDefinition reverseFace = GetFace(face.Axis, -face.Sign);
-                combined.AddMeshData(CreateBoundedFace(behavior, pos, reverseFace, backing, minimum, maximum));
             }
         }
 
@@ -509,7 +476,6 @@ namespace brickbybrick.RealisticConstruction
             minimum[face.Axis] = maximum[face.Axis] = plane;
             SurfaceMaterial brickBacking = material with { IsMortar = false };
             combined.AddMeshData(CreateBoundedFace(behavior, pos, face, brickBacking, minimum, maximum));
-            combined.AddMeshData(CreateBoundedFace(behavior, pos, GetFace(face.Axis, -face.Sign), brickBacking, minimum, maximum));
         }
 
         private static MeshData CreateBoundedFace(
@@ -604,12 +570,26 @@ namespace brickbybrick.RealisticConstruction
             int faceIndex = Array.IndexOf(source.XyzFaces, requestedFace, 0, source.XyzFacesCount);
             if (faceIndex < 0) throw new InvalidOperationException($"ARL source mesh does not contain face {requestedFace}.");
 
-            int verticesPerFace = source.VerticesPerFace > 0 ? source.VerticesPerFace : 4;
             int indicesPerFace = source.IndicesPerFace > 0 ? source.IndicesPerFace : 6;
-            int sourceVertex = faceIndex * verticesPerFace;
             int sourceIndex = faceIndex * indicesPerFace;
+            Span<int> sourceVertices = stackalloc int[4];
+            int vertexCount = 0;
+            for (int index = 0; index < indicesPerFace; index++)
+            {
+                int sourceVertex = source.Indices[sourceIndex + index];
+                bool known = false;
+                for (int vertex = 0; vertex < vertexCount; vertex++)
+                {
+                    if (sourceVertices[vertex] != sourceVertex) continue;
+                    known = true;
+                    break;
+                }
+                if (!known && vertexCount < sourceVertices.Length) sourceVertices[vertexCount++] = sourceVertex;
+            }
+            if (vertexCount != 4) throw new InvalidOperationException($"ARL source face {requestedFace} does not reference exactly four vertices.");
+
             MeshData mesh = new(
-                verticesPerFace,
+                vertexCount,
                 indicesPerFace,
                 source.Normals != null,
                 source.Uv != null,
@@ -617,7 +597,7 @@ namespace brickbybrick.RealisticConstruction
                 source.Flags != null)
             {
                 mode = source.mode,
-                VerticesPerFace = verticesPerFace,
+                VerticesPerFace = vertexCount,
                 IndicesPerFace = indicesPerFace,
                 HasAnyWindModeSet = source.HasAnyWindModeSet,
                 XyzFaces = new[] { requestedFace },
@@ -633,15 +613,28 @@ namespace brickbybrick.RealisticConstruction
                 RenderPassCount = source.RenderPassesAndExtraBits == null ? 0 : 1
             };
 
-            Array.Copy(source.xyz, sourceVertex * 3, mesh.xyz, 0, verticesPerFace * 3);
-            if (source.Uv != null) Array.Copy(source.Uv, sourceVertex * 2, mesh.Uv, 0, verticesPerFace * 2);
-            if (source.Rgba != null) Array.Copy(source.Rgba, sourceVertex * 4, mesh.Rgba, 0, verticesPerFace * 4);
-            if (source.Flags != null) Array.Copy(source.Flags, sourceVertex, mesh.Flags, 0, verticesPerFace);
-            if (source.Normals != null) Array.Copy(source.Normals, sourceVertex, mesh.Normals, 0, verticesPerFace);
-            for (int index = 0; index < indicesPerFace; index++) mesh.Indices[index] = source.Indices[sourceIndex + index] - sourceVertex;
-            mesh.VerticesCount = verticesPerFace;
+            for (int vertex = 0; vertex < vertexCount; vertex++)
+            {
+                int sourceVertex = sourceVertices[vertex];
+                Array.Copy(source.xyz, sourceVertex * 3, mesh.xyz, vertex * 3, 3);
+                if (source.Uv != null) Array.Copy(source.Uv, sourceVertex * 2, mesh.Uv, vertex * 2, 2);
+                if (source.Rgba != null) Array.Copy(source.Rgba, sourceVertex * 4, mesh.Rgba, vertex * 4, 4);
+                if (source.Flags != null) mesh.Flags[vertex] = source.Flags[sourceVertex];
+                if (source.Normals != null) mesh.Normals[vertex] = source.Normals[sourceVertex];
+            }
+            for (int index = 0; index < indicesPerFace; index++)
+            {
+                int sourceVertex = source.Indices[sourceIndex + index];
+                for (int vertex = 0; vertex < vertexCount; vertex++)
+                {
+                    if (sourceVertices[vertex] != sourceVertex) continue;
+                    mesh.Indices[index] = vertex;
+                    break;
+                }
+            }
+            mesh.VerticesCount = vertexCount;
             mesh.IndicesCount = indicesPerFace;
-            mesh.NormalsCount = source.Normals == null ? 0 : verticesPerFace;
+            mesh.NormalsCount = source.Normals == null ? 0 : vertexCount;
             return mesh;
         }
 

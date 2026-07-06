@@ -41,6 +41,10 @@ namespace brickbybrick.RealisticConstruction
 
         public HashSet<string> MortaredSideJoints { get; set; } = new();
 
+        public HashSet<MasonryGridPosition> EarthGapVoxels { get; set; } = new();
+
+        public HashSet<MasonryGridPosition> MortarGapVoxels { get; set; } = new();
+
         public string MortarMaterialCode { get; set; } = "default";
 
         public bool Frozen { get; set; }
@@ -107,7 +111,8 @@ namespace brickbybrick.RealisticConstruction
     {
         WholeBrick,
         HalfBrick,
-        RammedEarth
+        RammedEarth,
+        TriangleBrick
     }
 
     public enum MasonryOrientation
@@ -115,7 +120,11 @@ namespace brickbybrick.RealisticConstruction
         East,
         South,
         West,
-        North
+        North,
+        SouthEast,
+        SouthWest,
+        NorthWest,
+        NorthEast
     }
 
     public enum MasonryPlacementFailure
@@ -146,6 +155,14 @@ namespace brickbybrick.RealisticConstruction
 
         public IEnumerable<MasonryGridPosition> GetFootprint()
         {
+            if (IsDiagonal)
+            {
+                // The fine occupancy volume provides exact diagonal geometry.
+                // Quarter cells remain a conservative cross-block reservation.
+                foreach (MasonryGridPosition position in MasonryVoxelGeometry.GetQuarterFootprint(this)) yield return position;
+                yield break;
+            }
+
             if (Kind == MasonryUnitKind.HalfBrick)
             {
                 yield return Origin;
@@ -172,6 +189,8 @@ namespace brickbybrick.RealisticConstruction
             yield return Origin;
             yield return new MasonryGridPosition(Origin.X + unitX, Origin.Y, Origin.Z + unitZ);
         }
+
+        public bool IsDiagonal => Orientation >= MasonryOrientation.SouthEast;
 
         public bool Occupies(MasonryGridPosition position)
         {

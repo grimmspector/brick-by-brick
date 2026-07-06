@@ -9,7 +9,7 @@ namespace brickbybrick.RealisticConstruction
     // names for every loaded masonry cell.
     internal static class MasonryStateCodec
     {
-        private const byte Version = 3;
+        private const byte Version = 4;
 
         internal static byte[] Encode(MasonryCellState state)
         {
@@ -40,6 +40,8 @@ namespace brickbybrick.RealisticConstruction
             WritePositions(writer, state.ReservedPositions);
             writer.Write((ushort)Math.Min(state.MortaredSideJoints.Count, ushort.MaxValue));
             foreach (string joint in state.MortaredSideJoints.Take(ushort.MaxValue)) writer.Write(joint);
+            WritePositions(writer, state.EarthGapVoxels);
+            WritePositions(writer, state.MortarGapVoxels);
             return stream.ToArray();
         }
 
@@ -81,6 +83,11 @@ namespace brickbybrick.RealisticConstruction
             {
                 int sideJointCount = reader.ReadUInt16();
                 for (int index = 0; index < sideJointCount; index++) state.MortaredSideJoints.Add(reader.ReadString());
+            }
+            if (version >= 4)
+            {
+                state.EarthGapVoxels = ReadPositions(reader);
+                state.MortarGapVoxels = ReadPositions(reader);
             }
             return state;
         }
