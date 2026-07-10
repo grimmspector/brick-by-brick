@@ -209,7 +209,7 @@ namespace brickbybrick.RealisticConstruction
             {
                 int index = u + v * uCount;
                 SurfaceMaterial? material = mask[index];
-                if (material == null || material.Value.Kind == MasonryUnitKind.RammedEarth || material.Value.IsMortar) continue;
+                if (material == null || material.Value.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth || material.Value.IsMortar) continue;
 
                 byte edges = 0;
                 byte filledEdges = 0;
@@ -349,7 +349,7 @@ namespace brickbybrick.RealisticConstruction
             byte mortarEdges,
             float planeOffset = 0)
         {
-            bool earth = material.Kind == MasonryUnitKind.RammedEarth;
+            bool earth = material.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth;
             CompositeShape shape = new()
             {
                 Base = new AssetLocation(material.IsMortar
@@ -490,13 +490,13 @@ namespace brickbybrick.RealisticConstruction
             {
                 Base = new AssetLocation(material.IsMortar
                     ? "brickbybrick:shapes/block/realistic/mortar.json"
-                    : material.Kind == MasonryUnitKind.RammedEarth
+                    : material.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth
                     ? "brickbybrick:shapes/block/realistic/rammedearth.json"
                     : "brickbybrick:shapes/block/realistic/brick.json")
             };
             Variants variants = new();
             if (!material.IsMortar) variants.Set("color", material.Color);
-            MeshData cube = behavior.GetOrCreateMesh(variants, shape, pos, $"surface-source-{material.IsMortar}-{material.Kind == MasonryUnitKind.RammedEarth}-{material.Color}");
+            MeshData cube = behavior.GetOrCreateMesh(variants, shape, pos, $"surface-source-{material.IsMortar}-{material.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth}-{material.Color}");
             MeshData mesh = CopyFace(cube, (byte)(BlockFacing.FromCode(face.Code).Index + 1));
             float[] scale = { maximum[0] - minimum[0], maximum[1] - minimum[1], maximum[2] - minimum[2] };
             float translateX = minimum[0] - (face.Axis == 0 && face.Sign > 0 ? 1 : 0);

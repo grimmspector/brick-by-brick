@@ -32,7 +32,6 @@ The planned construction modes are:
 
 | Setting | Range | Default | Status | Description |
 | --- | ---: | ---: | --- | --- |
-| `EnableDiagonalPlacement` | `true`, `false` | `true` | Experimental | Adds 45-degree ground-plane steps to the realistic masonry rotation control. |
 | `CapacityPerTier` | 1–1024 | 16 | Active | Mortar capacity added for each trowel tool tier. |
 | `ConstructionActionSeconds` | 0.1–30.0 | 2.0 | Active | Seconds required in Immersive mode and the current Realistic fallback. |
 | `MortarCostPerAction` | 0–64 | 1 | Active | Mortar portions consumed by each successful action. |
@@ -92,6 +91,7 @@ Recovery values are fractions: `0.25` is 25%, `0.5` is 50%, and `1.0` is 100%.
 | Setting | Range | Default | Status | Description |
 | --- | ---: | ---: | --- | --- |
 | `EnableOptimizedFrozenMeshes` | `true`, `false` | `false` | Experimental | Uses validated exposed-face and greedy-merged meshes for frozen masonry, with automatic component-renderer fallback. |
+| `EnableDiagonalPlacement` | `true`, `false` | `false` | Experimental | Enables finite 45-degree realistic masonry poses. Diagonal placement snaps to named anchor continuations and triangular wedges remain half-brick gameplay units. |
 | `AllowUnmortaredRoomSealing` | `true`, `false` | `false` | Active | Allows realistic masonry without complete mortar coverage in every eligible vertical side joint to seal rooms. Top mortar does not affect room sealing. |
 | `FrozenMeshCacheMiB` | 32–1024 | 64 | Active | Maximum estimated client memory retained for reusable frozen masonry meshes. |
 | `TransformedMeshCacheMiB` | 8–256 | 16 | Active | Maximum estimated client memory retained for shared transformed masonry components. |

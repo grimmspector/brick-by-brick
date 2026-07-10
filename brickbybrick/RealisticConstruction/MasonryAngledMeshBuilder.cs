@@ -72,39 +72,24 @@ namespace brickbybrick.RealisticConstruction
                 if (IsFullyEnclosed(unit, occupied)) continue;
                 CompositeShape shape = new()
                 {
-                    Base = new AssetLocation(unit.Kind == MasonryUnitKind.RammedEarth
+                    Base = new AssetLocation(unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth
                         ? "brickbybrick:shapes/block/realistic/rammedearth.json"
                         : "brickbybrick:shapes/block/realistic/brick.json")
                 };
                 Variants variants = new();
                 variants.Set("color", GetMaterialColor(unit));
-                float length = unit.Kind == MasonryUnitKind.WholeBrick ? 0.5f : unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
-                float width = unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
-                float radians = MasonryVoxelGeometry.GetAngleDegrees(unit.Orientation) * GameMath.DEG2RAD;
-                float centerX = (unit.Origin.X + 0.5f) * 0.25f;
-                float centerZ = (unit.Origin.Z + 0.5f) * 0.25f;
-                if (unit.Kind == MasonryUnitKind.WholeBrick)
-                {
-                    centerX += MathF.Cos(radians) * 0.125f;
-                    centerZ += MathF.Sin(radians) * 0.125f;
-                }
 
-                string cacheKey = $"angled-unit:{unit.Kind}:{GetMaterialColor(unit)}:{unit.Origin.X}:{unit.Origin.Y}:{unit.Origin.Z}:{unit.Orientation}";
+                string cacheKey = $"angled-unit:{unit.Kind}:{unit.VisualShape}:{GetMaterialColor(unit)}:{unit.Origin.X}:{unit.Origin.Y}:{unit.Origin.Z}:{unit.OffsetX:0.###}:{unit.OffsetZ:0.###}:{unit.Orientation}";
                 MeshData transformed = MasonryTransformedMeshCache.GetOrCreate(cacheKey, () =>
                 {
                     MeshData source = behavior.GetOrCreateMesh(variants, shape, pos, $"angled-{unit.Kind}-{GetMaterialColor(unit)}").Clone();
-                    if (unit.Kind == MasonryUnitKind.TriangleBrick) MasonryVoxelGeometry.DeformTriangle(source);
-                    return source.MatrixTransform(Matrixf.Create()
-                            .Translate(centerX, unit.Origin.Y * 0.25f + JointInset, centerZ)
-                            .RotateY(radians)
-                            .Translate(-length * 0.5f + JointInset, 0, -width * 0.5f + JointInset)
-                            .Scale(length - JointInset * 2, 0.25f - JointInset * 2, width - JointInset * 2)
-                            .Values);
+                    if (unit.VisualShape == MasonryVisualShape.TriangleWedge) MasonryVoxelGeometry.DeformTriangle(source);
+                    return MasonryVoxelGeometry.TransformUnitMesh(source, unit, JointInset);
                 });
                 Append(ref region, transformed);
                 componentCount++;
 
-                if (unit.Kind == MasonryUnitKind.RammedEarth || unit.MortaredPositions.Count == 0) continue;
+                if (unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth || unit.MortaredPositions.Count == 0) continue;
                 CompositeShape mortarShape = new() { Base = new AssetLocation("brickbybrick:shapes/block/realistic/mortar.json") };
                 foreach (MasonryGridPosition mortared in unit.MortaredPositions)
                 {

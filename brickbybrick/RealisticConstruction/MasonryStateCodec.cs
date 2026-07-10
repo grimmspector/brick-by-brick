@@ -9,7 +9,7 @@ namespace brickbybrick.RealisticConstruction
     // names for every loaded masonry cell.
     internal static class MasonryStateCodec
     {
-        private const byte Version = 4;
+        private const byte Version = 7;
 
         internal static byte[] Encode(MasonryCellState state)
         {
@@ -21,23 +21,22 @@ namespace brickbybrick.RealisticConstruction
             writer.Write(state.LastModifiedTotalHours);
             writer.Write(state.MortarMaterialCode);
 
-            string[] palette = state.Units.Select(unit => unit.MaterialCode).Distinct().Take(255).ToArray();
+            string[] palette = state.Units.Concat(state.ReservedUnits).Select(unit => unit.MaterialCode).Distinct().Take(255).ToArray();
             writer.Write((byte)palette.Length);
             foreach (string material in palette) writer.Write(material);
 
             writer.Write((ushort)Math.Min(state.Units.Count, ushort.MaxValue));
             foreach (MasonryUnitPlacement unit in state.Units.Take(ushort.MaxValue))
             {
-                writer.Write((byte)unit.Kind);
-                writer.Write((byte)unit.Orientation);
-                writer.Write((short)unit.Origin.X);
-                writer.Write((short)unit.Origin.Y);
-                writer.Write((short)unit.Origin.Z);
-                writer.Write((byte)Math.Max(0, Array.IndexOf(palette, unit.MaterialCode)));
-                WritePositions(writer, unit.MortaredPositions);
+                WriteUnit(writer, unit, palette);
             }
 
             WritePositions(writer, state.ReservedPositions);
+            writer.Write((ushort)Math.Min(state.ReservedUnits.Count, ushort.MaxValue));
+            foreach (MasonryUnitPlacement unit in state.ReservedUnits.Take(ushort.MaxValue))
+            {
+                WriteUnit(writer, unit, palette);
+            }
             writer.Write((ushort)Math.Min(state.MortaredSideJoints.Count, ushort.MaxValue));
             foreach (string joint in state.MortaredSideJoints.Take(ushort.MaxValue)) writer.Write(joint);
             WritePositions(writer, state.EarthGapVoxels);
@@ -65,20 +64,18 @@ namespace brickbybrick.RealisticConstruction
             int unitCount = reader.ReadUInt16();
             for (int index = 0; index < unitCount; index++)
             {
-                MasonryUnitPlacement unit = new()
-                {
-                    Id = index.ToString(),
-                    Kind = (MasonryUnitKind)reader.ReadByte(),
-                    Orientation = (MasonryOrientation)reader.ReadByte(),
-                    Origin = new MasonryGridPosition(reader.ReadInt16(), reader.ReadInt16(), reader.ReadInt16())
-                };
-                int paletteIndex = reader.ReadByte();
-                unit.MaterialCode = paletteIndex < palette.Length ? palette[paletteIndex] : "burnedbrick-cream";
-                unit.MortaredPositions = ReadPositions(reader);
-                state.Units.Add(unit);
+                state.Units.Add(ReadUnit(reader, palette, version, index.ToString()));
             }
 
             state.ReservedPositions = ReadPositions(reader);
+            if (version >= 6)
+            {
+                int reservedUnitCount = reader.ReadUInt16();
+                for (int index = 0; index < reservedUnitCount; index++)
+                {
+                    state.ReservedUnits.Add(ReadUnit(reader, palette, version, $"r{index}"));
+                }
+            }
             if (version >= 2)
             {
                 int sideJointCount = reader.ReadUInt16();
@@ -122,6 +119,46 @@ namespace brickbybrick.RealisticConstruction
                 writer.Write((short)position.Y);
                 writer.Write((short)position.Z);
             }
+        }
+
+        private static void WriteUnit(BinaryWriter writer, MasonryUnitPlacement unit, string[] palette)
+        {
+            writer.Write((byte)unit.Kind);
+            writer.Write((byte)unit.Orientation);
+            writer.Write((byte)unit.VisualShape);
+            writer.Write((short)unit.Origin.X);
+            writer.Write((short)unit.Origin.Y);
+            writer.Write((short)unit.Origin.Z);
+            writer.Write(unit.OffsetX);
+            writer.Write(unit.OffsetZ);
+            writer.Write((byte)Math.Max(0, Array.IndexOf(palette, unit.MaterialCode)));
+            WritePositions(writer, unit.MortaredPositions);
+        }
+
+        private static MasonryUnitPlacement ReadUnit(BinaryReader reader, string[] palette, byte version, string id)
+        {
+            MasonryUnitPlacement unit = new()
+            {
+                Id = id,
+                Kind = (MasonryUnitKind)reader.ReadByte(),
+                Orientation = (MasonryOrientation)reader.ReadByte()
+            };
+            if (version >= 5) unit.VisualShape = (MasonryVisualShape)reader.ReadByte();
+            if (unit.Kind == MasonryUnitKind.ObsoleteTriangleBrick)
+            {
+                unit.Kind = MasonryUnitKind.HalfBrick;
+                unit.VisualShape = MasonryVisualShape.TriangleWedge;
+            }
+            unit.Origin = new MasonryGridPosition(reader.ReadInt16(), reader.ReadInt16(), reader.ReadInt16());
+            if (version >= 7)
+            {
+                unit.OffsetX = reader.ReadSingle();
+                unit.OffsetZ = reader.ReadSingle();
+            }
+            int paletteIndex = reader.ReadByte();
+            unit.MaterialCode = paletteIndex < palette.Length ? palette[paletteIndex] : "burnedbrick-cream";
+            unit.MortaredPositions = ReadPositions(reader);
+            return unit;
         }
 
         private static HashSet<MasonryGridPosition> ReadPositions(BinaryReader reader)

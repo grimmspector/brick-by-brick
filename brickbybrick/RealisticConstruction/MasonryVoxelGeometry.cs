@@ -29,6 +29,96 @@ namespace brickbybrick.RealisticConstruction
             };
         }
 
+        internal static float GetWholeBrickCenterOffset(MasonryOrientation orientation)
+        {
+            return 0.125f;
+        }
+
+        internal static void GetDimensions(MasonryUnitKind kind, out float length, out float width)
+        {
+            length = kind is MasonryUnitKind.WholeBrick or MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
+            width = kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
+        }
+
+        internal static void GetDirection(MasonryOrientation orientation, out float directionX, out float directionZ)
+        {
+            float angle = GetAngleDegrees(orientation) * GameMath.DEG2RAD;
+            directionX = MathF.Cos(angle);
+            directionZ = MathF.Sin(angle);
+        }
+
+        internal static void GetUnitCenter(MasonryUnitPlacement unit, out float centerX, out float centerZ)
+        {
+            GetDirection(unit.Orientation, out float directionX, out float directionZ);
+            centerX = (unit.Origin.X + 0.5f) * 0.25f + unit.OffsetX;
+            centerZ = (unit.Origin.Z + 0.5f) * 0.25f + unit.OffsetZ;
+
+            if (unit.Kind == MasonryUnitKind.WholeBrick)
+            {
+                float centerOffset = GetWholeBrickCenterOffset(unit.Orientation);
+                centerX += directionX * centerOffset;
+                centerZ += directionZ * centerOffset;
+            }
+        }
+
+        internal static void SetUnitCenter(MasonryUnitPlacement unit, float centerX, float centerZ)
+        {
+            GetDirection(unit.Orientation, out float directionX, out float directionZ);
+            if (unit.Kind == MasonryUnitKind.WholeBrick)
+            {
+                float centerOffset = GetWholeBrickCenterOffset(unit.Orientation);
+                centerX -= directionX * centerOffset;
+                centerZ -= directionZ * centerOffset;
+            }
+
+            unit.Origin.X = (int)MathF.Floor(centerX * 4);
+            unit.Origin.Z = (int)MathF.Floor(centerZ * 4);
+            unit.OffsetX = centerX - (unit.Origin.X + 0.5f) * 0.25f;
+            unit.OffsetZ = centerZ - (unit.Origin.Z + 0.5f) * 0.25f;
+        }
+
+        internal static void GetUnitAxes(
+            MasonryUnitPlacement unit,
+            out float centerX,
+            out float centerZ,
+            out float directionX,
+            out float directionZ,
+            out float perpendicularX,
+            out float perpendicularZ,
+            out float halfLength,
+            out float halfWidth)
+        {
+            GetUnitCenter(unit, out centerX, out centerZ);
+            GetDirection(unit.Orientation, out directionX, out directionZ);
+            perpendicularX = -directionZ;
+            perpendicularZ = directionX;
+            GetDimensions(unit.Kind, out float length, out float width);
+            halfLength = length * 0.5f;
+            halfWidth = width * 0.5f;
+        }
+
+        internal static IEnumerable<(float X, float Z)> GetUnitCorners(MasonryUnitPlacement unit)
+        {
+            GetUnitAxes(
+                unit,
+                out float centerX,
+                out float centerZ,
+                out float directionX,
+                out float directionZ,
+                out float perpendicularX,
+                out float perpendicularZ,
+                out float halfLength,
+                out float halfWidth);
+            int[] signs = { -1, 1 };
+            foreach (int lengthSign in signs)
+            foreach (int widthSign in signs)
+            {
+                yield return (
+                    centerX + directionX * halfLength * lengthSign + perpendicularX * halfWidth * widthSign,
+                    centerZ + directionZ * halfLength * lengthSign + perpendicularZ * halfWidth * widthSign);
+            }
+        }
+
         internal static IEnumerable<MasonryGridPosition> GetQuarterFootprint(MasonryUnitPlacement unit)
         {
             HashSet<MasonryGridPosition> cells = new();
@@ -40,20 +130,18 @@ namespace brickbybrick.RealisticConstruction
             return cells;
         }
 
+        internal static IEnumerable<MasonryGridPosition> GetReservationFootprint(MasonryUnitPlacement unit)
+        {
+            MasonryGridPosition[] footprint = unit.GetFootprint().ToArray();
+            if (!unit.IsDiagonal || footprint.Length == 0) return footprint;
+            return footprint;
+        }
+
         internal static IEnumerable<(int X, int Y, int Z)> GetVoxels(MasonryUnitPlacement unit)
         {
             GetDimensions(unit.Kind, out float length, out float width);
-            float angle = GetAngleDegrees(unit.Orientation) * GameMath.DEG2RAD;
-            float directionX = MathF.Cos(angle);
-            float directionZ = MathF.Sin(angle);
-            float centerX = (unit.Origin.X + 0.5f) * 0.25f;
-            float centerZ = (unit.Origin.Z + 0.5f) * 0.25f;
-
-            if (unit.Kind == MasonryUnitKind.WholeBrick)
-            {
-                centerX += directionX * 0.125f;
-                centerZ += directionZ * 0.125f;
-            }
+            GetDirection(unit.Orientation, out float directionX, out float directionZ);
+            GetUnitCenter(unit, out float centerX, out float centerZ);
 
             int minimumX = (int)MathF.Floor((centerX - 0.5f) * Resolution);
             int maximumX = (int)MathF.Ceiling((centerX + 0.5f) * Resolution);
@@ -70,7 +158,7 @@ namespace brickbybrick.RealisticConstruction
                 float localWidth = -sampleX * directionZ + sampleZ * directionX;
                 if (MathF.Abs(localLength) > length * 0.5f + Epsilon
                     || MathF.Abs(localWidth) > width * 0.5f + Epsilon) continue;
-                if (unit.Kind == MasonryUnitKind.TriangleBrick && localLength + localWidth > Epsilon) continue;
+                if (unit.VisualShape == MasonryVisualShape.TriangleWedge && localLength - localWidth > Epsilon) continue;
 
                 for (int y = minimumY; y < minimumY + 4; y++) yield return (x, y, z);
             }
@@ -80,6 +168,15 @@ namespace brickbybrick.RealisticConstruction
         {
             bool[,,] occupied = new bool[Resolution, Resolution, Resolution];
             foreach (MasonryUnitPlacement unit in state.Units)
+            foreach ((int x, int y, int z) in GetVoxels(unit))
+            {
+                if (x is >= 0 and < Resolution && y is >= 0 and < Resolution && z is >= 0 and < Resolution)
+                {
+                    occupied[x, y, z] = true;
+                }
+            }
+
+            foreach (MasonryUnitPlacement unit in state.ReservedUnits)
             foreach ((int x, int y, int z) in GetVoxels(unit))
             {
                 if (x is >= 0 and < Resolution && y is >= 0 and < Resolution && z is >= 0 and < Resolution)
@@ -116,6 +213,9 @@ namespace brickbybrick.RealisticConstruction
         {
             bool[,,] occupied = new bool[Resolution, Resolution, Resolution];
             foreach (MasonryUnitPlacement unit in state.Units)
+            foreach ((int x, int y, int z) in GetVoxels(unit))
+                if (x is >= 0 and < Resolution && y is >= 0 and < Resolution && z is >= 0 and < Resolution) occupied[x, y, z] = true;
+            foreach (MasonryUnitPlacement unit in state.ReservedUnits)
             foreach ((int x, int y, int z) in GetVoxels(unit))
                 if (x is >= 0 and < Resolution && y is >= 0 and < Resolution && z is >= 0 and < Resolution) occupied[x, y, z] = true;
             foreach (MasonryGridPosition voxel in state.EarthGapVoxels.Concat(state.MortarGapVoxels))
@@ -186,7 +286,7 @@ namespace brickbybrick.RealisticConstruction
         internal static bool Overlaps(MasonryCellState state, MasonryUnitPlacement candidate)
         {
             HashSet<(int X, int Y, int Z)> candidateVoxels = GetVoxels(candidate).ToHashSet();
-            return state.Units.SelectMany(GetVoxels).Any(candidateVoxels.Contains);
+            return state.Units.Concat(state.ReservedUnits).SelectMany(GetVoxels).Any(candidateVoxels.Contains);
         }
 
         internal static MeshData DeformTriangle(MeshData mesh)
@@ -201,10 +301,27 @@ namespace brickbybrick.RealisticConstruction
             return mesh;
         }
 
-        private static void GetDimensions(MasonryUnitKind kind, out float length, out float width)
+        internal static MeshData TransformUnitMesh(MeshData mesh, MasonryUnitPlacement unit, float jointInset)
         {
-            length = kind == MasonryUnitKind.WholeBrick ? 0.5f : kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
-            width = kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
+            GetDimensions(unit.Kind, out float length, out float width);
+            GetDirection(unit.Orientation, out float directionX, out float directionZ);
+            GetUnitCenter(unit, out float centerX, out float centerZ);
+
+            float scaledLength = length - jointInset * 2;
+            float scaledHeight = 0.25f - jointInset * 2;
+            float scaledWidth = width - jointInset * 2;
+            for (int vertex = 0; vertex < mesh.VerticesCount; vertex++)
+            {
+                int index = vertex * 3;
+                float localLength = -length * 0.5f + jointInset + mesh.xyz[index] * scaledLength;
+                float localHeight = unit.Origin.Y * 0.25f + jointInset + mesh.xyz[index + 1] * scaledHeight;
+                float localWidth = -width * 0.5f + jointInset + mesh.xyz[index + 2] * scaledWidth;
+                mesh.xyz[index] = centerX + localLength * directionX - localWidth * directionZ;
+                mesh.xyz[index + 1] = localHeight;
+                mesh.xyz[index + 2] = centerZ + localLength * directionZ + localWidth * directionX;
+            }
+
+            return mesh;
         }
 
         private static bool RectangleFree(bool[,,] occupied, bool[,,] consumed, int x, int y, int z, int width)

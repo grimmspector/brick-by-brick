@@ -91,7 +91,8 @@ namespace brickbybrick
                 + $"curing enabled: {Config.Curing.EnableMortarCuring}; "
                 + $"inactive freeze: {Config.Curing.InactiveFreezeSeconds:N1} seconds.");
             api.Network.GetChannel("brickbybrick-realistic")
-                .SetMessageHandler<int>((player, packet) => OnRealisticServerPacket(api, player, packet));
+                .SetMessageHandler<int>((player, packet) => OnRealisticServerPacket(api, player, packet))
+                .SetMessageHandler<RealisticControlPacket>((player, packet) => OnRealisticServerPacket(api, player, packet));
             api.Event.RegisterGameTickListener(_ => MasonryFreezeScheduler.DrainReady(), 100);
             RegisterProfilingCommands(api);
             RegisterMasonryDiagnosticCommand(api);
@@ -170,9 +171,19 @@ namespace brickbybrick
         private static void RegisterMasonryDiagnosticCommand(ICoreServerAPI api)
         {
             api.ChatCommands.Create("bbbmeshdump")
-                .WithDescription("Reports units and overlaps in the targeted masonry cell.")
+                .WithDescription("Reports realistic masonry geometry diagnostics.")
                 .RequiresPrivilege(Privilege.controlserver)
-                .HandleWith(args => DumpTargetedMasonry(api, args));
+                .HandleWith(args => DumpTargetedMasonry(api, args))
+                .BeginSubCommand("target")
+                    .HandleWith(args => DumpTargetedMasonry(api, args))
+                .EndSubCommand()
+                .BeginSubCommand("radius")
+                    .WithArgs(api.ChatCommands.Parsers.OptionalInt("radius", 4))
+                    .HandleWith(args => DumpMasonryRadius(api, args))
+                .EndSubCommand()
+                .BeginSubCommand("cases")
+                    .HandleWith(args => DumpMasonryGeometryCases(api, args))
+                .EndSubCommand();
         }
 
         private static TextCommandResult DumpTargetedMasonry(ICoreServerAPI api, TextCommandCallingArgs args)
@@ -186,9 +197,74 @@ namespace brickbybrick
                 return TextCommandResult.Error("The targeted block is not live realistic masonry.");
             }
 
+            string report = BuildMasonryDiagnosticReport(api, selection.Position, entity, "TARGET");
+            AppendProfileLog(api, "MASONRY GEOMETRY TARGET", report);
+            api.Logger.Notification(report);
+            return TextCommandResult.Success($"Dumped targeted masonry geometry to {GetProfileLogPath()}.");
+        }
+
+        private static TextCommandResult DumpMasonryRadius(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+
+            int radius = GameMath.Clamp((int)args[0], 1, 16);
+            BlockPos center = player.Entity.Pos.AsBlockPos;
+            List<string> reports = new();
+            for (int x = center.X - radius; x <= center.X + radius; x++)
+            for (int y = center.Y - radius; y <= center.Y + radius; y++)
+            for (int z = center.Z - radius; z <= center.Z + radius; z++)
+            {
+                BlockPos pos = new(x, y, z);
+                if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
+                reports.Add(BuildMasonryDiagnosticReport(api, pos, entity, "RADIUS"));
+            }
+
+            string report = reports.Count == 0
+                ? $"No live realistic masonry found within radius {radius} of {center}."
+                : string.Join(Environment.NewLine + Environment.NewLine, reports);
+            AppendProfileLog(api, "MASONRY GEOMETRY RADIUS", report);
+            api.Logger.Notification($"Masonry radius dump: center={center}, radius={radius}, cells={reports.Count}. Written to {GetProfileLogPath()}.");
+            return TextCommandResult.Success($"Dumped {reports.Count} masonry cells to {GetProfileLogPath()}.");
+        }
+
+        private static TextCommandResult DumpMasonryGeometryCases(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            List<MasonryUnitPlacement> cases = new()
+            {
+                CreateDiagnosticUnit("full-east", MasonryUnitKind.WholeBrick, MasonryVisualShape.Cuboid, MasonryOrientation.East, 1, 0, 1),
+                CreateDiagnosticUnit("full-southeast", MasonryUnitKind.WholeBrick, MasonryVisualShape.Cuboid, MasonryOrientation.SouthEast, 1, 0, 1),
+                CreateDiagnosticUnit("half-east", MasonryUnitKind.HalfBrick, MasonryVisualShape.Cuboid, MasonryOrientation.East, 1, 0, 1),
+                CreateDiagnosticUnit("half-southeast", MasonryUnitKind.HalfBrick, MasonryVisualShape.Cuboid, MasonryOrientation.SouthEast, 1, 0, 1),
+                CreateDiagnosticUnit("wedge-southeast", MasonryUnitKind.HalfBrick, MasonryVisualShape.TriangleWedge, MasonryOrientation.SouthEast, 1, 0, 1),
+                CreateDiagnosticUnit("earth-2x2-east", MasonryUnitKind.RammedEarth, MasonryVisualShape.Cuboid, MasonryOrientation.East, 1, 0, 1),
+                CreateDiagnosticUnit("earth-1x1-southeast", MasonryUnitKind.SmallRammedEarth, MasonryVisualShape.Cuboid, MasonryOrientation.SouthEast, 1, 0, 1)
+            };
+
+            string report = string.Join(Environment.NewLine + Environment.NewLine, cases.Select(unit => DescribeDiagnosticUnit(unit, "CASE")));
+            AppendProfileLog(api, "MASONRY GEOMETRY CASES", report);
+            api.Logger.Notification($"Dumped {cases.Count} deterministic masonry geometry cases to {GetProfileLogPath()}.");
+            return TextCommandResult.Success($"Dumped deterministic geometry cases to {GetProfileLogPath()}.");
+        }
+
+        private static MasonryUnitPlacement CreateDiagnosticUnit(string id, MasonryUnitKind kind, MasonryVisualShape shape, MasonryOrientation orientation, int x, int y, int z)
+        {
+            return new MasonryUnitPlacement
+            {
+                Id = id,
+                Kind = kind,
+                VisualShape = shape,
+                MaterialCode = kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth ? "testrammedearth" : "burnedbrick-cream",
+                Orientation = orientation,
+                Origin = new MasonryGridPosition(x, y, z)
+            };
+        }
+
+        private static string BuildMasonryDiagnosticReport(ICoreServerAPI api, BlockPos pos, BlockEntityRealisticMasonry entity, string source)
+        {
             MasonryCellState state = entity.State;
             Dictionary<MasonryGridPosition, List<MasonryUnitPlacement>> occupants = new();
-            foreach (MasonryUnitPlacement unit in state.Units)
+            foreach (MasonryUnitPlacement unit in state.Units.Concat(state.ReservedUnits))
             {
                 foreach (MasonryGridPosition position in unit.GetFootprint())
                 {
@@ -207,25 +283,78 @@ namespace brickbybrick
                 .ThenBy(entry => entry.Key.Z)
                 .ThenBy(entry => entry.Key.X)
                 .ToList();
-            string header = $"Masonry diagnostic at {selection.Position}: frozen={state.Frozen}, shape={state.FrozenShape}, "
-                + $"units={state.Units.Count}, occupied={occupants.Count}, overlaps={overlaps.Count}, "
-                + $"topMortar={state.Units.Sum(unit => unit.MortaredPositions.Count)}, sideMortar={state.MortaredSideJoints.Count}.";
-            api.Logger.Notification(header);
-            foreach (MasonryUnitPlacement unit in state.Units)
+
+            Block block = api.World.BlockAccessor.GetBlock(pos);
+            Cuboidf[] selectionBoxes = block.GetSelectionBoxes(api.World.BlockAccessor, pos) ?? Array.Empty<Cuboidf>();
+            Cuboidf[] collisionBoxes = block.GetCollisionBoxes(api.World.BlockAccessor, pos) ?? Array.Empty<Cuboidf>();
+            Cuboidf[] geometryBoxes = entity.GetGeometryBoxes();
+
+            List<string> lines = new()
             {
-                string footprint = string.Join(";", unit.GetFootprint().Select(position => $"{position.X},{position.Y},{position.Z}"));
-                string topMortar = string.Join(";", unit.MortaredPositions.Select(position => $"{position.X},{position.Y},{position.Z}"));
-                api.Logger.Notification($"Masonry unit: id={unit.Id}, kind={unit.Kind}, material={unit.MaterialCode}, "
-                    + $"orientation={unit.Orientation}, origin={unit.Origin.X},{unit.Origin.Y},{unit.Origin.Z}, "
-                    + $"footprint=[{footprint}], topMortar=[{topMortar}].");
-            }
+                $"[{source}] cell={pos}, block={block.Code}, frozen={state.Frozen}, frozenShape={state.FrozenShape}, units={state.Units.Count}, reservedUnits={state.ReservedUnits.Count}, reservedPositions={state.ReservedPositions.Count}, occupiedCells={occupants.Count}, overlaps={overlaps.Count}, topMortar={state.Units.Sum(unit => unit.MortaredPositions.Count)}, sideMortar={state.MortaredSideJoints.Count}",
+                $"selectionBoxes count={selectionBoxes.Length} bounds={FormatCuboidUnion(selectionBoxes)} boxes={FormatCuboids(selectionBoxes)}",
+                $"collisionBoxes count={collisionBoxes.Length} bounds={FormatCuboidUnion(collisionBoxes)} boxes={FormatCuboids(collisionBoxes)}",
+                $"geometryBoxes count={geometryBoxes.Length} bounds={FormatCuboidUnion(geometryBoxes)} boxes={FormatCuboids(geometryBoxes)}",
+                $"reservedPositions=[{FormatPositions(state.ReservedPositions)}]"
+            };
+
+            lines.AddRange(state.Units.Select(unit => DescribeDiagnosticUnit(unit, "UNIT")));
+            lines.AddRange(state.ReservedUnits.Select(unit => DescribeDiagnosticUnit(unit, "RESERVED_UNIT")));
             foreach (KeyValuePair<MasonryGridPosition, List<MasonryUnitPlacement>> overlap in overlaps)
             {
-                api.Logger.Warning($"Masonry overlap at {overlap.Key.X},{overlap.Key.Y},{overlap.Key.Z}: "
-                    + string.Join(", ", overlap.Value.Select(unit => $"{unit.Id}/{unit.MaterialCode}")));
+                lines.Add($"OVERLAP cell={FormatPosition(overlap.Key)} units=[{string.Join(",", overlap.Value.Select(unit => $"{unit.Id}/{unit.Kind}/{unit.VisualShape}/{unit.Orientation}"))}]");
             }
 
-            return TextCommandResult.Success($"{header} Full details were written to server-main.log.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static string DescribeDiagnosticUnit(MasonryUnitPlacement unit, string label)
+        {
+            (int X1, int Y1, int Z1, int X2, int Y2, int Z2, int Count) voxelBounds = GetVoxelBounds(unit);
+            MasonryGridPosition[] footprint = unit.GetFootprint().ToArray();
+            MasonryGridPosition[] reservation = MasonryVoxelGeometry.GetReservationFootprint(unit).ToArray();
+            return $"{label} id={unit.Id}, kind={unit.Kind}, visual={unit.VisualShape}, material={unit.MaterialCode}, orientation={unit.Orientation}, angle={MasonryVoxelGeometry.GetAngleDegrees(unit.Orientation):0.###}, origin={FormatPosition(unit.Origin)}, "
+                + $"footprintCount={footprint.Length}, footprint=[{FormatPositions(footprint)}], reservationCount={reservation.Length}, reservation=[{FormatPositions(reservation)}], "
+                + $"voxelCount={voxelBounds.Count}, voxelBounds=[{voxelBounds.X1},{voxelBounds.Y1},{voxelBounds.Z1} -> {voxelBounds.X2},{voxelBounds.Y2},{voxelBounds.Z2}], voxelWorldBounds=[{voxelBounds.X1 / 16d:0.###},{voxelBounds.Y1 / 16d:0.###},{voxelBounds.Z1 / 16d:0.###} -> {(voxelBounds.X2 + 1) / 16d:0.###},{(voxelBounds.Y2 + 1) / 16d:0.###},{(voxelBounds.Z2 + 1) / 16d:0.###}], mortared=[{FormatPositions(unit.MortaredPositions)}]";
+        }
+
+        private static (int X1, int Y1, int Z1, int X2, int Y2, int Z2, int Count) GetVoxelBounds(MasonryUnitPlacement unit)
+        {
+            (int X, int Y, int Z)[] voxels = MasonryVoxelGeometry.GetVoxels(unit).ToArray();
+            if (voxels.Length == 0) return (0, 0, 0, 0, 0, 0, 0);
+            return (
+                voxels.Min(voxel => voxel.X),
+                voxels.Min(voxel => voxel.Y),
+                voxels.Min(voxel => voxel.Z),
+                voxels.Max(voxel => voxel.X),
+                voxels.Max(voxel => voxel.Y),
+                voxels.Max(voxel => voxel.Z),
+                voxels.Length);
+        }
+
+        private static string FormatCuboidUnion(Cuboidf[] boxes)
+        {
+            if (boxes.Length == 0) return "empty";
+            return $"[{boxes.Min(box => box.X1):0.###},{boxes.Min(box => box.Y1):0.###},{boxes.Min(box => box.Z1):0.###} -> {boxes.Max(box => box.X2):0.###},{boxes.Max(box => box.Y2):0.###},{boxes.Max(box => box.Z2):0.###}]";
+        }
+
+        private static string FormatCuboids(Cuboidf[] boxes)
+        {
+            return string.Join(";", boxes.Select(box => $"[{box.X1:0.###},{box.Y1:0.###},{box.Z1:0.###}->{box.X2:0.###},{box.Y2:0.###},{box.Z2:0.###}]"));
+        }
+
+        private static string FormatPositions(IEnumerable<MasonryGridPosition> positions)
+        {
+            return string.Join(";", positions
+                .OrderBy(position => position.Y)
+                .ThenBy(position => position.Z)
+                .ThenBy(position => position.X)
+                .Select(FormatPosition));
+        }
+
+        private static string FormatPosition(MasonryGridPosition position)
+        {
+            return $"{position.X},{position.Y},{position.Z}";
         }
 
         private static TextCommandResult StartProfileExercise(ICoreServerAPI api, TextCommandCallingArgs args)
@@ -384,6 +513,17 @@ namespace brickbybrick
             }
 
             OnRealisticOrientationPacket(player, packet);
+        }
+
+        private static void OnRealisticServerPacket(ICoreServerAPI api, IServerPlayer player, RealisticControlPacket packet)
+        {
+            if (packet.PlacementState)
+            {
+                ItemTrowel.SetRealisticPlacementState(player, packet.Orientation, packet.Variant);
+                return;
+            }
+
+            OnRealisticServerPacket(api, player, packet.Code);
         }
 
         private static TextCommandResult SpawnProfileCells(ICoreServerAPI api, TextCommandCallingArgs args)
@@ -1170,36 +1310,118 @@ namespace brickbybrick
             base.Dispose();
         }
 
-        // Sneak-wheel is scoped to a held trowel in Realistic mode. All other
+        // Modifier-wheel is scoped to realistic masonry materials. All other
         // wheel input remains available to the hotbar and other mods.
         private void OnRealisticPlacementMouseWheel(MouseWheelEventArgs args)
         {
-            if (!Config.IsRealisticConstructionEnabled() || clientApi?.World?.Player?.Entity?.Controls?.Sneak != true) return;
+            if (!Config.IsRealisticConstructionEnabled() || clientApi?.World?.Player == null) return;
 
-            ItemSlot slot = clientApi.World.Player.InventoryManager.ActiveHotbarSlot;
-            if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
+            IClientPlayer player = clientApi.World.Player;
+            var entity = player.Entity;
+            if (entity == null) return;
 
-            int orientation = slot.Itemstack.Attributes.GetInt("realisticOrientation", 0);
-            int[] cycle = Config.Realism.EnableDiagonalPlacement
-                ? new[] { 0, 4, 1, 5, 2, 6, 3, 7 }
-                : new[] { 0, 1, 2, 3 };
-            int cycleIndex = Array.IndexOf(cycle, orientation);
-            if (cycleIndex < 0) cycleIndex = 0;
-            int nextOrientation = cycle[GameMath.Mod(cycleIndex + (args.delta > 0 ? 1 : -1), cycle.Length)];
-            slot.Itemstack.Attributes.SetInt("realisticOrientation", nextOrientation);
-            slot.MarkDirty();
-            realisticClientChannel?.SendPacket(nextOrientation);
+            bool primaryCycle = entity.Controls?.Sneak == true;
+            // Vintage Story exposes the generic secondary modifier here; the
+            // help text and interaction code keep it behind our binding name.
+            bool secondaryCycle = entity.Controls?.CtrlKey == true;
+            if (!primaryCycle && !secondaryCycle) return;
+
+            if (!TryGetRealisticPlacementKind(player, out MasonryUnitKind heldKind)) return;
+
+            int orientation = (int)ItemTrowel.ResolveRealisticOrientation(player);
+            int variant = ItemTrowel.ResolveRealisticVariant(player);
+            int step = args.delta > 0 ? 1 : -1;
+            CycleRealisticPlacementState(heldKind, primaryCycle, step, ref orientation, ref variant);
+
+            ItemTrowel.SetRealisticPlacementState(player, orientation, variant);
+            realisticClientChannel?.SendPacket(new RealisticControlPacket
+            {
+                PlacementState = true,
+                Orientation = orientation,
+                Variant = variant
+            });
             args.SetHandled(true);
         }
 
-        private static void OnRealisticOrientationPacket(IPlayer fromPlayer, int orientation)
+        private static void CycleRealisticPlacementState(MasonryUnitKind heldKind, bool primaryCycle, int step, ref int orientation, ref int variant)
         {
-            ItemSlot? slot = fromPlayer?.InventoryManager?.ActiveHotbarSlot;
-            if (slot?.Itemstack?.Collectible is not ItemTrowel) return;
+            int[] cardinal = { 0, 1, 2, 3 };
+            int[] diagonal = Config.Realism.EnableDiagonalPlacement ? new[] { 4, 5, 6, 7 } : cardinal;
+            int[] all = Config.Realism.EnableDiagonalPlacement ? new[] { 0, 4, 1, 5, 2, 6, 3, 7 } : cardinal;
 
+            switch (heldKind)
+            {
+                case MasonryUnitKind.WholeBrick:
+                    variant = 0;
+                    orientation = CycleIn(primaryCycle ? cardinal : diagonal, orientation, step);
+                    break;
+
+                case MasonryUnitKind.RammedEarth:
+                case MasonryUnitKind.SmallRammedEarth:
+                    variant = primaryCycle ? 0 : 1;
+                    orientation = CycleIn(all, orientation, step);
+                    break;
+
+                case MasonryUnitKind.HalfBrick:
+                    if (primaryCycle)
+                    {
+                        variant = 0;
+                        orientation = CycleIn(all, orientation, step);
+                    }
+                    else
+                    {
+                        if (!Config.Realism.EnableDiagonalPlacement)
+                        {
+                            variant = 0;
+                            orientation = CycleIn(cardinal, orientation, step);
+                            break;
+                        }
+
+                        variant = GameMath.Mod(Math.Max(1, variant) - 1 + step, ItemTrowel.RealisticHalfBrickVariantCount - 1) + 1;
+                        orientation = GameMath.Mod(variant - 1, 8);
+                    }
+                    break;
+
+                default:
+                    orientation = CycleIn(all, orientation, step);
+                    variant = 0;
+                    break;
+            }
+        }
+
+        private static int CycleIn(int[] cycle, int current, int step)
+        {
+            int index = Array.IndexOf(cycle, GameMath.Mod(current, 8));
+            if (index < 0) index = step > 0 ? -1 : 0;
+            return cycle[GameMath.Mod(index + step, cycle.Length)];
+        }
+
+        private bool TryGetRealisticPlacementKind(IClientPlayer player, out MasonryUnitKind kind)
+        {
+            ItemSlot slot = player.InventoryManager.ActiveHotbarSlot;
+            if (slot?.Itemstack?.Collectible is ItemTrowel
+                && TryGetOffhandRealisticMaterial(player, out ItemStack? offhandStack))
+            {
+                return ItemTrowel.TryResolveRealisticKind(offhandStack, player, out kind);
+            }
+
+            kind = (MasonryUnitKind)(-1);
+            return slot?.Itemstack != null && ItemTrowel.TryResolveRealisticKind(slot.Itemstack, player, out kind);
+        }
+
+        private static bool TryGetOffhandRealisticMaterial(IClientPlayer player, out ItemStack? stack)
+        {
+            stack = player.InventoryManager.GetHotbarInventory()?[11]?.Itemstack;
+            return stack != null;
+        }
+
+        private static void OnRealisticOrientationPacket(IPlayer fromPlayer, int packet)
+        {
             int directionCount = Config.Realism.EnableDiagonalPlacement ? 8 : 4;
-            slot.Itemstack.Attributes.SetInt("realisticOrientation", GameMath.Mod(orientation, directionCount));
-            slot.MarkDirty();
+            int orientation = GameMath.Mod(packet & 0xFF, directionCount);
+            int variantCount = Config.Realism.EnableDiagonalPlacement ? ItemTrowel.RealisticHalfBrickVariantCount : 1;
+            int variant = GameMath.Mod(packet >> 8, variantCount);
+            ItemTrowel.SetRealisticPlacementState(fromPlayer, orientation, variant);
         }
 
         private static void MoveMasonryGuideAfterVanillaGuides(List<GuiHandbookPage> pages)

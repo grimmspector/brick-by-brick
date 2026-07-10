@@ -7,6 +7,8 @@
   "heldhelp-trowel-stair": "Place stairs",
   "heldhelp-trowel-block": "Place block",
   "heldhelp-trowel-change-mode": "Change tool mode",
+  "heldhelp-realistic-cycle-ghost": "Mouse wheel: cycle masonry ghost",
+  "heldhelp-realistic-cycle-variant": "Mouse wheel: cycle placement variant",
   "item-trowel-copper": "Copper masonry trowel",
   "item-trowel-tinbronze": "Tin bronze masonry trowel",
   "item-trowel-bismuthbronze": "Bismuth bronze masonry trowel",

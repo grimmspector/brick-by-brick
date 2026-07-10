@@ -187,7 +187,7 @@ namespace brickbybrick
     {
         // Enables the experimental 45-degree placement steps used by realistic
         // masonry. Disabling this preserves the original four-direction cycle.
-        public bool EnableDiagonalPlacement { get; set; } = true;
+        public bool EnableDiagonalPlacement { get; set; } = false;
 
         // Allows mortar-free realistic masonry to seal rooms. Disabled by
         // default so dry-laid bricks remain permeable to heat and sound.

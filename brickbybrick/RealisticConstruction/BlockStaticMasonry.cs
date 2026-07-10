@@ -16,6 +16,7 @@ namespace brickbybrick.RealisticConstruction
     {
         private const string ShapeVariantKey = "shape";
         private static readonly ConcurrentDictionary<string, MeshData> MeshCache = new();
+        private static readonly ConcurrentDictionary<string, Cuboidf[]> BoxCache = new();
         private static long staticTessellations;
         private static long sidecarBytes;
         private static long exposedQuads;
@@ -48,12 +49,12 @@ namespace brickbybrick.RealisticConstruction
 
         public override Cuboidf[] GetSelectionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
-            return GetGeometryBoxes();
+            return GetGeometryBoxes(blockAccessor, pos);
         }
 
         public override Cuboidf[] GetCollisionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
-            return GetGeometryBoxes();
+            return GetGeometryBoxes(blockAccessor, pos);
         }
 
         internal static bool TryGetBlockCode(FrozenMasonryShape shape, out AssetLocation code)
@@ -210,6 +211,7 @@ namespace brickbybrick.RealisticConstruction
 
         internal static void ResetProfile()
         {
+            BoxCache.Clear();
             Interlocked.Exchange(ref staticTessellations, 0);
             Interlocked.Exchange(ref sidecarBytes, 0);
             Interlocked.Exchange(ref exposedQuads, 0);
@@ -245,16 +247,27 @@ namespace brickbybrick.RealisticConstruction
             return unit.Kind switch
             {
                 MasonryUnitKind.HalfBrick => new AssetLocation("brickbybrick", unit.MaterialCode),
-                MasonryUnitKind.RammedEarth => new AssetLocation("brickbybrick:testrammedearth"),
+                MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth => new AssetLocation("brickbybrick:testrammedearth"),
                 _ => new AssetLocation("game", unit.MaterialCode)
             };
         }
 
-        private Cuboidf[] GetGeometryBoxes()
+        private Cuboidf[] GetGeometryBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
-            return TryGetShape(out FrozenMasonryShape shape)
-                ? BlockRealisticMasonry.GetFrozenBoxes(shape) ?? Array.Empty<Cuboidf>()
-                : Array.Empty<Cuboidf>();
+            if (TryGetShape(out FrozenMasonryShape shape)
+                && BlockRealisticMasonry.GetFrozenBoxes(shape) is Cuboidf[] frozenBoxes)
+            {
+                return frozenBoxes;
+            }
+
+            if (!FrozenMasonryChunkStore.TryGet(blockAccessor, pos, out byte[] packedState)) return Array.Empty<Cuboidf>();
+
+            string cacheKey = Convert.ToBase64String(packedState);
+            return BoxCache.GetOrAdd(cacheKey, _ =>
+            {
+                MasonryCellState state = MasonryStateCodec.Decode(packedState);
+                return MasonryVoxelGeometry.BuildMergedBoxes(state);
+            });
         }
 
         private static IReadOnlyDictionary<string, FrozenMasonryShape> CreateReverseShapeMap()

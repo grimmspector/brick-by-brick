@@ -5,6 +5,9 @@ namespace brickbybrick.RealisticConstruction
     public sealed class RealisticControlPacket
     {
         public int Code;
+        public bool PlacementState;
+        public int Orientation;
+        public int Variant;
     }
 
     // Mirrors one chunk-side reconstruction record to clients that may need

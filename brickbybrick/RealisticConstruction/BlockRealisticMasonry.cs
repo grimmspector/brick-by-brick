@@ -12,12 +12,12 @@ namespace brickbybrick.RealisticConstruction
 
         public override Cuboidf[] GetSelectionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
-            return GetBoxes(blockAccessor, pos);
+            return GetBoxes(blockAccessor, pos, false);
         }
 
         public override Cuboidf[] GetCollisionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
-            return GetBoxes(blockAccessor, pos);
+            return GetBoxes(blockAccessor, pos, true);
         }
 
         public override int GetRetention(BlockPos pos, BlockFacing facing, EnumRetentionType type)
@@ -82,7 +82,7 @@ namespace brickbybrick.RealisticConstruction
             return true;
         }
 
-        private static Cuboidf[] GetBoxes(IBlockAccessor blockAccessor, BlockPos pos)
+        private static Cuboidf[] GetBoxes(IBlockAccessor blockAccessor, BlockPos pos, bool includeReservations)
         {
             if (blockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) return new[] { new Cuboidf(0, 0, 0, 1, 0.25f, 1) };
             if (entity.State.Frozen)
@@ -91,10 +91,37 @@ namespace brickbybrick.RealisticConstruction
                 if (frozenBoxes != null) return frozenBoxes;
             }
 
-            if (entity.State.Units.Any(unit => unit.IsDiagonal)) return entity.GetGeometryBoxes();
+            if (entity.State.Units.Concat(entity.State.ReservedUnits).Any(unit => unit.IsDiagonal))
+            {
+                if (includeReservations) return entity.GetGeometryBoxes();
+                MasonryCellState visibleState = new()
+                {
+                    Units = entity.State.Units,
+                    EarthGapVoxels = entity.State.EarthGapVoxels,
+                    MortarGapVoxels = entity.State.MortarGapVoxels
+                };
+                Cuboidf[] visibleBoxes = MasonryVoxelGeometry.BuildMergedBoxes(visibleState);
+                return visibleBoxes.Length == 0 ? new[] { new Cuboidf(0, 0, 0, 1, 0.01f, 1) } : visibleBoxes;
+            }
 
             System.Collections.Generic.List<Cuboidf> boxes = new();
             foreach (MasonryUnitPlacement unit in entity.State.Units)
+            {
+                foreach (MasonryGridPosition cell in unit.GetFootprint())
+                {
+                    boxes.Add(new Cuboidf(
+                        cell.X * 0.25f + JointInset,
+                        cell.Y * 0.25f + JointInset,
+                        cell.Z * 0.25f + JointInset,
+                        (cell.X + 1) * 0.25f - JointInset,
+                        (cell.Y + 1) * 0.25f - JointInset,
+                        (cell.Z + 1) * 0.25f - JointInset));
+                }
+            }
+
+            if (!includeReservations) return boxes.Count == 0 ? new[] { new Cuboidf(0, 0, 0, 1, 0.01f, 1) } : boxes.ToArray();
+
+            foreach (MasonryUnitPlacement unit in entity.State.ReservedUnits)
             {
                 foreach (MasonryGridPosition cell in unit.GetFootprint())
                 {

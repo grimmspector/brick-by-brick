@@ -85,6 +85,10 @@ namespace brickbybrick.RealisticConstruction
         {
             freezeRevision++;
             MasonryFrozenMeshCache.Remove(this);
+            if (Api?.Side == EnumAppSide.Server)
+            {
+                ReleaseAllNeighborReservations();
+            }
             base.OnBlockRemoved();
         }
 
@@ -101,6 +105,7 @@ namespace brickbybrick.RealisticConstruction
             base.FromTreeAttributes(tree, worldForResolving);
             MasonryFrozenMeshCache.Remove(this);
             lock (frozenMeshSync) frozenCombinedMesh = null;
+            cachedGeometryBoxes = null;
             byte[] packed = tree.GetBytes("masonryStatePacked");
             if (packed?.Length > 0)
             {
@@ -139,8 +144,9 @@ namespace brickbybrick.RealisticConstruction
         public MasonryPlacementFailure GetPlacementFailure(MasonryUnitPlacement unit)
         {
             if (State.Frozen) return MasonryPlacementFailure.Frozen;
-            if (MasonryVoxelGeometry.Overlaps(State, unit)
-                || unit.GetFootprint().Any(position => State.ReservedPositions.Contains(position))) return MasonryPlacementFailure.Occupied;
+            if (HasLogicalOverlap(unit)
+                || MasonryVoxelGeometry.Overlaps(State, unit)
+                || MasonryVoxelGeometry.GetReservationFootprint(unit).Any(position => State.ReservedPositions.Contains(position))) return MasonryPlacementFailure.Occupied;
             if (unit.Origin.Y == 0) return MasonryPlacementFailure.None;
 
             MasonryGridPosition[] footprint = unit.GetFootprint().ToArray();
@@ -149,10 +155,24 @@ namespace brickbybrick.RealisticConstruction
 
             // A whole brick may cantilever by one half-brick cell in any
             // direction. Half bricks and rammed earth require full support.
-            bool supported = unit.Kind is MasonryUnitKind.WholeBrick or MasonryUnitKind.TriangleBrick
+            bool supported = unit.Kind == MasonryUnitKind.WholeBrick
                 ? supportedCells >= 1
                 : supportedCells == footprint.Length;
             return supported ? MasonryPlacementFailure.None : MasonryPlacementFailure.Unsupported;
+        }
+
+        private bool HasLogicalOverlap(MasonryUnitPlacement unit)
+        {
+            MasonryGridPosition[] reservation = MasonryVoxelGeometry.GetReservationFootprint(unit).ToArray();
+            if (unit.IsDiagonal)
+            {
+                return reservation.Any(position => State.ReservedPositions.Contains(position));
+            }
+
+            return reservation.Any(position =>
+                State.ReservedPositions.Contains(position)
+                || State.Units.Any(existing => existing.Occupies(position))
+                || State.ReservedUnits.Any(existing => existing.Occupies(position)));
         }
 
         public bool TryPlace(MasonryUnitPlacement unit)
@@ -160,7 +180,7 @@ namespace brickbybrick.RealisticConstruction
             if (!CanPlace(unit)) return false;
 
             State.Units.Add(unit);
-            if (unit.Kind == MasonryUnitKind.TriangleBrick)
+            if (unit.VisualShape == MasonryVisualShape.TriangleWedge)
             {
                 HashSet<MasonryGridPosition> occupied = MasonryVoxelGeometry.GetVoxels(unit)
                     .Select(voxel => new MasonryGridPosition(voxel.X, voxel.Y, voxel.Z))
@@ -168,7 +188,7 @@ namespace brickbybrick.RealisticConstruction
                 State.EarthGapVoxels.RemoveWhere(occupied.Contains);
                 State.MortarGapVoxels.RemoveWhere(occupied.Contains);
             }
-            if (unit.Kind == MasonryUnitKind.RammedEarth)
+            if (unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth)
             {
                 State.EarthGapVoxels.UnionWith(MasonryVoxelGeometry.FindUnusableGaps(State));
             }
@@ -198,7 +218,7 @@ namespace brickbybrick.RealisticConstruction
             if (State.Frozen || !face.IsHorizontal) return false;
 
             MasonryUnitPlacement? unit = FindUnit(cell);
-            if (unit == null || unit.Kind == MasonryUnitKind.RammedEarth) return false;
+            if (unit == null || unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth) return false;
 
             // Selection faces point toward the ray on exposed brick sides, but
             // narrow joints may resolve to either brick. Try the hit-facing
@@ -208,7 +228,7 @@ namespace brickbybrick.RealisticConstruction
             MasonryUnitPlacement? neighbor = FindAdjacentUnit(cell, searchX, searchZ, unit, out MasonryGridPosition neighborPosition)
                 ?? FindAdjacentUnit(cell, -searchX, -searchZ, unit, out neighborPosition);
 
-            if (neighbor == null || neighbor == unit || neighbor.Kind == MasonryUnitKind.RammedEarth) return false;
+            if (neighbor == null || neighbor == unit || neighbor.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth) return false;
 
             string jointKey = GetJointKey(cell, neighborPosition);
             if (!State.MortaredSideJoints.Add(jointKey)) return false;
@@ -249,22 +269,22 @@ namespace brickbybrick.RealisticConstruction
             if (State.MortaredSideJoints.Any(joint => footprint.Any(position => joint.Contains($"{position.X},{position.Y},{position.Z}")))) return null;
 
             State.Units.Remove(unit);
-            ReleaseNeighborReservations(footprint);
+            ReleaseNeighborReservations(unit);
             Touch();
             MarkDirty(true);
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
 
             AssetLocation code = unit.Kind switch
             {
-                MasonryUnitKind.HalfBrick or MasonryUnitKind.TriangleBrick => new AssetLocation("brickbybrick", unit.MaterialCode),
-                MasonryUnitKind.RammedEarth => new AssetLocation("brickbybrick:testrammedearth"),
+                MasonryUnitKind.HalfBrick => new AssetLocation("brickbybrick", unit.MaterialCode),
+                MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth => new AssetLocation("brickbybrick:testrammedearth"),
                 _ => new AssetLocation("game", unit.MaterialCode)
             };
             Item? collectible = Api.World.GetItem(code);
             if (collectible == null) return null;
 
             ItemStack recovered = new(collectible);
-            if (State.Units.Count == 0 && State.ReservedPositions.Count == 0)
+            if (State.Units.Count == 0 && State.ReservedPositions.Count == 0 && State.ReservedUnits.Count == 0)
             {
                 Api.World.BlockAccessor.SetBlock(0, Pos);
             }
@@ -275,7 +295,7 @@ namespace brickbybrick.RealisticConstruction
         public bool IsUnmortaredBrickOfColor(MasonryGridPosition cell, string color)
         {
             MasonryUnitPlacement? unit = FindUnit(cell);
-            if (unit == null || unit.Kind == MasonryUnitKind.RammedEarth || unit.MortaredPositions.Count > 0) return false;
+            if (unit == null || unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth || unit.MortaredPositions.Count > 0) return false;
 
             MasonryGridPosition[] footprint = unit.GetFootprint().ToArray();
             if (State.MortaredSideJoints.Any(joint => footprint.Any(position => joint.Contains($"{position.X},{position.Y},{position.Z}")))) return false;
@@ -326,11 +346,10 @@ namespace brickbybrick.RealisticConstruction
                 int exposedQuadCount = 0;
                 string rejectionReason = string.Empty;
                 bool hasDiagonal = State.Units.Any(unit => unit.IsDiagonal);
-                bool built = hasDiagonal
-                    ? MasonryAngledMeshBuilder.TryBuildValidated(State, behavior, Pos, out optimizedMesh, out exposedQuadCount, out rejectionReason)
-                    : State.EarthGapVoxels.Count == 0
-                        && State.MortarGapVoxels.Count == 0
-                        && MasonryStaticMeshBuilder.TryBuildValidated(State, behavior, Pos, out optimizedMesh, out exposedQuadCount, out rejectionReason);
+                bool built = !hasDiagonal
+                    && State.EarthGapVoxels.Count == 0
+                    && State.MortarGapVoxels.Count == 0
+                    && MasonryStaticMeshBuilder.TryBuildValidated(State, behavior, Pos, out optimizedMesh, out exposedQuadCount, out rejectionReason);
                 if (built && optimizedMesh != null)
                 {
                     lock (frozenMeshSync) frozenCombinedMesh ??= optimizedMesh;
@@ -376,41 +395,21 @@ namespace brickbybrick.RealisticConstruction
             {
                 CompositeShape shape = new()
                 {
-                    Base = new AssetLocation(unit.Kind == MasonryUnitKind.RammedEarth
+                    Base = new AssetLocation(unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth
                         ? "brickbybrick:shapes/block/realistic/rammedearth.json"
                         : "brickbybrick:shapes/block/realistic/brick.json")
                 };
 
                 Variants variants = new();
                 variants.Set("color", GetMaterialColor(unit));
-                float length = unit.Kind == MasonryUnitKind.WholeBrick ? 0.5f : unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
-                float width = unit.Kind == MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
-                float angle = MasonryVoxelGeometry.GetAngleDegrees(unit.Orientation);
-                float radians = angle * GameMath.DEG2RAD;
-                float centerX = (unit.Origin.X + 0.5f) * 0.25f;
-                float centerZ = (unit.Origin.Z + 0.5f) * 0.25f;
-                if (unit.Kind == MasonryUnitKind.WholeBrick)
-                {
-                    centerX += MathF.Cos(radians) * 0.125f;
-                    centerZ += MathF.Sin(radians) * 0.125f;
-                }
                 string materialColor = GetMaterialColor(unit);
                 {
-                    string unitCacheKey = $"unit:{unit.Kind}:{materialColor}:{unit.Origin.X}:{unit.Origin.Y}:{unit.Origin.Z}:{unit.Orientation}";
+                    string unitCacheKey = $"unit:{unit.Kind}:{unit.VisualShape}:{materialColor}:{unit.Origin.X}:{unit.Origin.Y}:{unit.Origin.Z}:{unit.OffsetX:0.###}:{unit.OffsetZ:0.###}:{unit.Orientation}";
                     MeshData unitMesh = GetTransformedMesh(unitCacheKey, () =>
                     {
                         MeshData mesh = behavior.GetOrCreateMesh(variants, shape, Pos, $"{unit.Kind}-{materialColor}").Clone();
-                        if (unit.Kind == MasonryUnitKind.TriangleBrick) MasonryVoxelGeometry.DeformTriangle(mesh);
-                        float[] matrix = Matrixf.Create()
-                            .Translate(
-                                centerX,
-                                unit.Origin.Y * 0.25f + JointInset,
-                                centerZ)
-                            .RotateY(radians)
-                            .Translate(-length * 0.5f + JointInset, 0, -width * 0.5f + JointInset)
-                            .Scale(length - JointInset * 2, 0.25f - JointInset * 2, width - JointInset * 2)
-                            .Values;
-                        return mesh.MatrixTransform(matrix);
+                        if (unit.VisualShape == MasonryVisualShape.TriangleWedge) MasonryVoxelGeometry.DeformTriangle(mesh);
+                        return MasonryVoxelGeometry.TransformUnitMesh(mesh, unit, JointInset);
                     });
                     AddMesh(unitMesh);
                 }
@@ -601,33 +600,37 @@ namespace brickbybrick.RealisticConstruction
             }
         }
 
-        // Mortar fills only the shared vertical joint between adjacent masonry
-        // units. Rammed earth intentionally keeps direct contact with bricks.
+        // Side joints fill explicit mortar and back dry seams with recessed
+        // brick, keeping unmortared units visually separated.
         private void AddSideJointMortar(Action<MeshData> addMesh, BlockBehaviorShapeTexturesFromAttributes behavior)
         {
+            if (State.Units.Any(unit => unit.IsDiagonal)) return;
+
             HashSet<string> renderedJoints = new();
-            (int X, int Z)[] directions = { (1, 0), (-1, 0), (0, 1), (0, -1) };
+            (int X, int Z)[] directions = { (1, 0), (0, 1) };
             CompositeShape mortarShape = new()
             {
                 Base = new AssetLocation("brickbybrick:shapes/block/realistic/mortar.json")
             };
-
-            foreach (MasonryUnitPlacement unit in State.Units.Where(candidate => candidate.Kind != MasonryUnitKind.RammedEarth))
+            CompositeShape brickShape = new()
             {
-                foreach (MasonryGridPosition cell in unit.MortaredPositions)
+                Base = new AssetLocation("brickbybrick:shapes/block/realistic/brick.json")
+            };
+
+            foreach (MasonryUnitPlacement unit in State.Units.Where(candidate => candidate.Kind is not MasonryUnitKind.RammedEarth and not MasonryUnitKind.SmallRammedEarth))
+            {
+                foreach (MasonryGridPosition cell in unit.GetFootprint())
                 {
                     foreach ((int offsetX, int offsetZ) in directions)
                     {
                         MasonryGridPosition neighborPosition = new(cell.X + offsetX, cell.Y, cell.Z + offsetZ);
                         MasonryUnitPlacement? neighbor = State.Units.FirstOrDefault(candidate =>
                             candidate != unit
-                            && candidate.Kind != MasonryUnitKind.RammedEarth
+                            && candidate.Kind is not MasonryUnitKind.RammedEarth and not MasonryUnitKind.SmallRammedEarth
                             && candidate.Occupies(neighborPosition));
                         if (neighbor == null) continue;
 
                         string jointKey = GetJointKey(cell, neighborPosition);
-                        bool hasTopMortar = unit.MortaredPositions.Contains(cell) || neighbor.MortaredPositions.Contains(neighborPosition);
-                        if (!hasTopMortar && !State.MortaredSideJoints.Contains(jointKey)) continue;
                         if (!renderedJoints.Add(jointKey)) continue;
 
                         bool alongX = offsetX != 0;
@@ -637,10 +640,18 @@ namespace brickbybrick.RealisticConstruction
                         float z = alongX
                             ? cell.Z * 0.25f + JointInset
                             : (offsetZ > 0 ? (cell.Z + 1) * 0.25f - JointInset : cell.Z * 0.25f - JointInset);
-                        string sideCacheKey = $"mortar-side:{alongX}:{x}:{cell.Y}:{z}";
-                        MeshData mortarMesh = GetTransformedMesh(sideCacheKey, () =>
+                        bool mortared = State.MortaredSideJoints.Contains(jointKey);
+                        string materialColor = mortared ? string.Empty : GetMaterialColor(unit);
+                        string sideCacheKey = $"{(mortared ? "mortar" : "shadow")}-side:{alongX}:{x}:{cell.Y}:{z}:{materialColor}";
+                        MeshData jointMesh = GetTransformedMesh(sideCacheKey, () =>
                         {
-                            MeshData mesh = behavior.GetOrCreateMesh(new Variants(), mortarShape, Pos, "mortar-side").Clone();
+                            Variants variants = new();
+                            if (!mortared) variants.Set("color", materialColor);
+                            MeshData mesh = behavior.GetOrCreateMesh(
+                                variants,
+                                mortared ? mortarShape : brickShape,
+                                Pos,
+                                mortared ? "mortar-side" : $"shadow-side-{materialColor}").Clone();
                             float[] jointMatrix = Matrixf.Create()
                                 .Translate(x, cell.Y * 0.25f + JointInset, z)
                                 .Scale(
@@ -650,7 +661,7 @@ namespace brickbybrick.RealisticConstruction
                                 .Values;
                             return mesh.MatrixTransform(jointMatrix);
                         });
-                        addMesh(mortarMesh);
+                        addMesh(jointMesh);
                     }
                 }
             }
@@ -661,7 +672,16 @@ namespace brickbybrick.RealisticConstruction
             if (State.Frozen) return false;
             return positions.All(position =>
                 !State.ReservedPositions.Contains(position)
-                && !State.Units.Any(existing => existing.Occupies(position)));
+                && !State.Units.Any(existing => existing.Occupies(position))
+                && !State.ReservedUnits.Any(existing => existing.Occupies(position)));
+        }
+
+        public bool CanReserve(MasonryUnitPlacement unit)
+        {
+            if (State.Frozen) return false;
+            if (HasLogicalOverlap(unit)) return false;
+            if (MasonryVoxelGeometry.Overlaps(State, unit)) return false;
+            return MasonryVoxelGeometry.GetReservationFootprint(unit).All(position => !State.ReservedPositions.Contains(position));
         }
 
         // Gap fills are stored as compact microvoxels but rendered as merged
@@ -709,7 +729,7 @@ namespace brickbybrick.RealisticConstruction
             bool foundEligibleJoint = false;
             (int X, int Z)[] directions = { (1, 0), (0, 1) };
 
-            foreach (MasonryUnitPlacement unit in State.Units.Where(candidate => candidate.Kind != MasonryUnitKind.RammedEarth))
+            foreach (MasonryUnitPlacement unit in State.Units.Where(candidate => candidate.Kind is not MasonryUnitKind.RammedEarth and not MasonryUnitKind.SmallRammedEarth))
             {
                 foreach (MasonryGridPosition cell in unit.GetFootprint())
                 {
@@ -718,7 +738,7 @@ namespace brickbybrick.RealisticConstruction
                         MasonryGridPosition neighborPosition = new(cell.X + offsetX, cell.Y, cell.Z + offsetZ);
                         MasonryUnitPlacement? neighbor = State.Units.FirstOrDefault(candidate =>
                             candidate != unit
-                            && candidate.Kind != MasonryUnitKind.RammedEarth
+                            && candidate.Kind is not MasonryUnitKind.RammedEarth and not MasonryUnitKind.SmallRammedEarth
                             && candidate.Occupies(neighborPosition));
                         if (neighbor == null) continue;
 
@@ -743,6 +763,15 @@ namespace brickbybrick.RealisticConstruction
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
         }
 
+        public void Reserve(MasonryUnitPlacement unit)
+        {
+            State.ReservedUnits.RemoveAll(existing => existing.Id == unit.Id);
+            State.ReservedUnits.Add(unit);
+            Touch();
+            MarkDirty(true);
+            Api.World.BlockAccessor.MarkBlockDirty(Pos);
+        }
+
         private static string GetMaterialColor(MasonryUnitPlacement unit)
         {
             int separator = unit.MaterialCode.LastIndexOf('-');
@@ -756,23 +785,26 @@ namespace brickbybrick.RealisticConstruction
             return string.CompareOrdinal(first, second) < 0 ? $"{first}|{second}" : $"{second}|{first}";
         }
 
-        private void ReleaseNeighborReservations(IEnumerable<MasonryGridPosition> footprint)
+        private void ReleaseNeighborReservations(MasonryUnitPlacement owner)
         {
-            foreach (IGrouping<(int X, int Z), MasonryGridPosition> group in footprint
-                .Where(position => position.X < 0 || position.X > 3 || position.Z < 0 || position.Z > 3)
-                .GroupBy(position => ((int)Math.Floor(position.X / 4d), (int)Math.Floor(position.Z / 4d))))
+            Dictionary<(int X, int Z), List<MasonryGridPosition>> reservations = BuildNeighborReservations(owner);
+            foreach ((int X, int Z) offset in GetNeighborOffsets(owner, reservations))
             {
-                BlockPos neighborPos = Pos.AddCopy(group.Key.X, 0, group.Key.Z);
+                BlockPos neighborPos = Pos.AddCopy(offset.X, 0, offset.Z);
                 if (Api.World.BlockAccessor.GetBlockEntity(neighborPos) is not BlockEntityRealisticMasonry neighbor) continue;
 
-                foreach (MasonryGridPosition position in group)
+                if (reservations.TryGetValue(offset, out List<MasonryGridPosition>? positions))
                 {
-                    neighbor.State.ReservedPositions.Remove(new MasonryGridPosition(
-                        GameMath.Mod(position.X, 4), position.Y, GameMath.Mod(position.Z, 4)));
+                    foreach (MasonryGridPosition position in positions)
+                    {
+                        neighbor.State.ReservedPositions.Remove(position);
+                    }
                 }
 
+                neighbor.State.ReservedUnits.RemoveAll(unit => unit.Id == owner.Id);
+
                 neighbor.Touch();
-                if (neighbor.State.Units.Count == 0 && neighbor.State.ReservedPositions.Count == 0)
+                if (neighbor.State.Units.Count == 0 && neighbor.State.ReservedPositions.Count == 0 && neighbor.State.ReservedUnits.Count == 0)
                 {
                     Api.World.BlockAccessor.SetBlock(0, neighborPos);
                 }
@@ -781,6 +813,52 @@ namespace brickbybrick.RealisticConstruction
                     neighbor.MarkDirty(true);
                     Api.World.BlockAccessor.MarkBlockDirty(neighborPos);
                 }
+            }
+        }
+
+        private static Dictionary<(int X, int Z), List<MasonryGridPosition>> BuildNeighborReservations(MasonryUnitPlacement unit)
+        {
+            Dictionary<(int X, int Z), List<MasonryGridPosition>> reservations = new();
+            foreach (MasonryGridPosition position in MasonryVoxelGeometry.GetReservationFootprint(unit))
+            {
+                int offsetX = (int)Math.Floor(position.X / 4d);
+                int offsetZ = (int)Math.Floor(position.Z / 4d);
+                if (offsetX == 0 && offsetZ == 0) continue;
+
+                (int X, int Z) key = (offsetX, offsetZ);
+                if (!reservations.TryGetValue(key, out List<MasonryGridPosition>? positions))
+                {
+                    positions = new List<MasonryGridPosition>();
+                    reservations[key] = positions;
+                }
+
+                positions.Add(new MasonryGridPosition(
+                    GameMath.Mod(position.X, 4),
+                    position.Y,
+                    GameMath.Mod(position.Z, 4)));
+            }
+
+            return reservations;
+        }
+
+        private static IEnumerable<(int X, int Z)> GetNeighborOffsets(MasonryUnitPlacement unit, Dictionary<(int X, int Z), List<MasonryGridPosition>> reservations)
+        {
+            HashSet<(int X, int Z)> offsets = reservations.Keys.ToHashSet();
+            foreach ((int X, int Y, int Z) voxel in MasonryVoxelGeometry.GetVoxels(unit))
+            {
+                int offsetX = (int)Math.Floor(voxel.X / 16d);
+                int offsetZ = (int)Math.Floor(voxel.Z / 16d);
+                if (offsetX != 0 || offsetZ != 0) offsets.Add((offsetX, offsetZ));
+            }
+
+            return offsets;
+        }
+
+        private void ReleaseAllNeighborReservations()
+        {
+            foreach (MasonryUnitPlacement unit in State.Units.ToArray())
+            {
+                ReleaseNeighborReservations(unit);
             }
         }
 
@@ -1040,7 +1118,7 @@ namespace brickbybrick.RealisticConstruction
                     Orientation = useStraight ? straight[(caseIndex + attempt) % straight.Length] : diagonal[(caseIndex + attempt) % diagonal.Length],
                     Origin = new MasonryGridPosition(random.Next(4), random.Next(layers), random.Next(4))
                 };
-                if (kind == MasonryUnitKind.HalfBrick && !useStraight) unit.Kind = MasonryUnitKind.TriangleBrick;
+                if (kind == MasonryUnitKind.HalfBrick && !useStraight) unit.VisualShape = MasonryVisualShape.TriangleWedge;
                 if (MasonryVoxelGeometry.Overlaps(State, unit)) continue;
                 State.Units.Add(unit);
                 if (kind != MasonryUnitKind.RammedEarth && attempt % 2 == 0)
@@ -1090,9 +1168,16 @@ namespace brickbybrick.RealisticConstruction
 
         private void Freeze()
         {
+            if (State.Units.Count == 0 && State.ReservedPositions.Count == 0 && State.ReservedUnits.Count == 0)
+            {
+                Api.World.BlockAccessor.SetBlock(0, Pos);
+                return;
+            }
+
             State.FrozenShape = InferFrozenShape();
             State.Frozen = true;
             packedFrozenState = MasonryStateCodec.Encode(State);
+            cachedGeometryBoxes = null;
             MarkDirty(true);
             state = null;
             Api.World.BlockAccessor.MarkBlockDirty(Pos);
@@ -1107,6 +1192,7 @@ namespace brickbybrick.RealisticConstruction
         {
             if (state?.Frozen != true) return;
             packedFrozenState = MasonryStateCodec.Encode(state);
+            cachedGeometryBoxes = null;
             state = null;
         }
 

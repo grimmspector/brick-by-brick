@@ -95,22 +95,22 @@
     },
     "scale": 0.65
   },
-  guiTransform: {
-    translation: {
-      x: -5,
-      y: -5.5,
-      z: 0
+  "guiTransform": {
+    "translation": {
+      "x": -5,
+      "y": -5.5,
+      "z": 0
     },
-    rotation: {
-      x: -46,
-      y: 50,
-      z: -30
+    "rotation": {
+      "x": -46,
+      "y": 50,
+      "z": -30
     },
-    origin: {
-      x: 0.5,
-      y: 0,
-      z: 0
+    "origin": {
+      "x": 0.5,
+      "y": 0,
+      "z": 0
     },
-    scale: 1.57
+    "scale": 1.57
   }
 }

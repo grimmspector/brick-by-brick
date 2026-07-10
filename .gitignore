@@ -680,6 +680,7 @@ fabric.properties
 .local/
 assets-examples/
 research/
+docs/
 *.sh
 *.ps1
 *.lnk
