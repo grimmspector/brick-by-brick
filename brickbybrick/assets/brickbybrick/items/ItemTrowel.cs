@@ -212,7 +212,19 @@ namespace brickbybrick.items
                 }
                 else if (byEntity.World.Side == EnumAppSide.Server)
                 {
-                    TryPlaceRealisticUnit(slot, byEntity, byPlayer, blockSel);
+                    // The wheel state is sent over the mod channel, while the
+                    // held interaction arrives through the game channel.
+                    // Delay one short callback so the server commits the pose
+                    // that produced the client-side placement preview.
+                    byEntity.World.Api.Event.RegisterCallback(_ =>
+                    {
+                        TryPlaceRealisticUnit(slot, byEntity, byPlayer, blockSel);
+                    }, 25);
+                }
+                else
+                {
+                    brickbybrickModSystem system = byEntity.World.Api.ModLoader.GetModSystem<brickbybrickModSystem>();
+                    system?.SendRealisticPlacementState(byPlayer);
                 }
 
                 handling = EnumHandHandling.PreventDefault;
@@ -502,9 +514,7 @@ namespace brickbybrick.items
                 return;
             }
 
-            int layer = targetsExistingCell
-                ? GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Y * 4) + (blockSel.Face == BlockFacing.UP ? 1 : 0), 0, 255)
-                : 0;
+            int layer = ResolveRealisticPlacementLayer(blockSel, targetsExistingCell, gridX, gridZ, entity);
             MasonryUnitPlacement unit = new()
             {
                 Id = Guid.NewGuid().ToString("N"),
@@ -714,6 +724,30 @@ namespace brickbybrick.items
 
             gridX = GameMath.Clamp(rawGridX, 0, 3);
             gridZ = GameMath.Clamp(rawGridZ, 0, 3);
+        }
+
+        // Selection boxes cover the whole masonry block, including empty
+        // quarter-cells. Only step upward when the ray actually hit a unit.
+        private static int ResolveRealisticPlacementLayer(
+            BlockSelection blockSel,
+            bool targetsExistingCell,
+            int gridX,
+            int gridZ,
+            BlockEntityRealisticMasonry entity)
+        {
+            if (!targetsExistingCell || entity == null) return 0;
+
+            int contactX = GameMath.Mod((int)Math.Floor((blockSel.HitPosition.X - blockSel.Face.Normali.X * 0.001) * MasonryVoxelGeometry.Resolution), MasonryVoxelGeometry.Resolution);
+            int contactY = GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Y - blockSel.Face.Normali.Y * 0.001) * MasonryVoxelGeometry.Resolution), 0, MasonryVoxelGeometry.Resolution - 1);
+            int contactZ = GameMath.Mod((int)Math.Floor((blockSel.HitPosition.Z - blockSel.Face.Normali.Z * 0.001) * MasonryVoxelGeometry.Resolution), MasonryVoxelGeometry.Resolution);
+            bool hitOccupiedGeometry = entity.State.Units.Any(unit => MasonryVoxelGeometry.GetVoxels(unit)
+                .Any(voxel => voxel.X == contactX && voxel.Y == contactY && voxel.Z == contactZ));
+
+            if (!hitOccupiedGeometry) return 0;
+
+            int layer = contactY / 4;
+            if (blockSel.Face == BlockFacing.UP) layer++;
+            return GameMath.Clamp(layer, 0, 3);
         }
 
         private static void TrySnapDiagonalPlacement(IBlockAccessor blockAccessor, BlockPos targetPos, BlockEntityRealisticMasonry entity, BlockSelection blockSel, MasonryUnitPlacement unit)
@@ -2355,9 +2389,8 @@ namespace brickbybrick.items
                 bool targetsExistingCell = selectedBlock?.Code?.Path == "realisticmasonry";
                 targetPos = targetsExistingCell ? blockSel.Position.Copy() : trowel.ResolvePlacementTarget(blockSel);
                 ResolveRealisticGridOrigin(blockSel, ref targetPos, targetsExistingCell, out int gridX, out int gridZ);
-                int layer = targetsExistingCell
-                    ? GameMath.Clamp((int)Math.Floor(blockSel.HitPosition.Y * 4) + (blockSel.Face == BlockFacing.UP ? 1 : 0), 0, 255)
-                    : 0;
+                BlockEntityRealisticMasonry targetEntity = capi.World.BlockAccessor.GetBlockEntity(targetPos) as BlockEntityRealisticMasonry;
+                int layer = ResolveRealisticPlacementLayer(blockSel, targetsExistingCell, gridX, gridZ, targetEntity);
 
                 unit = new MasonryUnitPlacement
                 {

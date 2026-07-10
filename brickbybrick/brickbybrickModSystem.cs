@@ -1174,6 +1174,21 @@ namespace brickbybrick
             }
         }
 
+        // Resend the active pose with the click. This keeps server placement
+        // aligned with the client preview even when wheel and interaction
+        // packets arrive on different game-channel schedules.
+        internal void SendRealisticPlacementState(IPlayer player)
+        {
+            if (player?.Entity?.World?.Side != EnumAppSide.Client || realisticClientChannel == null) return;
+
+            realisticClientChannel.SendPacket(new RealisticControlPacket
+            {
+                PlacementState = true,
+                Orientation = (int)ItemTrowel.ResolveRealisticOrientation(player),
+                Variant = ItemTrowel.ResolveRealisticVariant(player)
+            });
+        }
+
         internal static void BroadcastStaticMasonryState(BlockPos pos, byte[] state, bool remove)
         {
             if (serverApi == null) return;
