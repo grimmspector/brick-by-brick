@@ -25,6 +25,7 @@ namespace brickbybrick
         private const int ProfileResetAcknowledgementPacket = -102;
         private const int ProfileReportAcknowledgementPacket = -103;
         private const int ProfileBatchSize = 256;
+        private const string ServerProfileTracker = "__server-wall-profile__";
 
         internal static BrickByBrickConfig Config { get; private set; } = new();
 
@@ -145,6 +146,27 @@ namespace brickbybrick
                 .BeginSubCommand("mixedangles")
                     .WithArgs(api.ChatCommands.Parsers.Int("count"))
                     .HandleWith(args => SpawnAngledCorpus(api, args, true))
+                .EndSubCommand()
+                .BeginSubCommand("walls")
+                    .WithArgs(
+                        api.ChatCommands.Parsers.Int("length"),
+                        api.ChatCommands.Parsers.Int("height"))
+                    .HandleWith(args => SpawnWallCorpus(api, args))
+                .EndSubCommand()
+                .BeginSubCommand("serverrun")
+                    .WithArgs(
+                        api.ChatCommands.Parsers.Int("length"),
+                        api.ChatCommands.Parsers.Int("height"))
+                    .HandleWith(args => RunServerWallProfile(api, args))
+                .EndSubCommand()
+                .BeginSubCommand("servercompact")
+                    .WithArgs(
+                        api.ChatCommands.Parsers.Int("length"),
+                        api.ChatCommands.Parsers.Int("height"))
+                    .HandleWith(args => RunServerWallProfile(api, args, true))
+                .EndSubCommand()
+                .BeginSubCommand("serverclear")
+                    .HandleWith(_ => ClearServerWallProfile(api))
                 .EndSubCommand()
                 .BeginSubCommand("clear")
                     .HandleWith(args => ClearProfileCells(api, args))
@@ -799,6 +821,275 @@ namespace brickbybrick
             return TextCommandResult.Success($"Started a batched {(mixed ? "mixed-angle" : "diagonal-only")} corpus of {requested:N0} cells.");
         }
 
+        // Creates contiguous base-wall runs that cross block and chunk
+        // boundaries. This complements the scattered stress corpora with the
+        // wall shapes players are most likely to leave loaded for long spans.
+        private static TextCommandResult SpawnWallCorpus(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            IServerPlayer? player = args.Caller.Player as IServerPlayer;
+            if (player == null) return TextCommandResult.Error("This command requires a player.");
+
+            int length = GameMath.Clamp((int)args[0], 8, 512);
+            int height = GameMath.Clamp((int)args[1], 1, 16);
+            return StartWallCorpus(api, player.PlayerUID, player.Entity.Pos.AsBlockPos, length, height, false, false, player);
+        }
+
+        // Runs from the dedicated-server console only. The isolated runner
+        // starts the server with a separate data path, so this never touches
+        // a player's ordinary world or profile cells.
+        private static TextCommandResult RunServerWallProfile(ICoreServerAPI api, TextCommandCallingArgs args, bool compactStatic = false)
+        {
+            int length = GameMath.Clamp((int)args[0], 8, 512);
+            int height = GameMath.Clamp((int)args[1], 1, 16);
+            BlockPos spawn = api.World.DefaultSpawnPosition.AsBlockPos;
+            int profileY = Math.Max(4, api.World.BlockAccessor.MapSizeY - height - 8);
+            return StartWallCorpus(api, ServerProfileTracker, new BlockPos(spawn.X, profileY, spawn.Z), length, height, true, compactStatic, null);
+        }
+
+        private static TextCommandResult ClearServerWallProfile(ICoreServerAPI api)
+        {
+            int removed = ClearTrackedProfileCells(api, ServerProfileTracker);
+            AppendProfileLog(api, "AUTOMATED SERVER WALL PROFILE CLEAR", $"Removed: {removed:N0} tracked wall cells.");
+            return TextCommandResult.Success($"Removed {removed:N0} automated server wall-profile cells.");
+        }
+
+        private static TextCommandResult StartWallCorpus(
+            ICoreServerAPI api,
+            string tracker,
+            BlockPos center,
+            int length,
+            int height,
+            bool automated,
+            bool compactStatic,
+            IServerPlayer? player)
+        {
+            if (!ActiveBenchmarks.Add(tracker)) return TextCommandResult.Error("A wall profiling run is already settling.");
+
+            ClearTrackedProfileCells(api, tracker);
+            if (player != null) ResetClientProfile(api, player);
+            Block? constructionBlock = api.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
+            if (constructionBlock == null)
+            {
+                ActiveBenchmarks.Remove(tracker);
+                return TextCommandResult.Error("Realistic masonry block is unavailable.");
+            }
+
+            List<(BlockPos Position, bool Diagonal)> candidates = new(length * height * 3);
+            for (int section = 0; section < length; section++)
+            for (int level = 0; level < height; level++)
+            {
+                candidates.Add((center.AddCopy(8 + section, level, 8), false));
+                candidates.Add((center.AddCopy(8 + section, level, 24 + section), true));
+                candidates.Add((center.AddCopy(8 + section, level, length + 48), section % 3 != 0));
+            }
+
+            List<BlockPos> created = new(candidates.Count);
+            ProfileCellsByPlayer[tracker] = created;
+            ServerRuntimeSnapshot runtimeBefore = CaptureServerRuntimeSnapshot();
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            int nextCandidate = 0;
+            int rejected = 0;
+            string? firstRejectedBlock = null;
+
+            void GenerateBatch(float _)
+            {
+                int attempted = 0;
+                while (nextCandidate < candidates.Count && attempted++ < ProfileBatchSize)
+                {
+                    (BlockPos pos, bool diagonal) = candidates[nextCandidate++];
+                    Block existing = api.World.BlockAccessor.GetBlock(pos);
+                    if (!existing.IsReplacableBy(constructionBlock))
+                    {
+                        rejected++;
+                        firstRejectedBlock ??= existing.Code?.ToString() ?? "unknown";
+                        continue;
+                    }
+                    api.World.BlockAccessor.SetBlock(constructionBlock.Id, pos);
+                    if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
+                    entity.PopulateWallCellForProfiling(nextCandidate, diagonal);
+                    created.Add(pos.Copy());
+                }
+
+                if (nextCandidate < candidates.Count)
+                {
+                    api.Event.RegisterCallback(GenerateBatch, 1);
+                    return;
+                }
+
+                stopwatch.Stop();
+                string spawnReport = $"Length: {length:N0}; height: {height:N0}; cardinal, diagonal, and mixed wall cells: {created.Count:N0}; rejected: {rejected:N0}; first rejected block: {firstRejectedBlock ?? "none"}; generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.";
+                AppendProfileLog(api, automated ? "AUTOMATED SERVER WALL PROFILE SPAWN" : "WALL CORPUS SPAWN", spawnReport);
+
+                if (!automated)
+                {
+                    if (player != null)
+                    {
+                        api.Event.RegisterCallback(_ => RequestClientProfile(api, player), 10000);
+                        player.SendMessage(GlobalConstants.GeneralChatGroup, $"Created {created.Count:N0} long-wall masonry cells in {stopwatch.ElapsedMilliseconds:N0} ms.", EnumChatType.Notification);
+                    }
+                    ActiveBenchmarks.Remove(tracker);
+                    return;
+                }
+
+                void BeginAutomatedMeasurement(int compacted, int notCompactible, double compactionMilliseconds)
+                {
+                    string compactionReport = compactStatic
+                        ? $"static compaction: {compacted:N0} converted, {notCompactible:N0} retained as arbitrary; {compactionMilliseconds:N1} ms."
+                        : "static compaction: disabled.";
+                    BuildTrackedStateReportBatched(api, created, baselineReport =>
+                    {
+                        AppendProfileLog(api, "AUTOMATED SERVER WALL PROFILE BASELINE", $"{baselineReport}{Environment.NewLine}{compactionReport}{Environment.NewLine}{CaptureServerRuntimeSnapshot().DescribeDelta(runtimeBefore)}");
+                        MarkTrackedCellsDirtyInBatches(api, created, 0, () => api.Event.RegisterCallback(_ =>
+                            BuildTrackedStateReportBatched(api, created, settledReport =>
+                            {
+                                AppendProfileLog(
+                                    api,
+                                    "AUTOMATED SERVER WALL PROFILE COMPLETE",
+                                    $"{settledReport}{Environment.NewLine}{compactionReport}{Environment.NewLine}{CaptureServerRuntimeSnapshot().DescribeDelta(runtimeBefore)}{Environment.NewLine}Client-only metrics not measured: draw calls, vertices submitted, VRAM, and frame time.");
+                                ActiveBenchmarks.Remove(tracker);
+                            }), 5000));
+                    });
+                }
+
+                if (compactStatic)
+                {
+                    CompactTrackedProfileCellsInBatches(api, created, 0, 0, 0, Stopwatch.StartNew(), BeginAutomatedMeasurement);
+                }
+                else
+                {
+                    BeginAutomatedMeasurement(0, 0, 0);
+                }
+            }
+
+            if (automated)
+            {
+                HashSet<(int X, int Z)> chunkColumns = candidates
+                    .Select(candidate => (candidate.Position.X / api.WorldManager.ChunkSize, candidate.Position.Z / api.WorldManager.ChunkSize))
+                    .ToHashSet();
+                foreach ((int chunkX, int chunkZ) in chunkColumns)
+                {
+                    api.WorldManager.LoadChunkColumn(chunkX, chunkZ, true);
+                }
+
+                int loadAttempts = 0;
+                void WaitForChunks(float _)
+                {
+                    bool loaded = chunkColumns.All(column => api.WorldManager.GetChunk(new BlockPos(
+                        column.X * api.WorldManager.ChunkSize,
+                        center.Y,
+                        column.Z * api.WorldManager.ChunkSize)) != null);
+                    if (loaded)
+                    {
+                        api.Event.RegisterCallback(GenerateBatch, 1);
+                        return;
+                    }
+
+                    if (++loadAttempts >= 100)
+                    {
+                        AppendProfileLog(api, "AUTOMATED SERVER WALL PROFILE LOAD FAILURE", $"Timed out loading {chunkColumns.Count:N0} chunk columns near {center}.");
+                        ActiveBenchmarks.Remove(tracker);
+                        return;
+                    }
+
+                    api.Event.RegisterCallback(WaitForChunks, 100);
+                }
+
+                api.Event.RegisterCallback(WaitForChunks, 100);
+            }
+            else
+            {
+                api.Event.RegisterCallback(GenerateBatch, 1);
+            }
+            return TextCommandResult.Success(automated
+                ? $"Started isolated server wall profile with {length:N0}-cell runs at {height:N0} blocks high."
+                : $"Started a wall corpus with {length:N0}-cell runs at {height:N0} blocks high.");
+        }
+
+        // Converts only canonical frozen shapes to entityless static blocks.
+        // Diagonal and otherwise arbitrary cells intentionally remain live.
+        private static void CompactTrackedProfileCellsInBatches(
+            ICoreServerAPI api,
+            List<BlockPos> positions,
+            int startIndex,
+            int compacted,
+            int notCompactible,
+            Stopwatch stopwatch,
+            Action<int, int, double> completed)
+        {
+            int endIndex = Math.Min(startIndex + ProfileBatchSize, positions.Count);
+            for (int index = startIndex; index < endIndex; index++)
+            {
+                if (TryCompactProfileCell(api, positions[index])) compacted++;
+                else notCompactible++;
+            }
+
+            if (endIndex < positions.Count)
+            {
+                api.Event.RegisterCallback(_ => CompactTrackedProfileCellsInBatches(api, positions, endIndex, compacted, notCompactible, stopwatch, completed), 1);
+                return;
+            }
+
+            stopwatch.Stop();
+            completed(compacted, notCompactible, stopwatch.Elapsed.TotalMilliseconds);
+        }
+
+        private static bool TryCompactProfileCell(ICoreServerAPI api, BlockPos pos)
+        {
+            if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity
+                || !entity.State.Frozen
+                || !BlockStaticMasonry.TryGetBlockCode(entity.State.FrozenShape, out AssetLocation staticCode)) return false;
+
+            Block? staticBlock = api.World.GetBlock(staticCode);
+            if (staticBlock == null || staticBlock.Id == 0) return false;
+
+            byte[] packed = entity.GetPackedStateForProfiling();
+            FrozenMasonryChunkStore.Set(api.World.BlockAccessor, pos, packed);
+            api.World.BlockAccessor.SetBlock(staticBlock.Id, pos);
+            api.World.BlockAccessor.MarkBlockDirty(pos);
+            if (api.World.AllOnlinePlayers.Length > 0) BroadcastStaticMasonryState(pos, packed, false);
+            return true;
+        }
+
+        private static ServerRuntimeSnapshot CaptureServerRuntimeSnapshot()
+        {
+            using Process process = Process.GetCurrentProcess();
+            return new ServerRuntimeSnapshot(
+                GC.GetTotalMemory(false),
+                process.WorkingSet64,
+                process.PrivateMemorySize64,
+                GC.CollectionCount(0),
+                GC.CollectionCount(1),
+                GC.CollectionCount(2));
+        }
+
+        private readonly struct ServerRuntimeSnapshot
+        {
+            private readonly long managedBytes;
+            private readonly long workingSetBytes;
+            private readonly long privateBytes;
+            private readonly int generationZeroCollections;
+            private readonly int generationOneCollections;
+            private readonly int generationTwoCollections;
+
+            internal ServerRuntimeSnapshot(long managedBytes, long workingSetBytes, long privateBytes, int generationZeroCollections, int generationOneCollections, int generationTwoCollections)
+            {
+                this.managedBytes = managedBytes;
+                this.workingSetBytes = workingSetBytes;
+                this.privateBytes = privateBytes;
+                this.generationZeroCollections = generationZeroCollections;
+                this.generationOneCollections = generationOneCollections;
+                this.generationTwoCollections = generationTwoCollections;
+            }
+
+            internal string DescribeDelta(ServerRuntimeSnapshot baseline)
+            {
+                return $"server memory: managed {managedBytes / 1048576d:N1} MiB ({(managedBytes - baseline.managedBytes) / 1048576d:+0.0;-0.0;0.0}); "
+                    + $"working set {workingSetBytes / 1048576d:N1} MiB ({(workingSetBytes - baseline.workingSetBytes) / 1048576d:+0.0;-0.0;0.0}); "
+                    + $"private {privateBytes / 1048576d:N1} MiB ({(privateBytes - baseline.privateBytes) / 1048576d:+0.0;-0.0;0.0}); "
+                    + $"GC +{generationZeroCollections - baseline.generationZeroCollections}/+{generationOneCollections - baseline.generationOneCollections}/+{generationTwoCollections - baseline.generationTwoCollections}.";
+            }
+        }
+
         // Builds separated room shells instead of solid profiling rings. The
         // result crosses chunks naturally and resembles walls, floors, and
         // corners that an established player base would keep loaded together.
@@ -1257,6 +1548,14 @@ namespace brickbybrick
                         return TextCommandResult.Success("Shared masonry mesh cache cleared. Existing chunks will rebuild it as needed.");
                     })
                 .EndSubCommand()
+                .BeginSubCommand("optimized")
+                    .BeginSubCommand("on")
+                        .HandleWith(_ => SetClientOptimizedFrozenMeshes(api, true))
+                    .EndSubCommand()
+                    .BeginSubCommand("off")
+                        .HandleWith(_ => SetClientOptimizedFrozenMeshes(api, false))
+                    .EndSubCommand()
+                .EndSubCommand()
                 .BeginSubCommand("rejecttest")
                     .HandleWith(_ =>
                     {
@@ -1279,6 +1578,26 @@ namespace brickbybrick
                         return TextCommandResult.Success("Queued one forced rejection. The selected arrangement should use component fallback and remain rejected after later dirty rebuilds.");
                     })
                 .EndSubCommand();
+        }
+
+        // Switches the client renderer only. The server keeps its saved
+        // construction state unchanged, allowing comparable A/B captures.
+        private static TextCommandResult SetClientOptimizedFrozenMeshes(ICoreClientAPI api, bool enabled)
+        {
+            Config.Realism.EnableOptimizedFrozenMeshes = enabled;
+            BlockEntityRealisticMasonry.ResetTessellationProfile();
+
+            BlockSelection? selection = api.World.Player.CurrentBlockSelection;
+            if (selection != null && api.World.BlockAccessor.GetBlockEntity(selection.Position) is BlockEntityRealisticMasonry entity)
+            {
+                entity.InvalidateFrozenMeshForProfiling();
+                api.World.BlockAccessor.MarkBlockDirty(selection.Position);
+                AppendProfileLog(api, "CLIENT OPTIMIZED MESH MODE", $"Enabled: {enabled}; invalidated selected cell: {selection.Position}.");
+                return TextCommandResult.Success($"Optimized frozen meshes {(enabled ? "enabled" : "disabled")} for client profiling. The selected cell was invalidated and queued for retessellation.");
+            }
+
+            AppendProfileLog(api, "CLIENT OPTIMIZED MESH MODE", $"Enabled: {enabled}; no selected masonry cell to invalidate.");
+            return TextCommandResult.Success($"Optimized frozen meshes {(enabled ? "enabled" : "disabled")} for future client tessellation. Select a frozen masonry cell and dirty it to include it in the next sample.");
         }
 
         private static string GetProfileLogPath()

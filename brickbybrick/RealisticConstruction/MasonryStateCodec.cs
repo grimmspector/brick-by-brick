@@ -9,7 +9,7 @@ namespace brickbybrick.RealisticConstruction
     // names for every loaded masonry cell.
     internal static class MasonryStateCodec
     {
-        private const byte Version = 7;
+        private const byte Version = 8;
 
         internal static byte[] Encode(MasonryCellState state)
         {
@@ -123,6 +123,7 @@ namespace brickbybrick.RealisticConstruction
 
         private static void WriteUnit(BinaryWriter writer, MasonryUnitPlacement unit, string[] palette)
         {
+            writer.Write(unit.Id ?? string.Empty);
             writer.Write((byte)unit.Kind);
             writer.Write((byte)unit.Orientation);
             writer.Write((byte)unit.VisualShape);
@@ -131,6 +132,9 @@ namespace brickbybrick.RealisticConstruction
             writer.Write((short)unit.Origin.Z);
             writer.Write(unit.OffsetX);
             writer.Write(unit.OffsetZ);
+            writer.Write(unit.OwnerBlockX);
+            writer.Write(unit.OwnerBlockY);
+            writer.Write(unit.OwnerBlockZ);
             writer.Write((byte)Math.Max(0, Array.IndexOf(palette, unit.MaterialCode)));
             WritePositions(writer, unit.MortaredPositions);
         }
@@ -139,7 +143,7 @@ namespace brickbybrick.RealisticConstruction
         {
             MasonryUnitPlacement unit = new()
             {
-                Id = id,
+                Id = version >= 8 ? reader.ReadString() : id,
                 Kind = (MasonryUnitKind)reader.ReadByte(),
                 Orientation = (MasonryOrientation)reader.ReadByte()
             };
@@ -154,6 +158,12 @@ namespace brickbybrick.RealisticConstruction
             {
                 unit.OffsetX = reader.ReadSingle();
                 unit.OffsetZ = reader.ReadSingle();
+            }
+            if (version >= 8)
+            {
+                unit.OwnerBlockX = reader.ReadInt32();
+                unit.OwnerBlockY = reader.ReadInt32();
+                unit.OwnerBlockZ = reader.ReadInt32();
             }
             int paletteIndex = reader.ReadByte();
             unit.MaterialCode = paletteIndex < palette.Length ? palette[paletteIndex] : "burnedbrick-cream";

@@ -145,12 +145,19 @@ namespace brickbybrick.RealisticConstruction
     }
 
     // Coordinates are quarter-block cells matching one half-brick footprint.
-    // X and Z may cross a block boundary;
-    // ownership stays with the origin cell while touched neighbors mirror only
-    // their local footprint for collision, mortar, and support checks.
+    // X and Z may cross a block boundary; the owner stores the source unit and
+    // touched cells retain only a mirror for local collision and tessellation.
     public sealed class MasonryUnitPlacement
     {
         public string Id { get; set; } = string.Empty;
+
+        // Absolute owner coordinates make cross-cell mirrors removable without
+        // relying on the block that happened to be clicked during placement.
+        public int OwnerBlockX { get; set; } = int.MinValue;
+
+        public int OwnerBlockY { get; set; } = int.MinValue;
+
+        public int OwnerBlockZ { get; set; } = int.MinValue;
 
         public string MaterialCode { get; set; } = "game:burnedbrick-cream";
 
@@ -167,6 +174,8 @@ namespace brickbybrick.RealisticConstruction
         public float OffsetZ { get; set; }
 
         public HashSet<MasonryGridPosition> MortaredPositions { get; set; } = new();
+
+        public bool HasOwner => OwnerBlockX != int.MinValue;
 
         public IEnumerable<MasonryGridPosition> GetFootprint()
         {

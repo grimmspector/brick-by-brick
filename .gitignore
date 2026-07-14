@@ -683,6 +683,8 @@ research/
 docs/
 *.sh
 *.ps1
+!tools/run-server-profile.ps1
+!tools/run-client-test-server.ps1
 *.lnk
 research/
 bbb-meshdump-latest.txt
