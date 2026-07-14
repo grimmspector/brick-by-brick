@@ -1,71 +1,97 @@
 # brick-by-brick
-Vintage Story Mod Brick-by-Brick for manual brick block building. Version 0.1.0 (pre-alpha).
+
+Vintage Story mod Brick-by-Brick for manual masonry construction. Version 0.1.1 (pre-alpha).
+
+## STATUS
+
+Brick-by-Brick currently supports metal masonry trowels, liquid mortar handling, staged fireclay brick masonry, placement previews, structural support checks, handbook guidance, and a generated configuration file. Several broader realism and compatibility systems are intentionally represented in config and planning docs before their full gameplay implementation.
+
 ## GOALS
 
-### ADDITIONS
+### COMPLETED
 
-	[ ] Add metal trowel tool & primitive wooden equivalent
-		[x] Add metal trowel {copper, bronze, iron, steel, etc.}
-			[x] Add metal trowel recipes
-			[x] Add trowel head smithing recipes and items
-		[ ] Add primitive wooden trowel with low durability and no repairability]
-	[ ] Add liquid mortar functionality 
-		[x] Add metal trowel liquid mortar functionality
-		[ ] Add primitive wooden trowel liquid mortar functionality
-		[x] Add liquid mortar barrel recipe(s)
-		[x] Add liquid clay barrel recipe(s)
-		[x] Add bucket & barrel as sources for trowels to pick up liquid mortar and clay
-		[x] Add liquid items {clay, mortar, refactory mortar}
-	[ ] Add sequential construction of assemblable brick & stone blocks in-world {slabs, stairs, blocks}
-		[ ] Add sequential construction of slabs {basic brick, stone, refractory brick, brick patterns, cobblestone patterns}
-		[ ] Add sequential construction of stairs {basic brick, stone, refractory brick, brick patterns, cobblestone patterns}
-		[ ] Add sequential construction of blocks {basic brick, stone, refractory brick, brick patterns, cobblestone patterns}
-		[ ] Ensure all blocks have the correct opaqueness, texture alignment and hitboxes/collision.
-	[ ] Add context menu to select brick block variant
-	[ ] Add languge file references for all blocks in english
++ [x] Add metal trowel tool variants.
+	+ [x] Add copper, bronze, iron, meteoric iron, and steel trowels.
+	+ [x] Add metal trowel grid recipes.
+	+ [x] Add trowel head smithing recipes and items.
++ [x] Add liquid mortar foundation.
+	+ [x] Add metal trowel liquid mortar storage.
+	+ [x] Add liquid mortar barrel recipe.
+	+ [x] Add liquid clay barrel recipes.
+	+ [x] Add bucket and barrel refill support for trowels.
+	+ [x] Add liquid items for clay, mortar, and refractory mortar.
++ [x] Add staged fireclay brick construction foundation.
+	+ [x] Add staged brick block construction.
+	+ [x] Add staged brick slab placement.
+	+ [x] Add staged brick stair placement.
+	+ [x] Add trowel modes for build, slab, stair, and block placement.
+	+ [x] Add placement preview for slab, stair, and block modes.
+	+ [x] Add structural support checks for placement and advancement.
++ [x] Add configuration file support.
+	+ [x] Add active trowel, pacing, support, preview, sound, and particle settings.
+	+ [x] Add planned config sections for curing, realism, mortar tiers, and visual variants.
+	+ [x] Normalize and clamp config values on load.
++ [x] Add player-facing guidance.
+	+ [x] Add English language entries for current items, blocks, notices, tool modes, and handbook text.
+	+ [x] Add in-game masonry handbook page.
+	+ [x] Add extra handbook sections for trowels, mortar, liquid clay, refractory mortar, construction courses, and finished masonry.
 
-### CHANGES
+### IN DEVELOPMENT
 
-	[ ] Change brick and stone item textures except when holding a single brick (Always finish a build by placing the final brick. So satisfying!)
-	[ ] Change brick and stone ground-placement behaviours {stackability, pathmaking, block assembly}
-	[ ] ~~Double mortar (temporary)~~
-	[ ] Add comments to all JSON files where appropriate
-	[ ] Add comments to all C# files where appropriate
++ [ ] Expand sequential construction beyond the current fireclay brick path.
+	+ [ ] Add broader brick pattern support.
+	+ [ ] Add stone construction stages.
+	+ [ ] Add refractory brick construction stages.
+	+ [ ] Ensure all supported blocks have correct opaqueness, texture alignment, hitboxes, and collision.
++ [ ] Improve material and variant selection.
+	+ [ ] Add context menu or other selection flow for brick block variants.
+	+ [ ] Support more brick colors and masonry families through data-driven variants.
++ [ ] Polish current code and data.
+	+ [ ] Remove or gate temporary interaction debug logging.
+	+ [ ] Decide whether to normalize Vintage Story JSON extensions to strict JSON for external tooling.
+	+ [ ] Add concise comments where current C# and JSON behavior is not self-explanatory.
++ [ ] Tune balance.
+	+ [ ] Rebalance mortar production ratios and consumption ratios.
+	+ [ ] Connect active settings to any remaining planned recipe-yield behavior.
 
-### FUTURE PLANS
-	
-	[ ] Compatability with XSkills (xp for clayworking and mining)
-	[ ] Add tiered mortar system for high-temp uses {sifted sand, pulverized bricks, mortar premixture}
-	[ ] Add sequential construction of bloomeries 
-	[ ] Add tiers to bloomeries (implemented by another mod, should we just compatibly add to it?)
-	[ ] Add tiered mortar system for cementation furnaces & beehive kilns
-	+ Visibly differently coloured mortar types on ALL blocks
-	+ Full compatability with rock and brick types from other mods
-	+ Compatability with modded classes that change ingredient ratios for refractory bricks
-	+ Immersive stone shapes when putting dry stone and cobblestone together to match the noisemap of different textures
-	+ Curing time for mortar on placed brickblocks that allows them to be retrievable or deconstructed (with mortar loss)
-	+ Wet final masonry blocks that dry into normal blocks over time; wet blocks cannot be broken to pick up, but can be dismantled for parts
-	+ Artist to make nice visuals for the DB page 
-	+ Language localization
-	+ Sledgehammer tool for breaking placed bricks
-	+ Rebalance mortar production ratios & consumption ratios [+configurable]
-	+ Total configuration
-	+ Correction of all stone/brick textures {only stairs, slabs, blocks} to match all sides with apparent bricks
-	+ Modify brick/stone creation/drops and mechanics for a "realistic" mode where individual bricks/stones in the corrected textured blocks is built one-to-one from new/modified bricks/stones
-	+ Extend beyond stairs, slabs and blocks
-	+ Extravanilla brick bonds
-	+ Use Attribute Rendering Library to optimize masonry variants after the initial public release
-	+ Lime Kiln to bulk-batch lime
+### PLANNED
+
++ [ ] Add primitive wooden trowel with low durability and no repairability.
++ [ ] Add primitive wooden trowel liquid mortar functionality.
++ [ ] Change brick and stone item textures except when holding a single brick.
++ [ ] Change brick and stone ground-placement behaviours for stackability, pathmaking, and block assembly.
++ [ ] Add compatibility with XSkills for clayworking and mining XP.
++ [ ] Add tiered mortar system for high-temperature uses.
++ [ ] Add sequential construction of bloomeries.
++ [ ] Add tiers to bloomeries, or compatibility with an existing bloomery-tier mod.
++ [ ] Add tiered mortar support for cementation furnaces and beehive kilns.
++ [ ] Add visibly different mortar colors on supported blocks.
++ [ ] Add full compatibility with rock and brick types from other mods.
++ [ ] Add compatibility with modded classes that change ingredient ratios for refractory bricks.
++ [ ] Add immersive dry-stone and cobblestone shapes.
++ [ ] Add curing time for mortared masonry.
++ [ ] Add wet final masonry blocks that dry into normal blocks over time.
++ [ ] Add sledgehammer tool for dismantling placed masonry.
++ [ ] Add total configuration coverage for supported systems.
++ [ ] Correct stone and brick textures for stairs, slabs, and blocks.
++ [ ] Add optional realistic mode with one-to-one visible masonry units.
++ [ ] Extend construction beyond stairs, slabs, and blocks.
++ [ ] Add extra-vanilla brick bonds.
++ [ ] Use Attribute Rendering Library to optimize masonry variants after the initial public release.
++ [ ] Add lime kiln support for bulk lime production.
++ [ ] Add localization beyond English.
++ [ ] Add polished artwork for the ModDB page.
 
 ### PRIORITIES
 
-	1. Config files
-	2. Rebalancing mortar recipe
-	3. Artist 
-	4. Curing timer on mortared bricks
-	5. Compatability with everyone
-	6. Sledgehammer
-	7. Immersive game changes
-	8. Different coloured mortar and all permutations
-	9. Modify stone/brick creation/drops and implement "realistic" mode (optional)
-	10. Extend to other block types, including vanilla and mods
+1. Finish and verify current staged masonry paths.
+2. Rebalance mortar recipes and consumption.
+3. Remove temporary debug logging and strict-JSON warnings.
+4. Improve art and textures.
+5. Add curing timer on mortared bricks.
+6. Add broad compatibility with vanilla, modded rocks, modded bricks, and scaffolding-style support.
+7. Add sledgehammer dismantling.
+8. Expand immersive construction changes.
+9. Add visible mortar color variants.
+10. Implement optional realistic mode.
+11. Extend construction to more block types.
