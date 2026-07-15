@@ -38,7 +38,7 @@ The planned construction modes are:
 | `MortarCostPerAction` | 0–64 | 1 | Active | Mortar portions consumed by each successful action. |
 | `MasonryCostPerAction` | 0–64 | 1 | Active | Bricks or stones consumed by each masonry action. |
 | `AllowContainerRefill` | `true`, `false` | `true` | Active | Allows trowels to collect mortar from compatible liquid containers. |
-| `EnablePlacementPreview` | `true`, `false` | `true` | Active | Shows the translucent finished-shape preview while placing masonry. |
+| `EnablePlacementPreview` | `true`, `false` | `true` | Active | Shows the translucent staged masonry preview while placing masonry, without previewing mortar. |
 | `PlacementPreviewOpacity` | 0.0–1.0 | 0.52 | Active | Controls preview transparency. Zero is invisible and one is opaque. |
 
 Setting a material or mortar cost to zero makes that resource free, but the player may still need to hold the correct material so Brick-by-Brick can determine the block variant.

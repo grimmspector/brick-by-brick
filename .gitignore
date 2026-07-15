@@ -679,6 +679,7 @@ fabric.properties
 .ref-repos/
 .local/
 assets-examples/
+docs/
 research/
 *.sh
 *.ps1
