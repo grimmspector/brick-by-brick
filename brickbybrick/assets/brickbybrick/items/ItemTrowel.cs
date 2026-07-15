@@ -324,20 +324,9 @@ namespace brickbybrick.items
             if (!HasEnoughMortar(slot, byEntity)) return false;
             if (!TryGetPlacementMaterial(player, byEntity, out ItemSlot offhandSlot, out ItemStack materialStack, out string family, out string color)) return false;
 
-            if (!TryCreatePlacementCourse(
-                byEntity.World,
-                byEntity,
-                blockSel,
-                toolMode,
-                materialStack,
-                family,
-                color,
-                out BlockPos targetPos,
-                out Block placeBlock,
-                out Variants placementVariants))
-            {
-                return false;
-            }
+            BlockPos targetPos = ResolvePlacementTarget(blockSel);
+            Block placeBlock = ResolvePlacementBlock(byEntity.World, byEntity, blockSel, toolMode, color);
+            if (placeBlock == null) return false;
 
             // Support is checked after the timed action so cave-ins or other
             // neighbour changes cannot leave a newly placed course floating.
@@ -350,6 +339,7 @@ namespace brickbybrick.items
                 return false;
             }
 
+            Variants placementVariants = CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
             ItemStack placementStack = CreateCourseStack(byEntity.World, placementVariants);
 
             byEntity.World.BlockAccessor.SetBlock(placeBlock.Id, targetPos, placementStack);
@@ -1077,33 +1067,6 @@ namespace brickbybrick.items
             return placeBlock;
         }
 
-        private bool TryCreatePlacementCourse(
-            IWorldAccessor world,
-            EntityAgent byEntity,
-            BlockSelection blockSel,
-            int toolMode,
-            ItemStack materialStack,
-            string family,
-            string color,
-            out BlockPos targetPos,
-            out Block placeBlock,
-            out Variants variants)
-        {
-            targetPos = null;
-            placeBlock = null;
-            variants = null;
-
-            if (world == null || blockSel == null || byEntity == null) return false;
-            if (!IsPlacementMode(toolMode)) return false;
-
-            targetPos = ResolvePlacementTarget(blockSel);
-            placeBlock = ResolvePlacementBlock(world, byEntity, blockSel, toolMode, color);
-            if (placeBlock == null) return false;
-
-            variants = CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
-            return variants != null;
-        }
-
         private ItemStack CreateCourseStack(IWorldAccessor world, Variants variants)
         {
             ItemStack stack = new ItemStack(world.BlockAccessor.GetBlock(new AssetLocation(MasonryCourseCode)));
@@ -1125,11 +1088,8 @@ namespace brickbybrick.items
             variants.Set("state", "four");
             variants.Set("color", color);
             variants.Set("stage", "1");
-            if (materialStack?.Collectible?.Code != null)
-            {
-                variants.Set("materialDomain", materialStack.Collectible.Code.Domain);
-                variants.Set("materialPath", materialStack.Collectible.Code.Path);
-            }
+            variants.Set("materialDomain", materialStack.Collectible.Code.Domain);
+            variants.Set("materialPath", materialStack.Collectible.Code.Path);
 
             if (toolMode == SlabMode)
             {
@@ -1684,8 +1644,6 @@ namespace brickbybrick.items
         {
             private const float ContactFaceOffset = 0.015625f;
             private const string DefaultPreviewColor = "red";
-            private const string NoMortarPreviewVariant = "nomortar";
-            private const string NoMortarPreviewMeshKey = "placement-preview-nomortar";
 
             private readonly ICoreClientAPI capi;
             private readonly ItemTrowel trowel;
@@ -1703,9 +1661,9 @@ namespace brickbybrick.items
             public void OnRenderFrame(float deltaTime, EnumRenderStage stage)
             {
                 if (!brickbybrickModSystem.Config.Trowels.EnablePlacementPreview) return;
-                if (!TryResolvePreview(out BlockPos targetPos, out Block courseBlock, out Variants previewVariants, out BlockFacing selectedFace, out bool hasSupport)) return;
+                if (!TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace, out bool hasSupport)) return;
 
-                MeshRef meshRef = GetOrCreateMeshRef(courseBlock, previewVariants);
+                MeshRef meshRef = GetOrCreateMeshRef(finalBlock);
                 if (meshRef == null) return;
 
                 IRenderAPI rpi = capi.Render;
@@ -1749,38 +1707,22 @@ namespace brickbybrick.items
                 meshRefs.Clear();
             }
 
-            private MeshRef GetOrCreateMeshRef(Block block, Variants variants)
+            private MeshRef GetOrCreateMeshRef(Block block)
             {
-                string key = $"{block.Code}-{variants}-{NoMortarPreviewMeshKey}";
+                string key = block.Code.ToString();
                 if (meshRefs.TryGetValue(key, out MeshRef meshRef)) return meshRef;
 
-                BlockBehaviorShapeTexturesFromAttributes behavior = block.GetBehavior<BlockBehaviorShapeTexturesFromAttributes>();
-                MeshData meshData;
-
-                if (behavior != null)
-                {
-                    meshData = behavior.GetOrCreateMesh(
-                        variants: variants,
-                        overrideShape: null,
-                        atBlockPos: null,
-                        extraCacheKey: NoMortarPreviewMeshKey);
-                }
-                else
-                {
-                    capi.Tesselator.TesselateBlock(block, out meshData);
-                }
-
+                capi.Tesselator.TesselateBlock(block, out MeshData meshData);
                 meshRef = capi.Render.UploadMesh(meshData);
                 meshRefs[key] = meshRef;
 
                 return meshRef;
             }
 
-            private bool TryResolvePreview(out BlockPos targetPos, out Block courseBlock, out Variants previewVariants, out BlockFacing selectedFace, out bool hasSupport)
+            private bool TryResolvePreview(out BlockPos targetPos, out Block finalBlock, out BlockFacing selectedFace, out bool hasSupport)
             {
                 targetPos = null;
-                courseBlock = null;
-                previewVariants = null;
+                finalBlock = null;
                 selectedFace = BlockFacing.UP;
                 hasSupport = false;
 
@@ -1792,28 +1734,19 @@ namespace brickbybrick.items
                 int toolMode = trowel.GetToolMode(activeSlot, player, blockSel);
                 if (!IsPlacementMode(toolMode)) return false;
                 if (!TryResolveMaterial(player, out ItemStack materialStack, out string family, out string color)) return false;
-                if (!trowel.TryCreatePlacementCourse(
-                    capi.World,
-                    player.Entity,
-                    blockSel,
-                    toolMode,
-                    materialStack,
-                    family,
-                    color,
-                    out targetPos,
-                    out courseBlock,
-                    out previewVariants))
-                {
-                    return false;
-                }
 
+                targetPos = trowel.ResolvePlacementTarget(blockSel);
                 hasSupport = HasStructuralSupport(capi.World, targetPos, player);
                 selectedFace = blockSel.Face ?? BlockFacing.UP;
+                Block placeBlock = trowel.ResolvePlacementBlock(capi.World, player.Entity, blockSel, toolMode, color);
                 Block existingBlock = capi.World.BlockAccessor.GetBlock(targetPos);
-                if (existingBlock == null || !existingBlock.IsReplacableBy(courseBlock)) return false;
+                if (placeBlock == null || existingBlock == null || !existingBlock.IsReplacableBy(placeBlock)) return false;
 
-                previewVariants.Set("preview", NoMortarPreviewVariant);
-                return true;
+                Variants variants = CreatePreviewVariants(toolMode, blockSel, player.Entity, family, color, materialStack);
+                AssetLocation finalCode = trowel.ResolveFinishedPlacementBlockCode(toolMode, variants, color);
+                finalBlock = finalCode == null ? null : capi.World.BlockAccessor.GetBlock(finalCode);
+
+                return finalBlock != null;
             }
 
             // Preview checks stay silent so invalid offhand contents do not
@@ -1839,6 +1772,46 @@ namespace brickbybrick.items
                 family = "brick";
                 color = DefaultPreviewColor;
                 return true;
+            }
+
+            private Variants CreatePreviewVariants(
+                int toolMode,
+                BlockSelection blockSel,
+                EntityAgent byEntity,
+                string family,
+                string color,
+                ItemStack materialStack)
+            {
+                if (materialStack != null)
+                {
+                    return trowel.CreatePlacementVariants(toolMode, blockSel, byEntity, family, color, materialStack);
+                }
+
+                Variants variants = new();
+                variants.Set("family", family);
+                variants.Set("state", "four");
+                variants.Set("color", color);
+
+                if (toolMode == SlabMode)
+                {
+                    variants.Set("shape", "slab");
+                    variants.Set("rotation", trowel.ResolveSlabRotationCode(blockSel, byEntity));
+                }
+                else if (toolMode == StairMode)
+                {
+                    trowel.ResolveStairOrientationCodes(blockSel, byEntity, out string vertical, out string horizontal);
+                    variants.Set("shape", "stair");
+                    variants.Set("vertical", vertical);
+                    variants.Set("horizontal", horizontal);
+                }
+                else
+                {
+                    BlockFacing facing = BlockFacing.HorizontalFromYaw(byEntity.Pos.Yaw);
+                    variants.Set("shape", "block");
+                    variants.Set("bond", facing.IsAxisWE ? "running" : "runningo");
+                }
+
+                return variants;
             }
 
             private Vec3f GetFaceOffset(BlockFacing face)

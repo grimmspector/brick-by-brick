@@ -85,14 +85,6 @@
             "rotateY": 270
           }
         },
-        "shapeIgnoreElementsCombine": {
-          "preview-nomortar": [
-            "base",
-            "Base",
-            "mortar",
-            "Mortar"
-          ]
-        },
         "textures": {
           "family-cobble::color-*": {
             "mortar": {
