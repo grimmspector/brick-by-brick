@@ -1745,7 +1745,7 @@ namespace brickbybrick
 
         private static bool TryGetOffhandRealisticMaterial(IClientPlayer player, out ItemStack? stack)
         {
-            stack = player.InventoryManager.GetHotbarInventory()?[11]?.Itemstack;
+            stack = player.InventoryManager.OffhandHotbarSlot?.Itemstack;
             return stack != null;
         }
 

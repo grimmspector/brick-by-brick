@@ -388,7 +388,7 @@ namespace brickbybrick.RealisticConstruction
                 else combinedMesh.AddMeshData(mesh);
             }
 
-            foreach (MasonryUnitPlacement unit in State.Units)
+            foreach (MasonryUnitPlacement unit in State.Units.Concat(State.ReservedUnits))
             {
                 CompositeShape shape = new()
                 {

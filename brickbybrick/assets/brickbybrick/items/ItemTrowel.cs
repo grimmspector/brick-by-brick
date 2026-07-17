@@ -3,6 +3,7 @@ using brickbybrick.RealisticConstruction;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using Vintagestory.API.Client;
@@ -35,9 +36,12 @@ namespace brickbybrick.items
         public const string RealisticVariantAttribute = "brickbybrick:realisticVariant";
         public const string SecondaryPlacementModifierHotKeyCode = "ctrl";
         public const int RealisticHalfBrickVariantCount = 9;
+        private const string RealisticPlacementLogName = "brickbybrick-placement.log";
+        private static readonly object RealisticPlacementLogLock = new();
         private static bool hasClientRealisticPlacementState;
         private static int clientRealisticOrientation;
         private static int clientRealisticVariant;
+        private static string lastRealisticPreviewTraceKey = string.Empty;
 
         private static readonly string[] BrickSounds =
         {
@@ -494,14 +498,6 @@ namespace brickbybrick.items
                         : (MasonryUnitKind)(-1);
             if ((int)kind < 0) return;
 
-            // A matching brick in the off-hand acts as a pickup filter when
-            // the player points at an existing, completely unmortared brick.
-            if (kind is not MasonryUnitKind.RammedEarth and not MasonryUnitKind.SmallRammedEarth
-                && TryPickupMatchingRealisticBrick(byEntity, player, blockSel, path))
-            {
-                return;
-            }
-
             BlockPos targetPos = byEntity.World.BlockAccessor.GetBlock(blockSel.Position).Code?.Path == "realisticmasonry"
                 ? blockSel.Position.Copy()
                 : ResolvePlacementTarget(blockSel);
@@ -522,20 +518,31 @@ namespace brickbybrick.items
                 Orientation = ResolveRealisticUnitOrientation(kind, player),
                 Origin = new MasonryGridPosition(gridX, layer, gridZ)
             };
-            TrySnapDiagonalPlacement(byEntity.World.BlockAccessor, targetPos, blockSel, unit);
+            StringBuilder placementTrace = new();
+            AppendRealisticPlacementTraceHeader(placementTrace, "PLACE", byEntity.World.Side, blockSel, path, unit, targetPos, targetsExistingCell, gridX, gridZ, layer);
+            TrySnapRealisticPlacement(byEntity.World.BlockAccessor, targetPos, blockSel, unit, placementTrace);
             CanonicalizePlacementOwner(ref targetPos, unit);
+            placementTrace.AppendLine($"finalTarget={FormatBlockPos(targetPos)} finalUnit={FormatRealisticUnit(unit)}");
             targetBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
 
             if (targetBlock.Code?.Path != "realisticmasonry")
             {
                 Block initialConstructionBlock = byEntity.World.GetBlock(new AssetLocation("brickbybrick:realisticmasonry"));
-                if (initialConstructionBlock == null || !targetBlock.IsReplacableBy(initialConstructionBlock)) return;
+                if (initialConstructionBlock == null || !targetBlock.IsReplacableBy(initialConstructionBlock))
+                {
+                    placementTrace.AppendLine($"result=blocked targetBlock={targetBlock?.Code}");
+                    LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
+                    return;
+                }
+
                 byEntity.World.BlockAccessor.SetBlock(initialConstructionBlock.Id, targetPos);
                 createdTargetBlock = true;
             }
 
             if (byEntity.World.BlockAccessor.GetBlockEntity(targetPos) is not BlockEntityRealisticMasonry entity)
             {
+                placementTrace.AppendLine("result=blocked reason=missing-block-entity");
+                LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
                 CleanupCreatedEmptyTarget();
                 return;
             }
@@ -547,6 +554,7 @@ namespace brickbybrick.items
             MasonryPlacementFailure placementFailure = GetProjectedPlacementFailure(byEntity.World.BlockAccessor, targetPos, entity, unit);
             if (placementFailure != MasonryPlacementFailure.None)
             {
+                placementTrace.AppendLine($"result=blocked reason={placementFailure}");
                 if (placementFailure == MasonryPlacementFailure.Frozen)
                 {
                     NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-frozen"));
@@ -557,6 +565,7 @@ namespace brickbybrick.items
                 }
 
                 CleanupCreatedEmptyTarget();
+                LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
                 return;
             }
 
@@ -573,12 +582,16 @@ namespace brickbybrick.items
                     if (byEntity.World.BlockAccessor.GetBlockEntity(neighborPos) is not BlockEntityRealisticMasonry neighborEntity
                         || !neighborEntity.CanReserve(neighborProjection))
                     {
+                        placementTrace.AppendLine($"result=blocked reason=neighbor-reserve-failed neighbor={FormatBlockPos(neighborPos)} projection={FormatRealisticUnit(neighborProjection)}");
+                        LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
                         CleanupCreatedEmptyTarget();
                         return;
                     }
                 }
                 else if (constructionBlock == null || !neighborBlock.IsReplacableBy(constructionBlock))
                 {
+                    placementTrace.AppendLine($"result=blocked reason=neighbor-not-replacable neighbor={FormatBlockPos(neighborPos)} block={neighborBlock?.Code}");
+                    LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
                     CleanupCreatedEmptyTarget();
                     return;
                 }
@@ -600,13 +613,19 @@ namespace brickbybrick.items
 
             if (!entity.TryPlace(unit))
             {
+                placementTrace.AppendLine("result=blocked reason=try-place-failed");
+                LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
                 CleanupCreatedEmptyTarget();
                 return;
             }
 
+            int materialCountBefore = materialSlot.Itemstack?.StackSize ?? 0;
             materialSlot.TakeOut(1);
             materialSlot.MarkDirty();
             PlayRandomSound(byEntity.World, targetPos, player, BrickSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
+            placementTrace.AppendLine($"inventory=consume material={path} count=1 before={materialCountBefore} after={materialSlot.Itemstack?.StackSize ?? 0}");
+            placementTrace.AppendLine("result=placed");
+            LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
 
             void CleanupCreatedEmptyTarget()
             {
@@ -780,51 +799,91 @@ namespace brickbybrick.items
             return GameMath.Clamp(layer, 0, 3);
         }
 
-        private static void TrySnapDiagonalPlacement(IBlockAccessor blockAccessor, BlockPos targetPos, BlockSelection blockSel, MasonryUnitPlacement unit)
+        private static void TrySnapRealisticPlacement(IBlockAccessor blockAccessor, BlockPos targetPos, BlockSelection blockSel, MasonryUnitPlacement unit, StringBuilder trace = null)
         {
+            if (unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth) return;
             if (!brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement
-                || (!unit.IsDiagonal && unit.VisualShape != MasonryVisualShape.TriangleWedge)) return;
+                && (unit.IsDiagonal || unit.VisualShape == MasonryVisualShape.TriangleWedge)) return;
 
             List<DiagonalSnapCandidate> candidates = new();
-            foreach (MasonryUnitPlacement anchor in CollectDiagonalAnchors(blockAccessor, targetPos, unit.Origin.Y))
+            foreach (MasonryUnitPlacement anchor in CollectPlacementAnchors(blockAccessor, targetPos, unit.Origin.Y))
             {
-                AddDiagonalAnchorCandidates(candidates, anchor, unit);
+                AddAnchorPlacementCandidates(candidates, anchor, unit);
             }
 
-            float hitX = (float)blockSel.HitPosition.X;
-            float hitZ = (float)blockSel.HitPosition.Z;
             float maxSnapDistance = blockSel.Face?.IsHorizontal == true ? 0.75f : 0.9f;
             float maxSnapDistanceSquared = maxSnapDistance * maxSnapDistance;
-            DiagonalSnapCandidate best = candidates
-                .Where(candidate => IsSnapCandidateValid(blockAccessor, targetPos, candidate.Unit))
-                .Where(candidate => DistanceToHit(candidate.Unit, blockSel) <= maxSnapDistanceSquared)
-                .OrderBy(candidate => candidate.Priority)
-                .ThenBy(candidate =>
+            bool rawValid = IsSnapCandidateValid(blockAccessor, targetPos, unit);
+            float rawDistance = DistanceToHit(unit, blockSel);
+            List<EvaluatedSnapCandidate> evaluatedCandidates = candidates
+                .Select((candidate, index) =>
                 {
-                    MasonryVoxelGeometry.GetUnitCenter(candidate.Unit, out float centerX, out float centerZ);
-                    return DistanceSquared(hitX, hitZ, centerX, centerZ);
+                    float distance = DistanceToHit(candidate.Unit, blockSel);
+                    bool inRange = distance <= maxSnapDistanceSquared;
+                    bool valid = inRange && IsSnapCandidateValid(blockAccessor, targetPos, candidate.Unit);
+                    return new EvaluatedSnapCandidate(candidate, index, distance, inRange, valid);
                 })
+                .ToList();
+            EvaluatedSnapCandidate best = evaluatedCandidates
+                .Where(candidate => candidate.Valid)
+                .OrderBy(candidate => candidate.DistanceSquared + candidate.Candidate.Priority * 0.015f)
                 .FirstOrDefault();
-            if (best.Unit == null) return;
 
-            unit.Origin = best.Unit.Origin;
-            unit.OffsetX = best.Unit.OffsetX;
-            unit.OffsetZ = best.Unit.OffsetZ;
-            unit.Orientation = best.Unit.Orientation;
-            unit.VisualShape = best.Unit.VisualShape;
+            if (rawValid && (best.Candidate.Unit == null || rawDistance <= best.DistanceSquared - 0.01f))
+            {
+                AppendSnapCandidateTrace(trace, candidates.Count, maxSnapDistanceSquared, evaluatedCandidates, rawValid, rawDistance, default);
+                return;
+            }
+
+            AppendSnapCandidateTrace(trace, candidates.Count, maxSnapDistanceSquared, evaluatedCandidates, rawValid, rawDistance, best.Candidate);
+            if (best.Candidate.Unit == null) return;
+
+            unit.Origin = best.Candidate.Unit.Origin;
+            unit.OffsetX = best.Candidate.Unit.OffsetX;
+            unit.OffsetZ = best.Candidate.Unit.OffsetZ;
+            unit.Orientation = best.Candidate.Unit.Orientation;
+            unit.VisualShape = best.Candidate.Unit.VisualShape;
         }
 
         private readonly struct DiagonalSnapCandidate
         {
-            public DiagonalSnapCandidate(MasonryUnitPlacement unit, int priority)
+            public DiagonalSnapCandidate(MasonryUnitPlacement unit, int priority, string relation, MasonryUnitPlacement anchor)
             {
                 Unit = unit;
                 Priority = priority;
+                Relation = relation;
+                Anchor = anchor;
             }
 
             public MasonryUnitPlacement Unit { get; }
 
             public int Priority { get; }
+
+            public string Relation { get; }
+
+            public MasonryUnitPlacement Anchor { get; }
+        }
+
+        private readonly struct EvaluatedSnapCandidate
+        {
+            public EvaluatedSnapCandidate(DiagonalSnapCandidate candidate, int index, float distanceSquared, bool inRange, bool valid)
+            {
+                Candidate = candidate;
+                Index = index;
+                DistanceSquared = distanceSquared;
+                InRange = inRange;
+                Valid = valid;
+            }
+
+            public DiagonalSnapCandidate Candidate { get; }
+
+            public int Index { get; }
+
+            public float DistanceSquared { get; }
+
+            public bool InRange { get; }
+
+            public bool Valid { get; }
         }
 
         private static bool IsSnapCandidateValid(IBlockAccessor blockAccessor, BlockPos targetPos, MasonryUnitPlacement unit)
@@ -853,7 +912,7 @@ namespace brickbybrick.items
             return true;
         }
 
-        private static IEnumerable<MasonryUnitPlacement> CollectDiagonalAnchors(IBlockAccessor blockAccessor, BlockPos targetPos, int layer)
+        private static IEnumerable<MasonryUnitPlacement> CollectPlacementAnchors(IBlockAccessor blockAccessor, BlockPos targetPos, int layer)
         {
             for (int offsetX = -1; offsetX <= 1; offsetX++)
             for (int offsetZ = -1; offsetZ <= 1; offsetZ++)
@@ -865,7 +924,7 @@ namespace brickbybrick.items
                     continue;
                 }
 
-                foreach (MasonryUnitPlacement anchor in anchorEntity.State.Units.Where(existing => existing.Origin.Y == layer))
+                foreach (MasonryUnitPlacement anchor in anchorEntity.State.Units.Concat(anchorEntity.State.ReservedUnits).Where(existing => existing.Origin.Y == layer))
                 {
                     yield return ProjectAnchorIntoTarget(anchor, offsetX, offsetZ);
                 }
@@ -893,18 +952,20 @@ namespace brickbybrick.items
             };
         }
 
-        private static void AddDiagonalAnchorCandidates(List<DiagonalSnapCandidate> candidates, MasonryUnitPlacement anchor, MasonryUnitPlacement unit)
+        private static void AddAnchorPlacementCandidates(List<DiagonalSnapCandidate> candidates, MasonryUnitPlacement anchor, MasonryUnitPlacement unit)
         {
+            if (anchor.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth) return;
+
             MasonryVoxelGeometry.GetUnitAxes(
                 unit,
                 out _,
                 out _,
-                out float unitDirectionX,
-                out float unitDirectionZ,
-                out float unitPerpendicularX,
-                out float unitPerpendicularZ,
-                out float unitHalfLength,
-                out float unitHalfWidth);
+                out _,
+                out _,
+                out _,
+                out _,
+                out float sourceHalfLength,
+                out float sourceHalfWidth);
             MasonryVoxelGeometry.GetUnitAxes(
                 anchor,
                 out float anchorCenterX,
@@ -916,60 +977,176 @@ namespace brickbybrick.items
                 out float anchorHalfLength,
                 out float anchorHalfWidth);
 
-            if (anchor.IsDiagonal)
+            foreach (MasonryOrientation orientation in GetSnapAxisOrientations(unit.Orientation))
             {
-                // End-to-end and side-by-side diagonal poses inherit the
-                // anchor's axis. The held orientation is intentionally not a
-                // prerequisite: aiming at a compatible joint picks its one
-                // finite, buildable pose.
-                MasonryOrientation orientation = anchor.Orientation;
-                float endSeparation = anchorHalfLength + unitHalfLength;
-                candidates.Add(new DiagonalSnapCandidate(CreatePlacementCandidate(unit, orientation, anchorCenterX + anchorDirectionX * endSeparation, anchorCenterZ + anchorDirectionZ * endSeparation), 0));
-                candidates.Add(new DiagonalSnapCandidate(CreatePlacementCandidate(unit, orientation, anchorCenterX - anchorDirectionX * endSeparation, anchorCenterZ - anchorDirectionZ * endSeparation), 0));
+                MasonryVoxelGeometry.GetDirection(orientation, out float unitDirectionX, out float unitDirectionZ);
+                float unitPerpendicularX = -unitDirectionZ;
+                float unitPerpendicularZ = unitDirectionX;
+                float unitHalfLength = sourceHalfLength;
+                float unitHalfWidth = sourceHalfWidth;
+                float axisDot = MathF.Abs(anchorDirectionX * unitDirectionX + anchorDirectionZ * unitDirectionZ);
+                float perpendicularDot = MathF.Abs(anchorPerpendicularX * unitDirectionX + anchorPerpendicularZ * unitDirectionZ);
 
-                float sideSeparation = anchorHalfWidth + unitHalfWidth;
-                candidates.Add(new DiagonalSnapCandidate(CreatePlacementCandidate(unit, orientation, anchorCenterX + anchorPerpendicularX * sideSeparation, anchorCenterZ + anchorPerpendicularZ * sideSeparation), 1));
-                candidates.Add(new DiagonalSnapCandidate(CreatePlacementCandidate(unit, orientation, anchorCenterX - anchorPerpendicularX * sideSeparation, anchorCenterZ - anchorPerpendicularZ * sideSeparation), 1));
-                return;
-            }
-
-            IEnumerable<MasonryOrientation> orientations = unit.VisualShape == MasonryVisualShape.TriangleWedge
-                ? AllOrientations
-                : unit.Kind == MasonryUnitKind.HalfBrick && unit.IsDiagonal
-                    ? DiagonalOrientations
-                    : new[] { unit.Orientation };
-            foreach (MasonryOrientation orientation in orientations)
-            {
-                MasonryVoxelGeometry.GetDirection(orientation, out float candidateDirectionX, out float candidateDirectionZ);
-                float candidatePerpendicularX = -candidateDirectionZ;
-                float candidatePerpendicularZ = candidateDirectionX;
-                foreach ((float cornerX, float cornerZ) in MasonryVoxelGeometry.GetUnitCorners(anchor))
-                foreach ((float offsetX, float offsetZ) in GetCornerOffsets(candidateDirectionX, candidateDirectionZ, candidatePerpendicularX, candidatePerpendicularZ, unitHalfLength, unitHalfWidth))
+                if (axisDot > 0.98f)
                 {
-                    candidates.Add(new DiagonalSnapCandidate(CreatePlacementCandidate(unit, orientation, cornerX - offsetX, cornerZ - offsetZ), 2));
+                    AddCandidate(candidates, unit, orientation, anchor, "end", 0, anchorCenterX + anchorDirectionX * (anchorHalfLength + unitHalfLength), anchorCenterZ + anchorDirectionZ * (anchorHalfLength + unitHalfLength));
+                    AddCandidate(candidates, unit, orientation, anchor, "end", 0, anchorCenterX - anchorDirectionX * (anchorHalfLength + unitHalfLength), anchorCenterZ - anchorDirectionZ * (anchorHalfLength + unitHalfLength));
+
+                    float sideSeparation = anchorHalfWidth + unitHalfWidth;
+                    AddSideCandidates(candidates, unit, orientation, anchor, anchorCenterX, anchorCenterZ, anchorPerpendicularX, anchorPerpendicularZ, anchorDirectionX, anchorDirectionZ, sideSeparation, 0, "side", 1);
+                    float runningOffset = MathF.Min(anchorHalfLength, unitHalfLength);
+                    AddSideCandidates(candidates, unit, orientation, anchor, anchorCenterX, anchorCenterZ, anchorPerpendicularX, anchorPerpendicularZ, anchorDirectionX, anchorDirectionZ, sideSeparation, runningOffset, "side-offset", 1);
+                }
+
+                if (perpendicularDot > 0.98f)
+                {
+                    AddPerpendicularCandidates(candidates, unit, orientation, anchor, anchorCenterX, anchorCenterZ, anchorDirectionX, anchorDirectionZ, anchorPerpendicularX, anchorPerpendicularZ, anchorHalfLength, anchorHalfWidth, unitHalfLength, unitHalfWidth);
+                }
+
+                if (unit.IsDiagonal || unit.VisualShape == MasonryVisualShape.TriangleWedge || anchor.IsDiagonal)
+                {
+                    foreach ((float cornerX, float cornerZ) in MasonryVoxelGeometry.GetUnitCorners(anchor))
+                    foreach ((float offsetX, float offsetZ) in GetCornerOffsets(unitDirectionX, unitDirectionZ, unitPerpendicularX, unitPerpendicularZ, unitHalfLength, unitHalfWidth))
+                    {
+                        AddCandidate(candidates, unit, orientation, anchor, "corner", 3, cornerX - offsetX, cornerZ - offsetZ);
+                    }
                 }
             }
         }
 
-        private static readonly MasonryOrientation[] DiagonalOrientations =
+        private static void AddSideCandidates(
+            List<DiagonalSnapCandidate> candidates,
+            MasonryUnitPlacement unit,
+            MasonryOrientation orientation,
+            MasonryUnitPlacement anchor,
+            float anchorCenterX,
+            float anchorCenterZ,
+            float perpendicularX,
+            float perpendicularZ,
+            float directionX,
+            float directionZ,
+            float sideSeparation,
+            float longitudinalOffset,
+            string relation,
+            int priority)
         {
-            MasonryOrientation.SouthEast,
-            MasonryOrientation.SouthWest,
-            MasonryOrientation.NorthWest,
-            MasonryOrientation.NorthEast
-        };
+            int[] sideSigns = { -1, 1 };
+            int[] offsetSigns = longitudinalOffset > 0.0001f ? new[] { -1, 1 } : new[] { 0 };
+            foreach (int sideSign in sideSigns)
+            foreach (int offsetSign in offsetSigns)
+            {
+                AddCandidate(
+                    candidates,
+                    unit,
+                    orientation,
+                    anchor,
+                    relation,
+                    priority,
+                    anchorCenterX + perpendicularX * sideSeparation * sideSign + directionX * longitudinalOffset * offsetSign,
+                    anchorCenterZ + perpendicularZ * sideSeparation * sideSign + directionZ * longitudinalOffset * offsetSign);
+            }
+        }
 
-        private static readonly MasonryOrientation[] AllOrientations =
+        private static void AddPerpendicularCandidates(
+            List<DiagonalSnapCandidate> candidates,
+            MasonryUnitPlacement unit,
+            MasonryOrientation orientation,
+            MasonryUnitPlacement anchor,
+            float anchorCenterX,
+            float anchorCenterZ,
+            float anchorDirectionX,
+            float anchorDirectionZ,
+            float anchorPerpendicularX,
+            float anchorPerpendicularZ,
+            float anchorHalfLength,
+            float anchorHalfWidth,
+            float unitHalfLength,
+            float unitHalfWidth)
         {
-            MasonryOrientation.East,
-            MasonryOrientation.South,
-            MasonryOrientation.West,
-            MasonryOrientation.North,
-            MasonryOrientation.SouthEast,
-            MasonryOrientation.SouthWest,
-            MasonryOrientation.NorthWest,
-            MasonryOrientation.NorthEast
-        };
+            int[] signs = { -1, 1 };
+            float[] sideAlongOffsets = { 0, anchorHalfLength - unitHalfWidth, -anchorHalfLength + unitHalfWidth };
+            foreach (int sideSign in signs)
+            foreach (float alongOffset in sideAlongOffsets)
+            {
+                AddCandidate(
+                    candidates,
+                    unit,
+                    orientation,
+                    anchor,
+                    "perpendicular",
+                    1,
+                    anchorCenterX + anchorPerpendicularX * (anchorHalfWidth + unitHalfLength) * sideSign + anchorDirectionX * alongOffset,
+                    anchorCenterZ + anchorPerpendicularZ * (anchorHalfWidth + unitHalfLength) * sideSign + anchorDirectionZ * alongOffset);
+            }
+
+            float[] endAcrossOffsets = { 0, anchorHalfWidth - unitHalfLength, -anchorHalfWidth + unitHalfLength };
+            foreach (int endSign in signs)
+            foreach (float acrossOffset in endAcrossOffsets)
+            {
+                AddCandidate(
+                    candidates,
+                    unit,
+                    orientation,
+                    anchor,
+                    "perpendicular",
+                    2,
+                    anchorCenterX + anchorDirectionX * (anchorHalfLength + unitHalfWidth) * endSign + anchorPerpendicularX * acrossOffset,
+                    anchorCenterZ + anchorDirectionZ * (anchorHalfLength + unitHalfWidth) * endSign + anchorPerpendicularZ * acrossOffset);
+            }
+        }
+
+        private static void AddCandidate(
+            List<DiagonalSnapCandidate> candidates,
+            MasonryUnitPlacement unit,
+            MasonryOrientation orientation,
+            MasonryUnitPlacement anchor,
+            string relation,
+            int priority,
+            float centerX,
+            float centerZ)
+        {
+            MasonryUnitPlacement candidate = CreatePlacementCandidate(unit, orientation, centerX, centerZ);
+            if (candidates.Any(existing => IsSameSnapCandidate(existing.Unit, candidate))) return;
+            candidates.Add(new DiagonalSnapCandidate(candidate, priority, relation, anchor));
+        }
+
+        private static bool IsSameSnapCandidate(MasonryUnitPlacement first, MasonryUnitPlacement second)
+        {
+            return first != null
+                && second != null
+                && first.Kind == second.Kind
+                && first.VisualShape == second.VisualShape
+                && first.Orientation == second.Orientation
+                && first.Origin.X == second.Origin.X
+                && first.Origin.Y == second.Origin.Y
+                && first.Origin.Z == second.Origin.Z
+                && MathF.Abs(first.OffsetX - second.OffsetX) < 0.001f
+                && MathF.Abs(first.OffsetZ - second.OffsetZ) < 0.001f;
+        }
+
+        private static IEnumerable<MasonryOrientation> GetSnapAxisOrientations(MasonryOrientation orientation)
+        {
+            yield return orientation;
+
+            MasonryOrientation opposite = GetOppositeOrientation(orientation);
+            if (opposite != orientation) yield return opposite;
+        }
+
+        private static MasonryOrientation GetOppositeOrientation(MasonryOrientation orientation)
+        {
+            return orientation switch
+            {
+                MasonryOrientation.East => MasonryOrientation.West,
+                MasonryOrientation.South => MasonryOrientation.North,
+                MasonryOrientation.West => MasonryOrientation.East,
+                MasonryOrientation.North => MasonryOrientation.South,
+                MasonryOrientation.SouthEast => MasonryOrientation.NorthWest,
+                MasonryOrientation.SouthWest => MasonryOrientation.NorthEast,
+                MasonryOrientation.NorthWest => MasonryOrientation.SouthEast,
+                MasonryOrientation.NorthEast => MasonryOrientation.SouthWest,
+                _ => orientation
+            };
+        }
 
         private static IEnumerable<(float X, float Z)> GetCornerOffsets(
             float directionX,
@@ -1019,6 +1196,112 @@ namespace brickbybrick.items
             float deltaX = firstX - secondX;
             float deltaZ = firstZ - secondZ;
             return deltaX * deltaX + deltaZ * deltaZ;
+        }
+
+        private static void AppendRealisticPlacementTraceHeader(
+            StringBuilder trace,
+            string phase,
+            EnumAppSide side,
+            BlockSelection blockSel,
+            string materialPath,
+            MasonryUnitPlacement unit,
+            BlockPos targetPos,
+            bool targetsExistingCell,
+            int gridX,
+            int gridZ,
+            int layer)
+        {
+            if (trace == null) return;
+
+            trace.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {phase} side={side}");
+            trace.AppendLine($"selection pos={FormatBlockPos(blockSel?.Position)} face={blockSel?.Face?.Code ?? "null"} hit={FormatVec(blockSel?.HitPosition)}");
+            trace.AppendLine($"material={materialPath} selectedUnit={FormatRealisticUnit(unit)}");
+            trace.AppendLine($"resolvedTarget={FormatBlockPos(targetPos)} existingCell={targetsExistingCell} grid=({gridX},{gridZ}) layer={layer}");
+        }
+
+        private static void AppendSnapCandidateTrace(
+            StringBuilder trace,
+            int candidateCount,
+            float maxDistanceSquared,
+            List<EvaluatedSnapCandidate> candidates,
+            bool rawValid,
+            float rawDistanceSquared,
+            DiagonalSnapCandidate chosen)
+        {
+            if (trace == null) return;
+
+            trace.AppendLine($"snap candidates={candidateCount} maxDistanceSquared={maxDistanceSquared:0.####} rawValid={rawValid} rawDistanceSquared={rawDistanceSquared:0.####}");
+            if (candidateCount == 0) return;
+
+            int chosenIndex = chosen.Unit == null
+                ? -1
+                : candidates.FindIndex(candidate => ReferenceEquals(candidate.Candidate.Unit, chosen.Unit));
+            foreach (EvaluatedSnapCandidate candidate in candidates.Take(32))
+            {
+                AppendSnapCandidateLine(trace, candidate, candidate.Index == chosenIndex);
+            }
+
+            if (candidates.Count > 32)
+            {
+                trace.AppendLine($"snap omitted={candidates.Count - 32}");
+                if (chosenIndex >= 32)
+                {
+                    AppendSnapCandidateLine(trace, candidates[chosenIndex], true);
+                }
+            }
+        }
+
+        private static void AppendSnapCandidateLine(StringBuilder trace, EvaluatedSnapCandidate candidate, bool chosen)
+        {
+            trace.AppendLine(
+                $"snap[{candidate.Index}] chosen={chosen} valid={candidate.Valid} inRange={candidate.InRange} priority={candidate.Candidate.Priority} relation={candidate.Candidate.Relation ?? "none"} distanceSquared={candidate.DistanceSquared:0.####} unit={FormatRealisticUnit(candidate.Candidate.Unit)} anchor={FormatRealisticUnit(candidate.Candidate.Anchor)}");
+        }
+
+        private static void LogRealisticPreviewTraceIfChanged(ICoreAPI api, StringBuilder trace, BlockPos targetPos, MasonryUnitPlacement unit, bool valid)
+        {
+            string key = $"{FormatBlockPos(targetPos)}|{valid}|{FormatRealisticUnit(unit)}";
+            if (key == lastRealisticPreviewTraceKey) return;
+
+            lastRealisticPreviewTraceKey = key;
+            LogRealisticPlacementTrace(api, trace);
+        }
+
+        private static void LogRealisticPlacementTrace(ICoreAPI api, StringBuilder trace)
+        {
+            if (api == null || trace == null || trace.Length == 0) return;
+
+            try
+            {
+                lock (RealisticPlacementLogLock)
+                {
+                    File.AppendAllText(
+                        Path.Combine(GamePaths.Logs, RealisticPlacementLogName),
+                        trace + Environment.NewLine,
+                        Encoding.UTF8);
+                }
+            }
+            catch (Exception exception)
+            {
+                api.Logger.Warning($"Could not write Brick by Brick placement log: {exception.Message}");
+            }
+        }
+
+        private static string FormatRealisticUnit(MasonryUnitPlacement unit)
+        {
+            if (unit == null) return "null";
+
+            MasonryVoxelGeometry.GetUnitCenter(unit, out float centerX, out float centerZ);
+            return $"id={unit.Id} kind={unit.Kind} shape={unit.VisualShape} orientation={unit.Orientation} origin=({unit.Origin?.X},{unit.Origin?.Y},{unit.Origin?.Z}) offset=({unit.OffsetX:0.###},{unit.OffsetZ:0.###}) center=({centerX:0.###},{centerZ:0.###})";
+        }
+
+        private static string FormatBlockPos(BlockPos pos)
+        {
+            return pos == null ? "null" : $"({pos.X},{pos.Y},{pos.Z})";
+        }
+
+        private static string FormatVec(Vec3d vec)
+        {
+            return vec == null ? "null" : $"({vec.X:0.###},{vec.Y:0.###},{vec.Z:0.###})";
         }
 
         public static MasonryOrientation ResolveRealisticOrientation(IPlayer player)
@@ -1101,16 +1384,37 @@ namespace brickbybrick.items
                 GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Y - blockSel.Face.Normali.Y * 0.001) * 4), 0, 255),
                 GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Z - blockSel.Face.Normali.Z * 0.001) * 4), 0, 3));
             string color = heldPath[(heldPath.LastIndexOf('-') + 1)..];
-            if (!entity.IsUnmortaredBrickOfColor(cell, color)) return false;
+            StringBuilder pickupTrace = new();
+            pickupTrace.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] PICKUP side={byEntity.World.Side}");
+            pickupTrace.AppendLine($"selection pos={FormatBlockPos(blockSel?.Position)} face={blockSel?.Face?.Code ?? "null"} hit={FormatVec(blockSel?.HitPosition)}");
+            pickupTrace.AppendLine($"heldMaterial={heldPath} color={color} targetCell=({cell.X},{cell.Y},{cell.Z})");
+            if (!entity.IsUnmortaredBrickOfColor(cell, color))
+            {
+                pickupTrace.AppendLine("result=skipped reason=no-matching-unmortared-unit");
+                LogRealisticPlacementTrace(byEntity.World.Api, pickupTrace);
+                return false;
+            }
 
             ItemStack recovered = entity.TryRemoveUnmortaredUnit(cell);
-            if (recovered == null) return false;
+            if (recovered == null)
+            {
+                pickupTrace.AppendLine("result=blocked reason=remove-failed");
+                LogRealisticPlacementTrace(byEntity.World.Api, pickupTrace);
+                return false;
+            }
 
+            AssetLocation recoveredCode = recovered.Collectible?.Code;
+            int recoveredCount = recovered.StackSize;
+            bool returnedToInventory = true;
             if (!player.InventoryManager.TryGiveItemstack(recovered, true))
             {
+                returnedToInventory = false;
                 byEntity.World.SpawnItemEntity(recovered, blockSel.Position.ToVec3d().Add(0.5, 0.5, 0.5));
             }
 
+            pickupTrace.AppendLine($"inventory=recovered item={recoveredCode} count={recoveredCount} returnedToInventory={returnedToInventory}");
+            pickupTrace.AppendLine("result=picked-up");
+            LogRealisticPlacementTrace(byEntity.World.Api, pickupTrace);
             return true;
         }
 
@@ -2492,9 +2796,12 @@ namespace brickbybrick.items
                     Orientation = ResolveRealisticUnitOrientation(kind, player),
                     Origin = new MasonryGridPosition(gridX, layer, gridZ)
                 };
+                StringBuilder previewTrace = new();
+                AppendRealisticPlacementTraceHeader(previewTrace, "PREVIEW", capi.Side, blockSel, path, unit, targetPos, targetsExistingCell, gridX, gridZ, layer);
                 Block targetBlock = capi.World.BlockAccessor.GetBlock(targetPos);
-                TrySnapDiagonalPlacement(capi.World.BlockAccessor, targetPos, blockSel, unit);
+                TrySnapRealisticPlacement(capi.World.BlockAccessor, targetPos, blockSel, unit, previewTrace);
                 CanonicalizePlacementOwner(ref targetPos, unit);
+                previewTrace.AppendLine($"finalTarget={FormatBlockPos(targetPos)} finalUnit={FormatRealisticUnit(unit)}");
                 targetBlock = capi.World.BlockAccessor.GetBlock(targetPos);
 
                 if (targetBlock?.Code?.Path == "realisticmasonry"
@@ -2513,6 +2820,8 @@ namespace brickbybrick.items
                         && CanReserveNeighborFootprints(targetPos, unit);
                 }
 
+                previewTrace.AppendLine($"result=preview valid={valid}");
+                LogRealisticPreviewTraceIfChanged(capi, previewTrace, targetPos, unit, valid);
                 meshRef = GetOrCreateRealisticMeshRef(unit, path);
                 return meshRef != null;
             }
