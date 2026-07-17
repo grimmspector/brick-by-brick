@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Threading;
 using AttributeRenderingLibrary;
 using Vintagestory.API.Client;
@@ -15,8 +14,12 @@ namespace brickbybrick.RealisticConstruction
     public sealed class BlockStaticMasonry : Block
     {
         private const string ShapeVariantKey = "shape";
-        private static readonly ConcurrentDictionary<string, MeshData> MeshCache = new();
-        private static readonly ConcurrentDictionary<string, Cuboidf[]> BoxCache = new();
+        private static readonly BoundedCache<MeshData> MeshCache = new(
+            mesh => Math.Max(256L, mesh.VerticesCount * 64L + mesh.IndicesCount * 8L),
+            () => (long)brickbybrickModSystem.Config.Realism.StaticMeshCacheMiB * 1048576L);
+        private static readonly BoundedCache<Cuboidf[]> BoxCache = new(
+            boxes => Math.Max(128L, boxes.Length * 24L),
+            () => Math.Max(1L, (long)brickbybrickModSystem.Config.Realism.StaticMeshCacheMiB * 1048576L / 8L));
         private static long staticTessellations;
         private static long sidecarBytes;
         private static long exposedQuads;
@@ -46,6 +49,129 @@ namespace brickbybrick.RealisticConstruction
 
         private static readonly IReadOnlyDictionary<string, FrozenMasonryShape> ShapesByCode =
             CreateReverseShapeMap();
+
+        // Static meshes and collision unions are immutable once generated.
+        // Track their actual buffer estimates instead of allowing unique
+        // frozen arrangements to grow the renderer's dictionaries forever.
+        private sealed class BoundedCache<TValue>
+        {
+            private sealed class Entry
+            {
+                internal required string Key { get; init; }
+                internal required TValue Value { get; init; }
+                internal required long EstimatedBytes { get; init; }
+            }
+
+            private readonly object syncRoot = new();
+            private readonly Dictionary<string, LinkedListNode<Entry>> entries = new();
+            private readonly LinkedList<Entry> usage = new();
+            private readonly System.Func<TValue, long> estimate;
+            private readonly System.Func<long> budget;
+            private long estimatedBytes;
+            private long hits;
+            private long misses;
+            private long evictions;
+            private long admissionRejections;
+
+            internal BoundedCache(System.Func<TValue, long> estimate, System.Func<long> budget)
+            {
+                this.estimate = estimate;
+                this.budget = budget;
+            }
+
+            internal bool TryGet(string key, out TValue value)
+            {
+                lock (syncRoot)
+                {
+                    if (!entries.TryGetValue(key, out LinkedListNode<Entry>? node))
+                    {
+                        misses++;
+                        value = default!;
+                        return false;
+                    }
+
+                    usage.Remove(node);
+                    usage.AddFirst(node);
+                    hits++;
+                    value = node.Value.Value;
+                    return true;
+                }
+            }
+
+            internal TValue StoreOrGet(string key, TValue value)
+            {
+                lock (syncRoot)
+                {
+                    if (entries.TryGetValue(key, out LinkedListNode<Entry>? existing))
+                    {
+                        usage.Remove(existing);
+                        usage.AddFirst(existing);
+                        hits++;
+                        return existing.Value.Value;
+                    }
+
+                    long entryBytes = estimate(value);
+                    long byteBudget = Math.Max(1L, budget());
+                    if (entryBytes > byteBudget / 2)
+                    {
+                        admissionRejections++;
+                        return value;
+                    }
+
+                    Entry entry = new() { Key = key, Value = value, EstimatedBytes = entryBytes };
+                    entries.Add(key, usage.AddFirst(entry));
+                    estimatedBytes += entryBytes;
+                    while (estimatedBytes > byteBudget && usage.Last is LinkedListNode<Entry> oldest)
+                    {
+                        usage.RemoveLast();
+                        entries.Remove(oldest.Value.Key);
+                        estimatedBytes -= oldest.Value.EstimatedBytes;
+                        evictions++;
+                    }
+
+                    return value;
+                }
+            }
+
+            internal void Clear()
+            {
+                lock (syncRoot)
+                {
+                    entries.Clear();
+                    usage.Clear();
+                    estimatedBytes = 0;
+                }
+            }
+
+            internal void ResetProfile()
+            {
+                lock (syncRoot)
+                {
+                    hits = 0;
+                    misses = 0;
+                    evictions = 0;
+                    admissionRejections = 0;
+                }
+            }
+
+            internal string GetProfile(string name)
+            {
+                lock (syncRoot)
+                {
+                    long byteBudget = Math.Max(1L, budget());
+                    return $"{name}: {entries.Count:N0} entries, {estimatedBytes / 1048576d:N1}/{byteBudget / 1048576d:N1} MiB estimated; "
+                        + $"{hits:N0} hits, {misses:N0} misses, {evictions:N0} evictions, {admissionRejections:N0} admission rejects";
+                }
+            }
+
+            internal int Count
+            {
+                get
+                {
+                    lock (syncRoot) return entries.Count;
+                }
+            }
+        }
 
         public override Cuboidf[] GetSelectionBoxes(IBlockAccessor blockAccessor, BlockPos pos)
         {
@@ -172,16 +298,13 @@ namespace brickbybrick.RealisticConstruction
             if (behavior == null) return;
 
             string cacheKey = Convert.ToBase64String(packedState);
-            if (!MeshCache.TryGetValue(cacheKey, out MeshData? mesh))
+            if (!MeshCache.TryGet(cacheKey, out MeshData? mesh))
             {
                 MasonryCellState state = MasonryStateCodec.Decode(packedState);
                 MeshData? built = MasonryStaticMeshBuilder.Build(state, behavior, pos, out int rawQuads);
                 if (built == null) return;
-                mesh = MeshCache.GetOrAdd(cacheKey, built);
-                if (ReferenceEquals(mesh, built))
-                {
-                    RecordMeshBuild(rawQuads, mesh.IndicesCount / 6);
-                }
+                mesh = MeshCache.StoreOrGet(cacheKey, built);
+                RecordMeshBuild(rawQuads, built.IndicesCount / 6);
             }
 
             sourceMesh = mesh;
@@ -212,6 +335,19 @@ namespace brickbybrick.RealisticConstruction
         internal static void ResetProfile()
         {
             BoxCache.Clear();
+            ResetProfileCounters();
+        }
+
+        internal static void ClearCaches()
+        {
+            MeshCache.Clear();
+            BoxCache.Clear();
+        }
+
+        internal static void ResetProfileCounters()
+        {
+            MeshCache.ResetProfile();
+            BoxCache.ResetProfile();
             Interlocked.Exchange(ref staticTessellations, 0);
             Interlocked.Exchange(ref sidecarBytes, 0);
             Interlocked.Exchange(ref exposedQuads, 0);
@@ -239,7 +375,14 @@ namespace brickbybrick.RealisticConstruction
                 + $"exposed quads: {Interlocked.Read(ref exposedQuads):N0}; "
                 + $"merged quads: {Interlocked.Read(ref mergedQuads):N0}; "
                 + $"cache rebuilds: {Interlocked.Read(ref cacheRebuilds):N0}; "
-                + $"rejected optimized builds: {Interlocked.Read(ref rejectedBuilds):N0}";
+                + $"rejected optimized builds: {Interlocked.Read(ref rejectedBuilds):N0}; "
+                + $"static mesh entries: {MeshCache.Count:N0}; collision entries: {BoxCache.Count:N0}";
+        }
+
+        internal static string GetCacheProfile()
+        {
+            return $"{MeshCache.GetProfile("static mesh cache")}; {BoxCache.GetProfile("static collision cache")}. "
+                + "GPU residency is not represented by these CPU-side estimates.";
         }
 
         private static AssetLocation GetDropCode(MasonryUnitPlacement unit)
@@ -263,11 +406,10 @@ namespace brickbybrick.RealisticConstruction
             if (!FrozenMasonryChunkStore.TryGet(blockAccessor, pos, out byte[] packedState)) return Array.Empty<Cuboidf>();
 
             string cacheKey = Convert.ToBase64String(packedState);
-            return BoxCache.GetOrAdd(cacheKey, _ =>
-            {
-                MasonryCellState state = MasonryStateCodec.Decode(packedState);
-                return MasonryVoxelGeometry.BuildMergedBoxes(state);
-            });
+            if (BoxCache.TryGet(cacheKey, out Cuboidf[]? boxes)) return boxes;
+
+            MasonryCellState state = MasonryStateCodec.Decode(packedState);
+            return BoxCache.StoreOrGet(cacheKey, MasonryVoxelGeometry.BuildMergedBoxes(state));
         }
 
         private static IReadOnlyDictionary<string, FrozenMasonryShape> CreateReverseShapeMap()

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
@@ -12,7 +13,15 @@ namespace brickbybrick.RealisticConstruction
     internal static class FrozenMasonryChunkStore
     {
         private const string ModDataKey = "brickbybrick:frozenmasonry:v1";
+        private static readonly System.TimeSpan WriteDebounce = System.TimeSpan.FromMilliseconds(100);
         private static readonly ConditionalWeakTable<IWorldChunk, Dictionary<int, byte[]>> Cache = new();
+        private static readonly Dictionary<IWorldChunk, long> PendingSaves = new();
+        private static readonly object PendingSaveSync = new();
+        private static long saveCount;
+        private static long deferredWriteCount;
+        private static long totalSavedBytes;
+        private static long largestSavedBytes;
+        private static long removedModdataCount;
 
         internal static void Set(IBlockAccessor accessor, BlockPos pos, byte[] state)
         {
@@ -21,7 +30,7 @@ namespace brickbybrick.RealisticConstruction
 
             Dictionary<int, byte[]> records = GetRecords(chunk);
             records[GetLocalIndex(pos)] = (byte[])state.Clone();
-            Save(chunk, records);
+            ScheduleSave(chunk);
         }
 
         internal static bool TryGet(IBlockAccessor accessor, BlockPos pos, out byte[] state)
@@ -43,8 +52,39 @@ namespace brickbybrick.RealisticConstruction
             Dictionary<int, byte[]> records = GetRecords(chunk);
             if (!records.Remove(GetLocalIndex(pos), out byte[]? stored)) return false;
             state = (byte[])stored.Clone();
-            Save(chunk, records);
+            ScheduleSave(chunk);
             return true;
+        }
+
+        // Reads use the in-memory record cache, so deferring chunk encoding
+        // does not delay static tessellation, restoration, or dropped items.
+        internal static void FlushDue()
+        {
+            List<IWorldChunk> due = new();
+            long nowTicks = System.DateTime.UtcNow.Ticks;
+            lock (PendingSaveSync)
+            {
+                foreach (KeyValuePair<IWorldChunk, long> pending in PendingSaves)
+                {
+                    if (pending.Value <= nowTicks) due.Add(pending.Key);
+                }
+
+                foreach (IWorldChunk chunk in due) PendingSaves.Remove(chunk);
+            }
+
+            foreach (IWorldChunk chunk in due) Save(chunk, GetRecords(chunk));
+        }
+
+        internal static void FlushAll()
+        {
+            List<IWorldChunk> pending;
+            lock (PendingSaveSync)
+            {
+                pending = new List<IWorldChunk>(PendingSaves.Keys);
+                PendingSaves.Clear();
+            }
+
+            foreach (IWorldChunk chunk in pending) Save(chunk, GetRecords(chunk));
         }
 
         private static Dictionary<int, byte[]> GetRecords(IWorldChunk chunk)
@@ -52,11 +92,62 @@ namespace brickbybrick.RealisticConstruction
             return Cache.GetValue(chunk, loadedChunk => Decode(loadedChunk.GetModdata(ModDataKey)));
         }
 
+        private static void ScheduleSave(IWorldChunk chunk)
+        {
+            lock (PendingSaveSync)
+            {
+                PendingSaves[chunk] = System.DateTime.UtcNow.Add(WriteDebounce).Ticks;
+            }
+
+            Interlocked.Increment(ref deferredWriteCount);
+        }
+
         private static void Save(IWorldChunk chunk, Dictionary<int, byte[]> records)
         {
-            if (records.Count == 0) chunk.RemoveModdata(ModDataKey);
-            else chunk.SetModdata(ModDataKey, Encode(records));
+            byte[] saved = System.Array.Empty<byte>();
+            if (records.Count == 0)
+            {
+                chunk.RemoveModdata(ModDataKey);
+                Interlocked.Increment(ref removedModdataCount);
+            }
+            else
+            {
+                saved = Encode(records);
+                chunk.SetModdata(ModDataKey, saved);
+            }
             chunk.MarkModified();
+            Interlocked.Increment(ref saveCount);
+            Interlocked.Add(ref totalSavedBytes, saved.Length);
+            long previous = Interlocked.Read(ref largestSavedBytes);
+            while (saved.Length > previous)
+            {
+                long observed = Interlocked.CompareExchange(ref largestSavedBytes, saved.Length, previous);
+                if (observed == previous) break;
+                previous = observed;
+            }
+        }
+
+        internal static string GetProfile()
+        {
+            return $"frozen sidecar writes: {Interlocked.Read(ref saveCount):N0}; "
+                + $"deferred updates: {Interlocked.Read(ref deferredWriteCount):N0}; pending chunks: {GetPendingSaveCount():N0}; "
+                + $"encoded bytes: {Interlocked.Read(ref totalSavedBytes):N0}; "
+                + $"largest write: {Interlocked.Read(ref largestSavedBytes):N0} bytes; "
+                + $"removed chunk records: {Interlocked.Read(ref removedModdataCount):N0}";
+        }
+
+        internal static void ResetProfile()
+        {
+            Interlocked.Exchange(ref saveCount, 0);
+            Interlocked.Exchange(ref deferredWriteCount, 0);
+            Interlocked.Exchange(ref totalSavedBytes, 0);
+            Interlocked.Exchange(ref largestSavedBytes, 0);
+            Interlocked.Exchange(ref removedModdataCount, 0);
+        }
+
+        private static int GetPendingSaveCount()
+        {
+            lock (PendingSaveSync) return PendingSaves.Count;
         }
 
         private static int GetLocalIndex(BlockPos pos)

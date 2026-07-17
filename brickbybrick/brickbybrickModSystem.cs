@@ -24,8 +24,12 @@ namespace brickbybrick
         private const int ProfileReportPacket = -101;
         private const int ProfileResetAcknowledgementPacket = -102;
         private const int ProfileReportAcknowledgementPacket = -103;
+        private const int ProfileCaptureMarkerPacket = -104;
         private const int ProfileBatchSize = 256;
         private const string ServerProfileTracker = "__server-wall-profile__";
+        private const string ServerMatrixTracker = "__server-matrix__";
+        private const string ServerMatrixLiveTracker = "__server-matrix-live__";
+        private const string ServerMatrixStaticTracker = "__server-matrix-static__";
 
         internal static BrickByBrickConfig Config { get; private set; } = new();
 
@@ -89,12 +93,17 @@ namespace brickbybrick
                 + $"optimized frozen meshes: {Config.Realism.EnableOptimizedFrozenMeshes}; "
                 + $"frozen cache: {Config.Realism.FrozenMeshCacheMiB} MiB; "
                 + $"transformed cache: {Config.Realism.TransformedMeshCacheMiB} MiB; "
+                + $"static cache: {Config.Realism.StaticMeshCacheMiB} MiB; "
                 + $"curing enabled: {Config.Curing.EnableMortarCuring}; "
                 + $"inactive freeze: {Config.Curing.InactiveFreezeSeconds:N1} seconds.");
             api.Network.GetChannel("brickbybrick-realistic")
                 .SetMessageHandler<int>((player, packet) => OnRealisticServerPacket(api, player, packet))
                 .SetMessageHandler<RealisticControlPacket>((player, packet) => OnRealisticServerPacket(api, player, packet));
-            api.Event.RegisterGameTickListener(_ => MasonryFreezeScheduler.DrainReady(), 100);
+            api.Event.RegisterGameTickListener(_ =>
+            {
+                MasonryFreezeScheduler.DrainReady();
+                FrozenMasonryChunkStore.FlushDue();
+            }, 100);
             RegisterProfilingCommands(api);
             RegisterMasonryDiagnosticCommand(api);
             ValidateConstructionRegistry(api);
@@ -165,8 +174,20 @@ namespace brickbybrick
                         api.ChatCommands.Parsers.Int("height"))
                     .HandleWith(args => RunServerWallProfile(api, args, true))
                 .EndSubCommand()
+                .BeginSubCommand("servermatrix")
+                    .WithArgs(
+                        api.ChatCommands.Parsers.Int("length"),
+                        api.ChatCommands.Parsers.Int("height"))
+                    .HandleWith(args => RunServerProfileMatrix(api, args))
+                .EndSubCommand()
                 .BeginSubCommand("serverclear")
                     .HandleWith(_ => ClearServerWallProfile(api))
+                .EndSubCommand()
+                .BeginSubCommand("runtime")
+                    .HandleWith(_ => ReportMasonryRuntime(api))
+                .EndSubCommand()
+                .BeginSubCommand("runtimereset")
+                    .HandleWith(_ => ResetMasonryRuntimeProfile(api))
                 .EndSubCommand()
                 .BeginSubCommand("clear")
                     .HandleWith(args => ClearProfileCells(api, args))
@@ -853,6 +874,82 @@ namespace brickbybrick
             return TextCommandResult.Success($"Removed {removed:N0} automated server wall-profile cells.");
         }
 
+        // Runs both live and compacted wall phases from a server console and
+        // removes each corpus after its settled report is written.
+        private static TextCommandResult RunServerProfileMatrix(ICoreServerAPI api, TextCommandCallingArgs args)
+        {
+            if (!ActiveBenchmarks.Add(ServerMatrixTracker)) return TextCommandResult.Error("A server profiling matrix is already running.");
+
+            int length = GameMath.Clamp((int)args[0], 8, 512);
+            int height = GameMath.Clamp((int)args[1], 1, 16);
+            BlockPos spawn = api.World.DefaultSpawnPosition.AsBlockPos;
+            int profileY = Math.Max(4, api.World.BlockAccessor.MapSizeY - height - 8);
+            BlockPos origin = new(spawn.X, profileY, spawn.Z);
+            AppendProfileLog(api, "AUTOMATED SERVER MATRIX START", $"Length: {length:N0}; height: {height:N0}; phases: live, compacted; cleanup: enabled.");
+
+            RunPhase(false);
+            return TextCommandResult.Success($"Started unattended server masonry matrix with {length:N0}-cell runs at {height:N0} blocks high.");
+
+            void RunPhase(bool compactStatic)
+            {
+                string tracker = compactStatic ? ServerMatrixStaticTracker : ServerMatrixLiveTracker;
+                string phase = compactStatic ? "COMPACTED" : "LIVE";
+                AppendProfileLog(api, $"AUTOMATED SERVER MATRIX {phase} START", "Client capture marker emitted. GPU residency must be collected by an external GPU telemetry tool.");
+                BroadcastProfileCaptureMarker(api);
+                StartWallCorpus(api, tracker, origin, length, height, true, compactStatic, null, success =>
+                {
+                    int removed = ClearTrackedProfileCells(api, tracker);
+                    AppendProfileLog(api, $"AUTOMATED SERVER MATRIX {phase} CLEANUP", $"Success: {success}; removed tracked cells: {removed:N0}.");
+                    if (!success)
+                    {
+                        ActiveBenchmarks.Remove(ServerMatrixTracker);
+                        AppendProfileLog(api, "AUTOMATED SERVER MATRIX FAILED", $"Phase: {phase}; see the preceding server wall profile entry.");
+                        return;
+                    }
+
+                    if (!compactStatic)
+                    {
+                        api.Event.RegisterCallback(_ => RunPhase(true), 250);
+                        return;
+                    }
+
+                    ActiveBenchmarks.Remove(ServerMatrixTracker);
+                    BroadcastProfileCaptureMarker(api);
+                    AppendProfileLog(api, "AUTOMATED SERVER MATRIX COMPLETE", BuildMasonryRuntimeProfile());
+                });
+            }
+        }
+
+        private static TextCommandResult ReportMasonryRuntime(ICoreServerAPI api)
+        {
+            string report = BuildMasonryRuntimeProfile();
+            AppendProfileLog(api, "MASONRY RUNTIME PROFILE", report);
+            api.Logger.Notification(report);
+            return TextCommandResult.Success($"Masonry runtime profile written to {GetProfileLogPath()}.");
+        }
+
+        private static TextCommandResult ResetMasonryRuntimeProfile(ICoreServerAPI api)
+        {
+            MasonryFreezeScheduler.ResetProfile();
+            MasonryFrozenMeshCache.ResetProfile();
+            MasonryTransformedMeshCache.ResetProfile();
+            FrozenMasonryChunkStore.ResetProfile();
+            BlockStaticMasonry.ResetProfileCounters();
+            AppendProfileLog(api, "MASONRY RUNTIME PROFILE RESET", "Scheduler, cache, static-mesh, and sidecar write counters reset without clearing cached meshes or world data.");
+            return TextCommandResult.Success("Masonry runtime profiling counters reset.");
+        }
+
+        private static string BuildMasonryRuntimeProfile()
+        {
+            return $"{MasonryFreezeScheduler.GetProfile()}{Environment.NewLine}"
+                + $"{MasonryFrozenMeshCache.GetProfile()}{Environment.NewLine}"
+                + $"{MasonryTransformedMeshCache.GetProfile()}{Environment.NewLine}"
+                + $"{BlockStaticMasonry.GetProfile()}{Environment.NewLine}"
+                + $"{BlockStaticMasonry.GetCacheProfile()}{Environment.NewLine}"
+                + $"{FrozenMasonryChunkStore.GetProfile()}{Environment.NewLine}"
+                + "GPU residency: no verified Vintage Story client API was found for VRAM counters. Use the emitted capture markers with external GPU telemetry for direct residency and frame-time evidence.";
+        }
+
         private static TextCommandResult StartWallCorpus(
             ICoreServerAPI api,
             string tracker,
@@ -861,7 +958,8 @@ namespace brickbybrick
             int height,
             bool automated,
             bool compactStatic,
-            IServerPlayer? player)
+            IServerPlayer? player,
+            Action<bool>? completed = null)
         {
             if (!ActiveBenchmarks.Add(tracker)) return TextCommandResult.Error("A wall profiling run is already settling.");
 
@@ -871,6 +969,7 @@ namespace brickbybrick
             if (constructionBlock == null)
             {
                 ActiveBenchmarks.Remove(tracker);
+                completed?.Invoke(false);
                 return TextCommandResult.Error("Realistic masonry block is unavailable.");
             }
 
@@ -928,6 +1027,7 @@ namespace brickbybrick
                         player.SendMessage(GlobalConstants.GeneralChatGroup, $"Created {created.Count:N0} long-wall masonry cells in {stopwatch.ElapsedMilliseconds:N0} ms.", EnumChatType.Notification);
                     }
                     ActiveBenchmarks.Remove(tracker);
+                    completed?.Invoke(true);
                     return;
                 }
 
@@ -947,6 +1047,7 @@ namespace brickbybrick
                                     "AUTOMATED SERVER WALL PROFILE COMPLETE",
                                     $"{settledReport}{Environment.NewLine}{compactionReport}{Environment.NewLine}{CaptureServerRuntimeSnapshot().DescribeDelta(runtimeBefore)}{Environment.NewLine}Client-only metrics not measured: draw calls, vertices submitted, VRAM, and frame time.");
                                 ActiveBenchmarks.Remove(tracker);
+                                completed?.Invoke(true);
                             }), 5000));
                     });
                 }
@@ -988,6 +1089,7 @@ namespace brickbybrick
                     {
                         AppendProfileLog(api, "AUTOMATED SERVER WALL PROFILE LOAD FAILURE", $"Timed out loading {chunkColumns.Count:N0} chunk columns near {center}.");
                         ActiveBenchmarks.Remove(tracker);
+                        completed?.Invoke(false);
                         return;
                     }
 
@@ -1434,6 +1536,12 @@ namespace brickbybrick
             else AppendProfileLog(api, "INTEGRATED CLIENT PROFILE", BlockEntityRealisticMasonry.GetTessellationProfile());
         }
 
+        private static void BroadcastProfileCaptureMarker(ICoreServerAPI api)
+        {
+            if (api.World.AllOnlinePlayers.Length == 0) return;
+            api.Network.GetChannel("brickbybrick-realistic").BroadcastPacket(new RealisticControlPacket { Code = ProfileCaptureMarkerPacket });
+        }
+
         public override void AssetsFinalize(ICoreAPI api)
         {
             base.AssetsFinalize(api);
@@ -1456,6 +1564,7 @@ namespace brickbybrick
             realisticClientChannel = api.Network.GetChannel("brickbybrick-realistic");
             realisticClientChannel.SetMessageHandler<RealisticControlPacket>(packet => OnProfileControlPacket(api, packet.Code));
             realisticClientChannel.SetMessageHandler<StaticMasonryStatePacket>(packet => OnStaticMasonryStatePacket(api, packet));
+            api.Event.RegisterGameTickListener(_ => FrozenMasonryChunkStore.FlushDue(), 100);
             api.Event.MouseWheelMove += OnRealisticPlacementMouseWheel;
             RegisterClientProfilingCommands(api);
             survivalHandbook = api.ModLoader.GetModSystem<ModSystemSurvivalHandbook>();
@@ -1513,6 +1622,14 @@ namespace brickbybrick
                 return;
             }
 
+            if (packet == ProfileCaptureMarkerPacket)
+            {
+                string markerReport = $"UTC: {DateTime.UtcNow:O}; {BlockEntityRealisticMasonry.GetTessellationProfile()}{Environment.NewLine}"
+                    + "GPU residency is not exposed by a verified Vintage Story API. Correlate this marker with external GPU telemetry for VRAM, draw calls, and frame time.";
+                AppendProfileLog(api, "CLIENT GPU CAPTURE MARKER", markerReport);
+                return;
+            }
+
             if (packet != ProfileReportPacket) return;
             string report = BlockEntityRealisticMasonry.GetTessellationProfile();
             AppendProfileLog(api, "AUTOMATED EXERCISE CLIENT REPORT", report);
@@ -1538,6 +1655,15 @@ namespace brickbybrick
                         string report = BlockEntityRealisticMasonry.GetTessellationProfile();
                         AppendProfileLog(api, "CLIENT MESH REPORT", report);
                         return TextCommandResult.Success($"{report} Written to {GetProfileLogPath()}.");
+                    })
+                .EndSubCommand()
+                .BeginSubCommand("marker")
+                    .HandleWith(_ =>
+                    {
+                        string report = $"UTC: {DateTime.UtcNow:O}; {BlockEntityRealisticMasonry.GetTessellationProfile()}{Environment.NewLine}"
+                            + "GPU residency is not exposed by a verified Vintage Story API. Correlate this marker with external GPU telemetry for VRAM, draw calls, and frame time.";
+                        AppendProfileLog(api, "CLIENT GPU CAPTURE MARKER", report);
+                        return TextCommandResult.Success($"GPU capture marker written to {GetProfileLogPath()}.");
                     })
                 .EndSubCommand()
                 .BeginSubCommand("clearcache")
@@ -1625,8 +1751,10 @@ namespace brickbybrick
         public override void Dispose()
         {
             ResetWorldScopedProfileState();
+            FrozenMasonryChunkStore.FlushAll();
             MasonryFrozenMeshCache.Clear();
             BlockEntityRealisticMasonry.ClearTransformedMeshCache();
+            BlockStaticMasonry.ClearCaches();
             if (clientApi != null)
             {
                 clientApi.Event.MouseWheelMove -= OnRealisticPlacementMouseWheel;

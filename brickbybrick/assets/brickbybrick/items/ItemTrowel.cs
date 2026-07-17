@@ -821,11 +821,17 @@ namespace brickbybrick.items
                     float distance = DistanceToHit(candidate.Unit, blockSel);
                     bool inRange = distance <= maxSnapDistanceSquared;
                     bool valid = inRange && IsSnapCandidateValid(blockAccessor, targetPos, candidate.Unit);
-                    return new EvaluatedSnapCandidate(candidate, index, distance, inRange, valid);
+                    bool keepsSelectedOriginCell = IsInSameOriginCell(unit, candidate.Unit);
+                    return new EvaluatedSnapCandidate(candidate, index, distance, inRange, valid, keepsSelectedOriginCell);
                 })
                 .ToList();
-            EvaluatedSnapCandidate best = evaluatedCandidates
-                .Where(candidate => candidate.Valid)
+            IEnumerable<EvaluatedSnapCandidate> validCandidates = evaluatedCandidates.Where(candidate => candidate.Valid);
+            if (validCandidates.Any(candidate => candidate.KeepsSelectedOriginCell))
+            {
+                validCandidates = validCandidates.Where(candidate => candidate.KeepsSelectedOriginCell);
+            }
+
+            EvaluatedSnapCandidate best = validCandidates
                 .OrderBy(candidate => candidate.DistanceSquared + candidate.Candidate.Priority * 0.015f)
                 .FirstOrDefault();
 
@@ -866,13 +872,14 @@ namespace brickbybrick.items
 
         private readonly struct EvaluatedSnapCandidate
         {
-            public EvaluatedSnapCandidate(DiagonalSnapCandidate candidate, int index, float distanceSquared, bool inRange, bool valid)
+            public EvaluatedSnapCandidate(DiagonalSnapCandidate candidate, int index, float distanceSquared, bool inRange, bool valid, bool keepsSelectedOriginCell)
             {
                 Candidate = candidate;
                 Index = index;
                 DistanceSquared = distanceSquared;
                 InRange = inRange;
                 Valid = valid;
+                KeepsSelectedOriginCell = keepsSelectedOriginCell;
             }
 
             public DiagonalSnapCandidate Candidate { get; }
@@ -884,6 +891,14 @@ namespace brickbybrick.items
             public bool InRange { get; }
 
             public bool Valid { get; }
+
+            public bool KeepsSelectedOriginCell { get; }
+        }
+
+        private static bool IsInSameOriginCell(MasonryUnitPlacement selectedUnit, MasonryUnitPlacement candidate)
+        {
+            return (int)Math.Floor(selectedUnit.Origin.X / 4d) == (int)Math.Floor(candidate.Origin.X / 4d)
+                && (int)Math.Floor(selectedUnit.Origin.Z / 4d) == (int)Math.Floor(candidate.Origin.Z / 4d);
         }
 
         private static bool IsSnapCandidateValid(IBlockAccessor blockAccessor, BlockPos targetPos, MasonryUnitPlacement unit)
@@ -1254,7 +1269,7 @@ namespace brickbybrick.items
         private static void AppendSnapCandidateLine(StringBuilder trace, EvaluatedSnapCandidate candidate, bool chosen)
         {
             trace.AppendLine(
-                $"snap[{candidate.Index}] chosen={chosen} valid={candidate.Valid} inRange={candidate.InRange} priority={candidate.Candidate.Priority} relation={candidate.Candidate.Relation ?? "none"} distanceSquared={candidate.DistanceSquared:0.####} unit={FormatRealisticUnit(candidate.Candidate.Unit)} anchor={FormatRealisticUnit(candidate.Candidate.Anchor)}");
+                $"snap[{candidate.Index}] chosen={chosen} valid={candidate.Valid} inRange={candidate.InRange} selectedOriginCell={candidate.KeepsSelectedOriginCell} priority={candidate.Candidate.Priority} relation={candidate.Candidate.Relation ?? "none"} distanceSquared={candidate.DistanceSquared:0.####} unit={FormatRealisticUnit(candidate.Candidate.Unit)} anchor={FormatRealisticUnit(candidate.Candidate.Anchor)}");
         }
 
         private static void LogRealisticPreviewTraceIfChanged(ICoreAPI api, StringBuilder trace, BlockPos targetPos, MasonryUnitPlacement unit, bool valid)
@@ -1284,6 +1299,14 @@ namespace brickbybrick.items
             {
                 api.Logger.Warning($"Could not write Brick by Brick placement log: {exception.Message}");
             }
+        }
+
+        internal static void LogRealisticMasonryTrace(ICoreAPI api, string phase, IEnumerable<string> lines)
+        {
+            StringBuilder trace = new();
+            trace.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {phase} side={api?.World?.Side}");
+            foreach (string line in lines ?? Enumerable.Empty<string>()) trace.AppendLine(line);
+            LogRealisticPlacementTrace(api, trace);
         }
 
         private static string FormatRealisticUnit(MasonryUnitPlacement unit)
@@ -1428,11 +1451,21 @@ namespace brickbybrick.items
             if (secondsUsed < duration) return true;
             if (byEntity.World.Side != EnumAppSide.Server || HasInteracted(slot.Itemstack)) return false;
             BlockEntityRealisticMasonry entity = byEntity.World.BlockAccessor.GetBlockEntity(blockSel.Position) as BlockEntityRealisticMasonry;
-            if (entity == null && byEntity.World.BlockAccessor.GetBlock(blockSel.Position) is BlockStaticMasonry)
+            bool selectedStatic = byEntity.World.BlockAccessor.GetBlock(blockSel.Position) is BlockStaticMasonry;
+            if (selectedStatic || entity?.State.Frozen == true)
             {
-                if (!BlockStaticMasonry.TryRestoreEntity(byEntity.World, blockSel.Position, out entity, out string failureReason))
+                MasonryAssemblyReopenResult reopen = MasonryAssemblyReopener.TryReopen(byEntity.World, blockSel.Position);
+                LogRealisticMasonryTrace(
+                    byEntity.World.Api,
+                    "REOPEN",
+                    new[]
+                    {
+                        $"selection pos={FormatBlockPos(blockSel.Position)} static={selectedStatic}",
+                        $"result={(reopen.Success ? "reopened" : "failed")} cells={string.Join(",", reopen.ReopenedPositions.Select(FormatBlockPos))} reason={reopen.FailureReason}"
+                    }.Concat(reopen.TraceLines));
+                if (!reopen.Success)
                 {
-                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-reopen-failed", failureReason));
+                    NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-reopen-failed", reopen.FailureReason));
                     return false;
                 }
 
@@ -1443,15 +1476,6 @@ namespace brickbybrick.items
             }
 
             if (entity == null) return false;
-
-            if (entity.State.Frozen)
-            {
-                if (!entity.Reopen()) return false;
-                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
-                SetInteracted(slot.Itemstack, true);
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-reopened"));
-                return false;
-            }
 
             if (blockSel.Face?.IsHorizontal == true)
             {

@@ -201,6 +201,10 @@ namespace brickbybrick
 
         public int TransformedMeshCacheMiB { get; set; } = 16;
 
+        // Static masonry uses this for decoded mesh buffers; its collision
+        // cache receives one eighth of the same bounded budget.
+        public int StaticMeshCacheMiB { get; set; } = 64;
+
         public int MortarCapacityMultiplier { get; set; } = 4;
 
         public int FillUnitsPerItem { get; set; } = 2;
@@ -217,6 +221,7 @@ namespace brickbybrick
         {
             FrozenMeshCacheMiB = ConfigRange.Clamp(FrozenMeshCacheMiB, 32, 1024);
             TransformedMeshCacheMiB = ConfigRange.Clamp(TransformedMeshCacheMiB, 8, 256);
+            StaticMeshCacheMiB = ConfigRange.Clamp(StaticMeshCacheMiB, 32, 1024);
             MortarCapacityMultiplier = ConfigRange.Clamp(MortarCapacityMultiplier, 1, 64);
             FillUnitsPerItem = ConfigRange.Clamp(FillUnitsPerItem, 1, 64);
             SledgehammerRecoveryMultiplier = ConfigRange.Clamp(SledgehammerRecoveryMultiplier, 0.0f, 1.0f);
