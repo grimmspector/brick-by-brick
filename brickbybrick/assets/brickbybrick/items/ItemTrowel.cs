@@ -75,31 +75,38 @@ namespace brickbybrick.items
             // Cache mode data once per API instance. Icons are client-only, so
             // server loads keep the same mode codes with null textures.
             var capi = api as ICoreClientAPI;
-            toolModes = ObjectCacheUtil.GetOrCreate<SkillItem[]>(api, "trowelToolModes", () => [
-                new SkillItem {
-                    Code = new AssetLocation("build"),
-                    Name = Lang.Get("brickbybrick:toolmode-trowel-build"),
-                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                },
-                new SkillItem()
-                {
-                    Code = new AssetLocation("slab"),
-                    Name = Lang.Get("brickbybrick:toolmode-trowel-slab"),
-                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                },
-                new SkillItem()
-                {
-                    Code = new AssetLocation("stair"),
-                    Name = Lang.Get("brickbybrick:toolmode-trowel-stair"),
-                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                },
-                new SkillItem()
-                {
-                    Code = new AssetLocation("block"),
-                    Name = Lang.Get("brickbybrick:toolmode-trowel-block"),
-                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                }
-            ]);
+            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                toolModes = Array.Empty<SkillItem>();
+            }
+            else
+            {
+                toolModes = ObjectCacheUtil.GetOrCreate<SkillItem[]>(api, "trowelToolModes", () => [
+                    new SkillItem {
+                        Code = new AssetLocation("build"),
+                        Name = Lang.Get("brickbybrick:toolmode-trowel-build"),
+                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                    },
+                    new SkillItem()
+                    {
+                        Code = new AssetLocation("slab"),
+                        Name = Lang.Get("brickbybrick:toolmode-trowel-slab"),
+                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                    },
+                    new SkillItem()
+                    {
+                        Code = new AssetLocation("stair"),
+                        Name = Lang.Get("brickbybrick:toolmode-trowel-stair"),
+                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                    },
+                    new SkillItem()
+                    {
+                        Code = new AssetLocation("block"),
+                        Name = Lang.Get("brickbybrick:toolmode-trowel-block"),
+                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                    }
+                ]);
+            }
             if (capi == null) return;
 
             // Build interaction help from all blocks marked trowelable so the
@@ -172,6 +179,14 @@ namespace brickbybrick.items
             }
 
             base.OnUnloaded(api);
+        }
+
+        public override void OnHeldAttackStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, ref EnumHandHandling handling)
+        {
+            base.OnHeldAttackStart(slot, byEntity, blockSel, entitySel, ref handling);
+            if (!brickbybrickModSystem.Config.IsRealisticConstructionEnabled()) return;
+
+            handling = EnumHandHandling.PreventDefault;
         }
 
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
@@ -660,6 +675,25 @@ namespace brickbybrick.items
             };
         }
 
+        private static MasonryUnitPlacement ClonePlacementUnit(MasonryUnitPlacement unit)
+        {
+            return new MasonryUnitPlacement
+            {
+                Id = unit.Id,
+                OwnerBlockX = unit.OwnerBlockX,
+                OwnerBlockY = unit.OwnerBlockY,
+                OwnerBlockZ = unit.OwnerBlockZ,
+                Kind = unit.Kind,
+                VisualShape = unit.VisualShape,
+                MaterialCode = unit.MaterialCode,
+                Orientation = unit.Orientation,
+                Origin = new MasonryGridPosition(unit.Origin.X, unit.Origin.Y, unit.Origin.Z),
+                OffsetX = unit.OffsetX,
+                OffsetZ = unit.OffsetZ,
+                MortaredPositions = unit.MortaredPositions.ToHashSet()
+            };
+        }
+
         // A snapped diagonal may extend into a neighboring block cell. Keep
         // its center fixed while making that cell the sole authoritative owner.
         private static void CanonicalizePlacementOwner(ref BlockPos targetPos, MasonryUnitPlacement unit)
@@ -802,16 +836,27 @@ namespace brickbybrick.items
         private static void TrySnapRealisticPlacement(IBlockAccessor blockAccessor, BlockPos targetPos, BlockSelection blockSel, MasonryUnitPlacement unit, StringBuilder trace = null)
         {
             if (unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth) return;
-            if (!brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement
-                && (unit.IsDiagonal || unit.VisualShape == MasonryVisualShape.TriangleWedge)) return;
+            if (!brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement) return;
 
+            bool isCardinalConnection = !unit.IsDiagonal && unit.VisualShape == MasonryVisualShape.Cuboid;
             List<DiagonalSnapCandidate> candidates = new();
             foreach (MasonryUnitPlacement anchor in CollectPlacementAnchors(blockAccessor, targetPos, unit.Origin.Y))
             {
-                AddAnchorPlacementCandidates(candidates, anchor, unit);
+                if (isCardinalConnection)
+                {
+                    if (anchor.IsDiagonal) AddCardinalDiagonalConnectionCandidates(candidates, anchor, unit);
+                }
+                else
+                {
+                    AddAnchorPlacementCandidates(candidates, anchor, unit);
+                }
             }
 
-            float maxSnapDistance = blockSel.Face?.IsHorizontal == true ? 0.75f : 0.9f;
+            // Cardinals stay on the selected quarter grid unless a diagonal
+            // endpoint is deliberately targeted within this small capture area.
+            float maxSnapDistance = isCardinalConnection
+                ? 0.1875f
+                : blockSel.Face?.IsHorizontal == true ? 0.75f : 0.9f;
             float maxSnapDistanceSquared = maxSnapDistance * maxSnapDistance;
             bool rawValid = IsSnapCandidateValid(blockAccessor, targetPos, unit);
             float rawDistance = DistanceToHit(unit, blockSel);
@@ -903,20 +948,21 @@ namespace brickbybrick.items
 
         private static bool IsSnapCandidateValid(IBlockAccessor blockAccessor, BlockPos targetPos, MasonryUnitPlacement unit)
         {
+            MasonryUnitPlacement validationUnit = ClonePlacementUnit(unit);
             BlockPos ownerPos = targetPos.Copy();
-            CanonicalizePlacementOwner(ref ownerPos, unit);
+            CanonicalizePlacementOwner(ref ownerPos, validationUnit);
             BlockEntityRealisticMasonry ownerEntity = blockAccessor.GetBlock(ownerPos)?.Code?.Path == "realisticmasonry"
                 ? blockAccessor.GetBlockEntity(ownerPos) as BlockEntityRealisticMasonry
                 : null;
-            if (GetProjectedPlacementFailure(blockAccessor, ownerPos, ownerEntity, unit) != MasonryPlacementFailure.None) return false;
+            if (GetProjectedPlacementFailure(blockAccessor, ownerPos, ownerEntity, validationUnit) != MasonryPlacementFailure.None) return false;
 
-            Dictionary<(int X, int Z), List<MasonryGridPosition>> neighborReservations = BuildNeighborReservations(unit);
-            foreach ((int X, int Z) neighborOffset in GetNeighborOffsets(unit, neighborReservations))
+            Dictionary<(int X, int Z), List<MasonryGridPosition>> neighborReservations = BuildNeighborReservations(validationUnit);
+            foreach ((int X, int Z) neighborOffset in GetNeighborOffsets(validationUnit, neighborReservations))
             {
                 BlockPos neighborPos = ownerPos.AddCopy(neighborOffset.X, 0, neighborOffset.Z);
                 if (blockAccessor.GetBlock(neighborPos)?.Code?.Path != "realisticmasonry") continue;
 
-                MasonryUnitPlacement neighborProjection = ProjectUnitIntoNeighbor(unit, neighborOffset);
+                MasonryUnitPlacement neighborProjection = ProjectUnitIntoNeighbor(validationUnit, neighborOffset);
                 if (blockAccessor.GetBlockEntity(neighborPos) is not BlockEntityRealisticMasonry neighborEntity
                     || !neighborEntity.CanReserve(neighborProjection))
                 {
@@ -938,6 +984,7 @@ namespace brickbybrick.items
                 {
                     continue;
                 }
+                if (anchorEntity.State.Frozen) continue;
 
                 foreach (MasonryUnitPlacement anchor in anchorEntity.State.Units.Concat(anchorEntity.State.ReservedUnits).Where(existing => existing.Origin.Y == layer))
                 {
@@ -965,6 +1012,28 @@ namespace brickbybrick.items
                     .Select(position => new MasonryGridPosition(position.X + blockOffsetX * 4, position.Y, position.Z + blockOffsetZ * 4))
                     .ToHashSet()
             };
+        }
+
+        private static void AddCardinalDiagonalConnectionCandidates(List<DiagonalSnapCandidate> candidates, MasonryUnitPlacement anchor, MasonryUnitPlacement unit)
+        {
+            MasonryVoxelGeometry.GetUnitAxes(
+                unit,
+                out _,
+                out _,
+                out float directionX,
+                out float directionZ,
+                out float perpendicularX,
+                out float perpendicularZ,
+                out float halfLength,
+                out float halfWidth);
+
+            foreach ((float cornerX, float cornerZ) in MasonryVoxelGeometry.GetUnitCorners(anchor))
+            foreach ((float offsetX, float offsetZ) in GetCornerOffsets(directionX, directionZ, perpendicularX, perpendicularZ, halfLength, halfWidth))
+            {
+                // Preserve the player's cardinal direction. Only a diagonal
+                // corner may supply a placement connection.
+                AddCandidate(candidates, unit, unit.Orientation, anchor, "diagonal-corner", 0, cornerX - offsetX, cornerZ - offsetZ);
+            }
         }
 
         private static void AddAnchorPlacementCandidates(List<DiagonalSnapCandidate> candidates, MasonryUnitPlacement anchor, MasonryUnitPlacement unit)
@@ -1660,15 +1729,30 @@ namespace brickbybrick.items
 
         public override SkillItem[] GetToolModes(ItemSlot slot, IClientPlayer forPlayer, BlockSelection blockSel)
         {
+            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                return Array.Empty<SkillItem>();
+            }
+
             return toolModes;
         }
         public override int GetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel)
         {
+            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                return 0;
+            }
+
             return Math.Min(toolModes.Length - 1, slot.Itemstack.Attributes.GetInt("toolMode"));
         }
 
         public override void SetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel, int toolMode)
         {
+            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                return;
+            }
+
             slot.Itemstack.Attributes.SetInt("toolMode", toolMode);
         }
 
