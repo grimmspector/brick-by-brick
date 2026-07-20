@@ -1,7 +1,34 @@
 # Realistic Masonry Design
 
-Status: proposed architecture. This document records the agreed direction for
-future work; it does not claim that every part is implemented today.
+Status: active design direction. This document records the agreed direction;
+some visual variation and surface-decoration systems remain future work.
+
+## Realistic Trowel Controls
+
+Realistic mode is deliberately GUI-free. It does not expose vanilla tool-mode
+icons, the tool-mode window, or the trowel's Immersive mode list. The vanilla
+`toolmodeselect` hotkey is intercepted globally while Realistic mode is active;
+it never delegates to the vanilla selector. When a compatible placement
+material is available, it cycles the material's placement variant; otherwise
+it simply consumes the key. For Immersive mode, the original vanilla handler
+and mode list are preserved.
+
+- Plain mouse wheel remains hotbar selection.
+- Shift + mouse wheel cycles the masonry orientation/ghost path, including
+  diagonal orientations when enabled.
+- Ctrl + mouse wheel cycles the placement variant path.
+- F is consumed globally and cycles the active material's variant/profile path
+  when a compatible material is available.
+- Left click is prevented as an attack or block-break action; the trowel is
+  not a weapon. Right-click remains the construction interaction, including
+  targeted mortar application through its existing modifier behavior.
+- Bond patterns are created by physical brick placement rather than another
+  selector. Depth, age, and artistic surface profiles are reserved for the
+  same bounded variant path so they can later be added without multiplying
+  tool modes.
+
+The trowel has no default hit animation. This is intentional: Realistic left
+click must be visually inert as well as server-side harmless.
 
 ## Goals
 
@@ -81,6 +108,13 @@ at masonry does not outline every individual quarter cell.
   static compaction is enabled outside profiling.
 - Live edits may use coalesced deltas; full packed snapshots remain for
   chunk load and resynchronization.
+- Placement previews should remain one transient client ghost and one compact
+  placement-state packet. Do not create a block entity, network update, or
+  mesh cache entry for every candidate brick while the player is only aiming.
+- Variant selection should be an integer profile index resolved during mesh
+  construction. Reuse the same canonical mesh/material inputs for equal
+  profiles; never serialize expanded per-face decoration data when a seed,
+  profile, and material palette identify it.
 - CPU mesh-buffer estimates are not VRAM measurements. Direct GPU evidence
   requires an in-process platform probe or external GPU telemetry correlated
   with the client capture markers.

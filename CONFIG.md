@@ -15,7 +15,7 @@ Settings marked **Active** affect the current release. Settings marked **Planned
 
 | Setting | Values | Default | Status | Description |
 | --- | --- | --- | --- | --- |
-| `Mode` | `Cosmetic`, `Immersive`, `Realistic`, `Builder` | `Immersive` | Active | Selects the overall construction experience. Realistic currently falls back to Immersive. |
+| `Mode` | `Cosmetic`, `Immersive`, `Realistic`, `Builder` | `Immersive` | Active | Selects the overall construction experience. Realistic uses the direct masonry placement path and is GUI-free while the trowel is held. |
 | `DisableVanillaBlockRecipes` | `true`, `false` | `false` | Active | Disables covered vanilla brick or stone block recipes when their material family is enabled. |
 | `EnableBloomeryConstruction` | `true`, `false` | `false` | Planned | Enables sequential bloomery construction when that system is available. |
 
@@ -23,7 +23,7 @@ The planned construction modes are:
 
 - `Cosmetic`: 0.3-second actions with normal material costs.
 - `Immersive`: current pacing with vanilla-equivalent costs.
-- `Realistic`: planned one-to-one visible masonry units, structural support rules, and curing. It currently falls back to Immersive.
+- `Realistic`: one-to-one visible masonry units, structural support rules, curing, direct placement previews, and GUI-free trowel controls.
 - `Builder`: 0.3-second actions with half the normal mortar consumption.
 
 `ConstructionActionSeconds` controls Immersive pacing and the current Realistic fallback. Cosmetic and Builder always use 0.3 seconds per stage. Builder carries half portions between actions, so one mortar portion pays for two actions when the normal cost is one.
@@ -41,6 +41,18 @@ The planned construction modes are:
 | `PlacementPreviewOpacity` | 0.0–1.0 | 0.52 | Active | Controls preview transparency. Zero is invisible and one is opaque. |
 
 Setting a material or mortar cost to zero makes that resource free, but the player may still need to hold the correct material so Brick-by-Brick can determine the block variant.
+
+## Realistic trowel controls
+
+Realistic mode does not open the vanilla tool-mode window and does not show
+tool-mode icons. F is consumed globally while Realistic mode is active; when a
+compatible material is selected it cycles that material's placement
+variant/profile. Plain mouse wheel remains hotbar selection;
+Shift + mouse wheel cycles orientation/ghost choices, including diagonals when
+enabled; Ctrl + mouse wheel cycles placement variants. Left click is prevented
+as an attack or block-break action, while right click remains the masonry and
+mortar interaction. The trowel's default stab animation is disabled because it
+is not a weapon.
 
 ## Effects
 

@@ -33,9 +33,12 @@ namespace brickbybrick
 
         internal static BrickByBrickConfig Config { get; private set; } = new();
 
+        internal static bool ConfigLoaded { get; private set; }
+
         private ModSystemSurvivalHandbook? survivalHandbook;
         private ICoreClientAPI? clientApi;
         private IClientNetworkChannel? realisticClientChannel;
+        private ActionConsumable<KeyCombination>? vanillaToolModeHandler;
         private static ICoreServerAPI? serverApi;
         private static readonly Dictionary<string, List<BlockPos>> ProfileCellsByPlayer = new();
         private static readonly Dictionary<string, ProfileExerciseSession> ProfileExercisesByPlayer = new();
@@ -67,6 +70,7 @@ namespace brickbybrick
         // the default file only when none exists, then validation guards edits.
         private void LoadConfig(ICoreAPI api)
         {
+            ConfigLoaded = false;
             try
             {
                 Config = api.LoadModConfig<BrickByBrickConfig>(ConfigFileName) ?? new BrickByBrickConfig();
@@ -79,6 +83,7 @@ namespace brickbybrick
 
             Config.Validate();
             api.StoreModConfig(Config, ConfigFileName);
+            ConfigLoaded = true;
         }
 
         public override void StartServerSide(ICoreServerAPI api)
@@ -1561,6 +1566,9 @@ namespace brickbybrick
         {
             BlockEntityRealisticMasonry.ResetOptimizedMeshRuntimeGuard();
             clientApi = api;
+            HotKey? toolModeHotKey = api.Input.GetHotKeyByCode("toolmodeselect");
+            vanillaToolModeHandler = toolModeHotKey?.Handler;
+            api.Input.SetHotKeyHandler("toolmodeselect", HandleToolModeHotKey);
             realisticClientChannel = api.Network.GetChannel("brickbybrick-realistic");
             realisticClientChannel.SetMessageHandler<RealisticControlPacket>(packet => OnProfileControlPacket(api, packet.Code));
             realisticClientChannel.SetMessageHandler<StaticMasonryStatePacket>(packet => OnStaticMasonryStatePacket(api, packet));
@@ -1572,6 +1580,28 @@ namespace brickbybrick
             {
                 survivalHandbook.OnInitCustomPages += MoveMasonryGuideAfterVanillaGuides;
             }
+        }
+
+        private bool HandleToolModeHotKey(KeyCombination combination)
+        {
+            if (!Config.IsRealisticConstructionEnabled())
+            {
+                return vanillaToolModeHandler?.Invoke(combination) ?? false;
+            }
+
+            IClientPlayer? player = clientApi?.World?.Player;
+            if (player != null && TryGetRealisticPlacementKind(player, out MasonryUnitKind heldKind))
+            {
+                int orientation = (int)ItemTrowel.ResolveRealisticOrientation(player);
+                int variant = ItemTrowel.ResolveRealisticVariant(player);
+                CycleRealisticVariantState(heldKind, 1, ref orientation, ref variant);
+                ItemTrowel.SetRealisticPlacementState(player, orientation, variant);
+                SendRealisticPlacementState(player);
+            }
+
+            // Realistic mode owns F globally. Never delegate to vanilla, even
+            // when no item or placement material is selected.
+            return true;
         }
 
         // Resend the active pose with the click. This keeps server placement
@@ -1758,6 +1788,7 @@ namespace brickbybrick
             if (clientApi != null)
             {
                 clientApi.Event.MouseWheelMove -= OnRealisticPlacementMouseWheel;
+                clientApi.Input.SetHotKeyHandler("toolmodeselect", vanillaToolModeHandler);
                 clientApi = null;
                 realisticClientChannel = null;
             }
@@ -1856,6 +1887,32 @@ namespace brickbybrick
             int index = Array.IndexOf(cycle, GameMath.Mod(current, 8));
             if (index < 0) index = step > 0 ? -1 : 0;
             return cycle[GameMath.Mod(index + step, cycle.Length)];
+        }
+
+        private static void CycleRealisticVariantState(MasonryUnitKind heldKind, int step, ref int orientation, ref int variant)
+        {
+            switch (heldKind)
+            {
+                case MasonryUnitKind.RammedEarth:
+                case MasonryUnitKind.SmallRammedEarth:
+                    variant = GameMath.Mod(variant + step, 2);
+                    break;
+
+                case MasonryUnitKind.HalfBrick:
+                    if (!Config.Realism.EnableDiagonalPlacement)
+                    {
+                        variant = 0;
+                        break;
+                    }
+
+                    variant = GameMath.Mod(variant + step, ItemTrowel.RealisticHalfBrickVariantCount);
+                    if (variant > 0) orientation = GameMath.Mod(variant - 1, 8);
+                    break;
+
+                default:
+                    variant = 0;
+                    break;
+            }
         }
 
         private bool TryGetRealisticPlacementKind(IClientPlayer player, out MasonryUnitKind kind)

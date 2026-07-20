@@ -72,41 +72,7 @@ namespace brickbybrick.items
         {
             base.OnLoaded(api);
 
-            // Cache mode data once per API instance. Icons are client-only, so
-            // server loads keep the same mode codes with null textures.
-            var capi = api as ICoreClientAPI;
-            if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
-            {
-                toolModes = Array.Empty<SkillItem>();
-            }
-            else
-            {
-                toolModes = ObjectCacheUtil.GetOrCreate<SkillItem[]>(api, "trowelToolModes", () => [
-                    new SkillItem {
-                        Code = new AssetLocation("build"),
-                        Name = Lang.Get("brickbybrick:toolmode-trowel-build"),
-                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                    },
-                    new SkillItem()
-                    {
-                        Code = new AssetLocation("slab"),
-                        Name = Lang.Get("brickbybrick:toolmode-trowel-slab"),
-                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                    },
-                    new SkillItem()
-                    {
-                        Code = new AssetLocation("stair"),
-                        Name = Lang.Get("brickbybrick:toolmode-trowel-stair"),
-                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                    },
-                    new SkillItem()
-                    {
-                        Code = new AssetLocation("block"),
-                        Name = Lang.Get("brickbybrick:toolmode-trowel-block"),
-                        Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
-                    }
-                ]);
-            }
+            ICoreClientAPI capi = api as ICoreClientAPI;
             if (capi == null) return;
 
             // Build interaction help from all blocks marked trowelable so the
@@ -183,8 +149,11 @@ namespace brickbybrick.items
 
         public override void OnHeldAttackStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, ref EnumHandHandling handling)
         {
-            base.OnHeldAttackStart(slot, byEntity, blockSel, entitySel, ref handling);
-            if (!brickbybrickModSystem.Config.IsRealisticConstructionEnabled()) return;
+            if (!brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
+            {
+                base.OnHeldAttackStart(slot, byEntity, blockSel, entitySel, ref handling);
+                return;
+            }
 
             handling = EnumHandHandling.PreventDefault;
         }
@@ -1727,23 +1696,65 @@ namespace brickbybrick.items
             }
         }
 
+        private void EnsureToolModes(ICoreAPI api)
+        {
+            if (api == null
+                || toolModes != null
+                || !brickbybrickModSystem.ConfigLoaded
+                || brickbybrickModSystem.Config.IsRealisticConstructionEnabled()) return;
+
+            ICoreClientAPI capi = api as ICoreClientAPI;
+            toolModes = ObjectCacheUtil.GetOrCreate<SkillItem[]>(api, "trowelToolModes", () => [
+                new SkillItem {
+                    Code = new AssetLocation("build"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-build"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/trowel.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                },
+                new SkillItem()
+                {
+                    Code = new AssetLocation("slab"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-slab"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-slab.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                },
+                new SkillItem()
+                {
+                    Code = new AssetLocation("stair"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-stair"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-stair.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                },
+                new SkillItem()
+                {
+                    Code = new AssetLocation("block"),
+                    Name = Lang.Get("brickbybrick:toolmode-trowel-block"),
+                    Texture = capi?.Gui.LoadSvgWithPadding(new AssetLocation("brickbybrick:textures/icons/brick-block.svg"), 64, 64, 5, ColorUtil.WhiteArgb)
+                }
+            ]);
+        }
+
         public override SkillItem[] GetToolModes(ItemSlot slot, IClientPlayer forPlayer, BlockSelection blockSel)
         {
             if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
             {
-                return Array.Empty<SkillItem>();
+                // Returning an empty array still causes Vintage Story to open
+                // an empty tool-mode selector. Null means this item has no
+                // tool-mode surface at all.
+                return null;
             }
 
-            return toolModes;
+            EnsureToolModes(forPlayer?.Entity?.World?.Api);
+            return toolModes ?? Array.Empty<SkillItem>();
         }
         public override int GetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel)
         {
             if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
             {
-                return 0;
+                return -1;
             }
 
-            return Math.Min(toolModes.Length - 1, slot.Itemstack.Attributes.GetInt("toolMode"));
+            EnsureToolModes(byPlayer?.Entity?.World?.Api);
+            return toolModes == null || toolModes.Length == 0
+                ? -1
+                : Math.Min(toolModes.Length - 1, slot.Itemstack.Attributes.GetInt("toolMode"));
         }
 
         public override void SetToolMode(ItemSlot slot, IPlayer byPlayer, BlockSelection blockSel, int toolMode)
@@ -1753,6 +1764,7 @@ namespace brickbybrick.items
                 return;
             }
 
+            EnsureToolModes(byPlayer?.Entity?.World?.Api);
             slot.Itemstack.Attributes.SetInt("toolMode", toolMode);
         }
 
@@ -2486,24 +2498,11 @@ namespace brickbybrick.items
                 HotKeyCodes = new string[] { "toolmodeselect" },
                 MouseButton = EnumMouseButton.None
             };
-            WorldInteraction realisticCycleInteraction = new WorldInteraction()
-            {
-                ActionLangCode = "brickbybrick:heldhelp-realistic-cycle-ghost",
-                HotKeyCodes = new string[] { "shift" },
-                MouseButton = EnumMouseButton.None
-            };
-            WorldInteraction realisticVariantInteraction = new WorldInteraction()
-            {
-                ActionLangCode = "brickbybrick:heldhelp-realistic-cycle-variant",
-                HotKeyCodes = new string[] { SecondaryPlacementModifierHotKeyCode },
-                MouseButton = EnumMouseButton.None
-            };
-
             if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
             {
-                return activeInteractions == null || activeInteractions.Length == 0
-                    ? new WorldInteraction[] { realisticCycleInteraction, realisticVariantInteraction }
-                    : new WorldInteraction[] { actionInteraction, realisticCycleInteraction, realisticVariantInteraction };
+                // Realistic mode is intentionally GUI-free. Its controls are
+                // handled directly by the trowel and documented in the handbook.
+                return Array.Empty<WorldInteraction>();
             }
 
             return activeInteractions == null || activeInteractions.Length == 0
