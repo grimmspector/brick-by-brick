@@ -86,6 +86,40 @@ or masks at the chosen local resolution. At a vanilla-block boundary, the
 occupancy and retention interface must align exactly to the cardinal face
 lattice; a diagonal overhang never silently creates a vanilla-solid face.
 
+## Automatic Mixed-Angle Infill
+
+Half-brick and rammed-earth placement near a cardinal/diagonal interface is
+candidate-driven. The player targets the desired void; placement evaluates
+valid cardinal, diagonal, and half-brick-wedge poses and selects the closest
+valid candidate, rather than requiring a particular rotation to be selected.
+The ordinary half-brick remains preferred where it fits; the triangular wedge
+is considered automatically only at a mixed-angle interface.
+
+Rammed earth has two levels. Its ordinary 2x2 and 1x1 units are snapped like
+other fillers. If the selected point is inside a closed remainder smaller than
+a 2x2 fill, including a 45-degree triangle or trapezoid, one rammed-earth item
+claims that connected microvoxel pocket directly. This keeps the normal mortar
+inset from the surrounding masonry, creates a coplanar finished face, and
+avoids inventing a rectangular unit that would overlap adjacent bricks.
+
+## Rammed-Earth Supply Accounting
+
+The production rammed-earth supply is separate from `testrammedearth` so the
+test material remains available while the player-facing economy evolves. One
+crafted supply represents one vanilla rammed-earth block and holds 192 points:
+there are sixteen 2x2 pieces per block, each 2x2 piece occupies four cells,
+and each cell is three points. A 1x1 piece costs three points, a 2x2 piece
+costs twelve, and a pinpoint wedge or small enclosed pocket costs one.
+
+The supply uses the normal durability bar and tooltip to show its remaining
+points. Supplies are capped at 192 points and normalize through the ordinary
+inventory merge path: they auto-merge when moved into an inventory, and a
+player may left-click one supply onto another to consolidate them. The result
+is one full supply plus a usable remainder. This avoids emitting fractional
+vanilla blocks or inventory items for individual wedges. Wedges are
+mortar-free on their top, bottom, and side joints, although their masonry
+state is still recorded so adjacent geometry remains correct.
+
 ## Meshing and Collision
 
 Reduce quads only when adjacent faces have identical material, repeating UV

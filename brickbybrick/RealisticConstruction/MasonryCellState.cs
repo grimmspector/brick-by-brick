@@ -99,7 +99,9 @@ namespace brickbybrick.RealisticConstruction
             foreach (MasonryGridPosition position in positions.Distinct())
             {
                 MasonryUnitPlacement? unit = Units.FirstOrDefault(candidate => candidate.Occupies(position));
-                if (unit == null || unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth || unit.MortaredPositions.Contains(position)) continue;
+                if (unit == null
+                    || unit.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth
+                    || unit.MortaredPositions.Contains(position)) continue;
 
                 unit.MortaredPositions.Add(position);
                 changed++;

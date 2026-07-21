@@ -1,0 +1,32 @@
+{
+  "code": "rammedearthsupply",
+  "class": "brickbybrick.rammedearthsupply",
+  "durability": 192,
+  "attributes": {
+    "realisticConstructionFill": true,
+    "handbook": {
+      "extraSections": [
+        {
+          "title": "handbook-rammed-earth-supply-title",
+          "text": "handbook-rammed-earth-supply-text"
+        }
+      ]
+    }
+  },
+  "shape": {
+    "base": "game:item/brick"
+  },
+  "textures": {
+    "material": {
+      "base": "game:block/soil/rammed/light/plain1"
+    }
+  },
+  "creativeinventory": {
+    "brickbybrick": [
+      "*"
+    ]
+  },
+  "maxstacksize": 1,
+  "storageFlags": 257,
+  "heldTpIdleAnimation": "holdbothhandslarge"
+}

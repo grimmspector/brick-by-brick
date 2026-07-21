@@ -53,6 +53,7 @@ namespace brickbybrick
             LoadConfig(api);
             Mod.Logger.Event($"started '{Mod.Info.Name}' mod");
             api.RegisterItemClass(Mod.Info.ModID + ".trowel", typeof(ItemTrowel));
+            api.RegisterItemClass(Mod.Info.ModID + ".rammedearthsupply", typeof(ItemRammedEarthSupply));
             api.RegisterBlockClass(Mod.Info.ModID + ".cobbleblock", typeof(BlockStone));
             api.RegisterBlockClass(Mod.Info.ModID + ".brickblock", typeof(BlockBrick));
             api.RegisterBlockClass(Mod.Info.ModID + ".realisticmasonry", typeof(BlockRealisticMasonry));

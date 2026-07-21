@@ -1,0 +1,16 @@
+{
+  "ingredientPattern": "R",
+  "ingredients": {
+    "R": {
+      "type": "block",
+      "code": "game:rammed-*"
+    }
+  },
+  "width": 1,
+  "height": 1,
+  "output": {
+    "type": "item",
+    "code": "brickbybrick:rammedearthsupply",
+    "quantity": 1
+  }
+}

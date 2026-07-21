@@ -194,6 +194,20 @@ namespace brickbybrick.RealisticConstruction
             return true;
         }
 
+        public bool TryFillSmallEarthGap(MasonryGridPosition seed)
+        {
+            if (State.Frozen) return false;
+
+            HashSet<MasonryGridPosition> gap = MasonryVoxelGeometry.FindSmallEnclosedGapAt(State, seed);
+            if (gap.Count == 0) return false;
+
+            State.EarthGapVoxels.UnionWith(gap);
+            Touch();
+            MarkDirty(true);
+            Api.World.BlockAccessor.MarkBlockDirty(Pos);
+            return true;
+        }
+
         public int ApplyMortar(MasonryUnitPlacement unit)
         {
             if (State.Frozen) return 0;
@@ -207,6 +221,19 @@ namespace brickbybrick.RealisticConstruction
             }
 
             return changed;
+        }
+
+        public bool IsMortarFree(MasonryGridPosition cell, BlockFacing? face = null)
+        {
+            MasonryUnitPlacement? unit = FindUnit(cell);
+            if (unit?.VisualShape == MasonryVisualShape.TriangleWedge) return true;
+            if (face?.IsHorizontal != true) return false;
+
+            int searchX = face.Normali.X == 0 ? 1 : 0;
+            int searchZ = face.Normali.Z == 0 ? 1 : 0;
+            MasonryUnitPlacement? neighbor = FindAdjacentUnit(cell, searchX, searchZ, unit, out _)
+                ?? FindAdjacentUnit(cell, -searchX, -searchZ, unit, out _);
+            return neighbor?.VisualShape == MasonryVisualShape.TriangleWedge;
         }
 
         public bool ApplySideMortar(MasonryGridPosition cell, BlockFacing face)

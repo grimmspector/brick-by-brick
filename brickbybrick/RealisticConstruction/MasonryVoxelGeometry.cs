@@ -257,6 +257,47 @@ namespace brickbybrick.RealisticConstruction
             return result;
         }
 
+        // Keeps diagonal triangle and trapezoid pockets compact without
+        // pretending that their irregular shape is a rectangular unit.
+        internal static HashSet<MasonryGridPosition> FindSmallEnclosedGapAt(MasonryCellState state, MasonryGridPosition seed)
+        {
+            const int MaximumArea = 63;
+            if (seed.X is < 0 or >= Resolution || seed.Y is < 0 or >= Resolution || seed.Z is < 0 or >= Resolution)
+                return new HashSet<MasonryGridPosition>();
+
+            bool[,,] occupied = new bool[Resolution, Resolution, Resolution];
+            foreach (MasonryUnitPlacement unit in state.Units.Concat(state.ReservedUnits))
+            foreach ((int x, int y, int z) in GetVoxels(unit))
+                if (x is >= 0 and < Resolution && y is >= 0 and < Resolution && z is >= 0 and < Resolution) occupied[x, y, z] = true;
+            foreach (MasonryGridPosition voxel in state.EarthGapVoxels.Concat(state.MortarGapVoxels))
+                if (voxel.X is >= 0 and < Resolution && voxel.Y is >= 0 and < Resolution && voxel.Z is >= 0 and < Resolution) occupied[voxel.X, voxel.Y, voxel.Z] = true;
+            if (occupied[seed.X, seed.Y, seed.Z]) return new HashSet<MasonryGridPosition>();
+
+            (int X, int Z)[] steps = { (1, 0), (-1, 0), (0, 1), (0, -1) };
+            Queue<(int X, int Z)> queue = new();
+            HashSet<(int X, int Z)> visited = new();
+            bool reachesBoundary = false;
+            queue.Enqueue((seed.X, seed.Z));
+            visited.Add((seed.X, seed.Z));
+            while (queue.Count > 0)
+            {
+                (int x, int z) = queue.Dequeue();
+                if (x == 0 || x == Resolution - 1 || z == 0 || z == Resolution - 1) reachesBoundary = true;
+                foreach ((int stepX, int stepZ) in steps)
+                {
+                    int nextX = x + stepX;
+                    int nextZ = z + stepZ;
+                    if (nextX is < 0 or >= Resolution || nextZ is < 0 or >= Resolution
+                        || occupied[nextX, seed.Y, nextZ] || !visited.Add((nextX, nextZ))) continue;
+                    queue.Enqueue((nextX, nextZ));
+                }
+            }
+
+            return reachesBoundary || visited.Count > MaximumArea
+                ? new HashSet<MasonryGridPosition>()
+                : visited.Select(position => new MasonryGridPosition(position.X, seed.Y, position.Z)).ToHashSet();
+        }
+
         private static Cuboidf[] MergeVolume(bool[,,] occupied, bool includeEmptyFallback = true)
         {
 
