@@ -2485,10 +2485,12 @@ namespace brickbybrick.items
             if (world.Side == EnumAppSide.Client && player is IClientPlayer clientPlayer)
             {
                 clientPlayer.ShowChatNotification(message);
+                world.Api.ModLoader.GetModSystem<brickbybrickModSystem>()?.ShowHudNotification(player, world, message);
             }
             else if (world.Side == EnumAppSide.Server && player is IServerPlayer serverPlayer)
             {
                 serverPlayer.SendMessage(GlobalConstants.GeneralChatGroup, message, EnumChatType.Notification);
+                world.Api.ModLoader.GetModSystem<brickbybrickModSystem>()?.ShowHudNotification(player, world, message);
             }
         }
 

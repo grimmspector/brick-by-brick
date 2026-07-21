@@ -39,4 +39,12 @@ namespace brickbybrick.RealisticConstruction
         [ProtoMember(5)]
         public bool Remove;
     }
+
+    // Carries a short player-facing notification for the client HUD.
+    [ProtoContract]
+    public sealed class HudTextPacket
+    {
+        [ProtoMember(1)]
+        public string Message = string.Empty;
+    }
 }

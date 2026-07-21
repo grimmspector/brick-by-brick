@@ -153,6 +153,19 @@ at masonry does not outline every individual quarter cell.
   requires an in-process platform probe or external GPU telemetry correlated
   with the client capture markers.
 
+## Player HUD Notifications
+
+Player-facing construction feedback remains in the notification chat channel
+for history and compatibility. The same message is also sent to one transient
+client HUD notification below the crosshair. A new notification replaces any
+message already on screen and restarts its lifetime. It transitions from red
+to white during its first second, remains visible for three seconds, then
+alpha-fades out over 0.75 seconds. The renderer uses premultiplied alpha;
+runtime testing must confirm its appearance on supported game versions.
+
+The handler is deliberately generic rather than trowel-specific so it can be
+promoted to Grimm's Mod Commons as a shared client notification surface.
+
 ## Evidence Commands
 
 The server-only matrix is designed for unattended use:

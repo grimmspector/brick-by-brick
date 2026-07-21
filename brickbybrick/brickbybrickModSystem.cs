@@ -38,6 +38,7 @@ namespace brickbybrick
         private ModSystemSurvivalHandbook? survivalHandbook;
         private ICoreClientAPI? clientApi;
         private IClientNetworkChannel? realisticClientChannel;
+        private HudTextNotification? hudTextNotification;
         private ActionConsumable<KeyCombination>? vanillaToolModeHandler;
         private static ICoreServerAPI? serverApi;
         private static readonly Dictionary<string, List<BlockPos>> ProfileCellsByPlayer = new();
@@ -63,7 +64,8 @@ namespace brickbybrick
             api.Network.RegisterChannel("brickbybrick-realistic")
                 .RegisterMessageType<int>()
                 .RegisterMessageType<RealisticControlPacket>()
-                .RegisterMessageType<StaticMasonryStatePacket>();
+                .RegisterMessageType<StaticMasonryStatePacket>()
+                .RegisterMessageType<HudTextPacket>();
 
         }
 
@@ -1573,6 +1575,8 @@ namespace brickbybrick
             realisticClientChannel = api.Network.GetChannel("brickbybrick-realistic");
             realisticClientChannel.SetMessageHandler<RealisticControlPacket>(packet => OnProfileControlPacket(api, packet.Code));
             realisticClientChannel.SetMessageHandler<StaticMasonryStatePacket>(packet => OnStaticMasonryStatePacket(api, packet));
+            realisticClientChannel.SetMessageHandler<HudTextPacket>(packet => hudTextNotification?.Show(packet.Message));
+            hudTextNotification = new HudTextNotification(api);
             api.Event.RegisterGameTickListener(_ => FrozenMasonryChunkStore.FlushDue(), 100);
             api.Event.MouseWheelMove += OnRealisticPlacementMouseWheel;
             RegisterClientProfilingCommands(api);
@@ -1580,6 +1584,21 @@ namespace brickbybrick
             if (survivalHandbook != null)
             {
                 survivalHandbook.OnInitCustomPages += MoveMasonryGuideAfterVanillaGuides;
+            }
+        }
+
+        internal void ShowHudNotification(IPlayer player, IWorldAccessor world, string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return;
+
+            if (world.Side == EnumAppSide.Client)
+            {
+                hudTextNotification?.Show(message);
+            }
+            else if (world.Side == EnumAppSide.Server && player is IServerPlayer serverPlayer)
+            {
+                serverApi?.Network.GetChannel("brickbybrick-realistic")
+                    .SendPacket(new HudTextPacket { Message = message }, serverPlayer);
             }
         }
 
