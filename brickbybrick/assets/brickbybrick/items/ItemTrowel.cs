@@ -853,8 +853,7 @@ namespace brickbybrick.items
 
         private static void TrySnapRealisticPlacement(IBlockAccessor blockAccessor, BlockPos targetPos, BlockSelection blockSel, MasonryUnitPlacement unit, StringBuilder trace = null)
         {
-            if (!brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement) return;
-
+            bool diagonalPlacementEnabled = brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement;
             bool isCardinalConnection = unit.Kind == MasonryUnitKind.WholeBrick
                 && !unit.IsDiagonal
                 && unit.VisualShape == MasonryVisualShape.Cuboid;
@@ -875,13 +874,15 @@ namespace brickbybrick.items
                 MasonryUnitPlacement anchor = placementAnchor.Unit;
                 if (isCardinalConnection)
                 {
-                    if (anchor.IsDiagonal) AddCardinalDiagonalConnectionCandidates(candidates, anchor, unit);
-                    else if (placementAnchor.IsFocusedFrozen) AddAnchorPlacementCandidates(candidates, anchor, unit);
+                    if (placementAnchor.IsFocusedFrozen && (diagonalPlacementEnabled || !anchor.IsDiagonal))
+                    {
+                        AddAdjacentPlacementCandidates(candidates, anchor, unit);
+                    }
+                    if (diagonalPlacementEnabled && anchor.IsDiagonal) AddCardinalDiagonalConnectionCandidates(candidates, anchor, unit);
                 }
-                else
+                else if (diagonalPlacementEnabled)
                 {
-                    AddAnchorPlacementCandidates(candidates, anchor, unit);
-                    AddAutomaticHalfBrickWedgeCandidates(candidates, anchor, unit);
+                    AddDiagonalPlacementCandidates(candidates, anchor, unit);
                 }
             }
 
@@ -893,6 +894,7 @@ namespace brickbybrick.items
             {
                 foreach (PlacementAnchor placementAnchor in CollectPlacementAnchors(blockAccessor, targetPos, unit.Origin.Y - 1, focusedMasonryPos, focusedFrozenUnit))
                 {
+                    if (!diagonalPlacementEnabled && placementAnchor.Unit.IsDiagonal) continue;
                     AddSupportSnapCandidate(candidates, placementAnchor.Unit, unit);
                 }
             }
@@ -942,7 +944,8 @@ namespace brickbybrick.items
                 .OrderBy(candidate => candidate.DistanceSquared + candidate.Candidate.Priority * 0.015f)
                 .FirstOrDefault();
 
-            bool automaticInterfaceFill = (unit.Kind is MasonryUnitKind.HalfBrick or MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth)
+            bool automaticInterfaceFill = diagonalPlacementEnabled
+                && (unit.Kind is MasonryUnitKind.HalfBrick or MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth)
                 && best.Candidate.Anchor?.IsDiagonal == true;
             bool supportSnap = best.Candidate.IsSupportCandidate;
             if (rawValid && !automaticInterfaceFill && !supportSnap && (best.Candidate.Unit == null || rawDistance <= best.DistanceSquared - 0.01f))
@@ -1164,7 +1167,16 @@ namespace brickbybrick.items
             }
         }
 
-        private static void AddAnchorPlacementCandidates(
+        private static void AddDiagonalPlacementCandidates(
+            List<DiagonalSnapCandidate> candidates,
+            MasonryUnitPlacement anchor,
+            MasonryUnitPlacement unit)
+        {
+            AddAdjacentPlacementCandidates(candidates, anchor, unit);
+            AddAutomaticHalfBrickWedgeCandidates(candidates, anchor, unit);
+        }
+
+        private static void AddAdjacentPlacementCandidates(
             List<DiagonalSnapCandidate> candidates,
             MasonryUnitPlacement anchor,
             MasonryUnitPlacement unit)
@@ -1238,7 +1250,7 @@ namespace brickbybrick.items
 
             MasonryUnitPlacement wedge = ClonePlacementUnit(unit);
             wedge.VisualShape = MasonryVisualShape.TriangleWedge;
-            AddAnchorPlacementCandidates(candidates, anchor, wedge);
+            AddAdjacentPlacementCandidates(candidates, anchor, wedge);
         }
 
         private static void AddSideCandidates(
