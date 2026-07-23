@@ -858,12 +858,25 @@ namespace brickbybrick.items
             bool isCardinalConnection = unit.Kind == MasonryUnitKind.WholeBrick
                 && !unit.IsDiagonal
                 && unit.VisualShape == MasonryVisualShape.Cuboid;
+            BlockPos focusedMasonryPos = blockAccessor.GetBlock(blockSel.Position)?.Code?.Path == "realisticmasonry"
+                ? blockSel.Position.Copy()
+                : null;
+            BlockEntityRealisticMasonry focusedEntity = focusedMasonryPos == null
+                ? null
+                : blockAccessor.GetBlockEntity(focusedMasonryPos) as BlockEntityRealisticMasonry;
+            bool isFocusedMasonryFrozen = focusedEntity?.State.Frozen == true;
+            MasonryUnitPlacement focusedFrozenUnit = isFocusedMasonryFrozen
+                ? FindFocusedMasonryUnit(blockSel, focusedEntity)
+                : null;
+            trace?.AppendLine($"snap focusedFrozenUnit={FormatRealisticUnit(focusedFrozenUnit)}");
             List<DiagonalSnapCandidate> candidates = new();
-            foreach (MasonryUnitPlacement anchor in CollectPlacementAnchors(blockAccessor, targetPos, unit.Origin.Y))
+            foreach (PlacementAnchor placementAnchor in CollectPlacementAnchors(blockAccessor, targetPos, unit.Origin.Y, focusedMasonryPos, focusedFrozenUnit))
             {
+                MasonryUnitPlacement anchor = placementAnchor.Unit;
                 if (isCardinalConnection)
                 {
                     if (anchor.IsDiagonal) AddCardinalDiagonalConnectionCandidates(candidates, anchor, unit);
+                    else if (placementAnchor.IsFocusedFrozen) AddAnchorPlacementCandidates(candidates, anchor, unit);
                 }
                 else
                 {
@@ -872,26 +885,55 @@ namespace brickbybrick.items
                 }
             }
 
+            // An upper whole-brick course inherits its horizontal work frame
+            // from the masonry directly beneath it, including a diagonal's
+            // offset. Support validity remains the placement and mortar
+            // system's job.
+            if (unit.Kind == MasonryUnitKind.WholeBrick)
+            {
+                foreach (PlacementAnchor placementAnchor in CollectPlacementAnchors(blockAccessor, targetPos, unit.Origin.Y - 1, focusedMasonryPos, focusedFrozenUnit))
+                {
+                    AddSupportSnapCandidate(candidates, placementAnchor.Unit, unit);
+                }
+            }
+
             // Cardinals stay on the selected quarter grid unless a diagonal
-            // endpoint is deliberately targeted within this small capture area.
-            float maxSnapDistance = isCardinalConnection
+            // endpoint or the explicitly targeted frozen masonry is nearby.
+            float maxSnapDistance = isCardinalConnection && !isFocusedMasonryFrozen
                 ? 0.1875f
                 : blockSel.Face?.IsHorizontal == true ? 0.75f : 0.9f;
             float maxSnapDistanceSquared = maxSnapDistance * maxSnapDistance;
+            float supportSnapDistance = blockSel.Face?.IsHorizontal == true ? 0.75f : 0.9f;
+            float supportSnapDistanceSquared = supportSnapDistance * supportSnapDistance;
             bool rawValid = IsSnapCandidateValid(blockAccessor, targetPos, unit);
             float rawDistance = DistanceToHit(unit, blockSel);
             List<EvaluatedSnapCandidate> evaluatedCandidates = candidates
                 .Select((candidate, index) =>
                 {
                     float distance = DistanceToHit(candidate.Unit, blockSel);
-                    bool inRange = distance <= maxSnapDistanceSquared;
-                    bool valid = inRange && IsSnapCandidateValid(blockAccessor, targetPos, candidate.Unit);
+                    bool inRange = distance <= (candidate.IsSupportCandidate
+                        ? supportSnapDistanceSquared
+                        : maxSnapDistanceSquared);
+                    bool valid = inRange && IsSnapCandidateValid(
+                        blockAccessor,
+                        targetPos,
+                        candidate.Unit,
+                        candidate.IsSupportCandidate,
+                        focusedMasonryPos);
                     bool keepsSelectedOriginCell = IsInSameOriginCell(unit, candidate.Unit);
                     return new EvaluatedSnapCandidate(candidate, index, distance, inRange, valid, keepsSelectedOriginCell);
                 })
                 .ToList();
             IEnumerable<EvaluatedSnapCandidate> validCandidates = evaluatedCandidates.Where(candidate => candidate.Valid);
-            if (validCandidates.Any(candidate => candidate.KeepsSelectedOriginCell))
+            if (isFocusedMasonryFrozen && validCandidates.Any(candidate => !TargetsMasonryBlock(targetPos, candidate.Candidate.Unit, focusedMasonryPos)))
+            {
+                validCandidates = validCandidates.Where(candidate => !TargetsMasonryBlock(targetPos, candidate.Candidate.Unit, focusedMasonryPos));
+            }
+            if (validCandidates.Any(candidate => candidate.Candidate.IsSupportCandidate))
+            {
+                validCandidates = validCandidates.Where(candidate => candidate.Candidate.IsSupportCandidate);
+            }
+            else if (validCandidates.Any(candidate => candidate.KeepsSelectedOriginCell))
             {
                 validCandidates = validCandidates.Where(candidate => candidate.KeepsSelectedOriginCell);
             }
@@ -902,7 +944,8 @@ namespace brickbybrick.items
 
             bool automaticInterfaceFill = (unit.Kind is MasonryUnitKind.HalfBrick or MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth)
                 && best.Candidate.Anchor?.IsDiagonal == true;
-            if (rawValid && !automaticInterfaceFill && (best.Candidate.Unit == null || rawDistance <= best.DistanceSquared - 0.01f))
+            bool supportSnap = best.Candidate.IsSupportCandidate;
+            if (rawValid && !automaticInterfaceFill && !supportSnap && (best.Candidate.Unit == null || rawDistance <= best.DistanceSquared - 0.01f))
             {
                 AppendSnapCandidateTrace(trace, candidates.Count, maxSnapDistanceSquared, evaluatedCandidates, rawValid, rawDistance, default);
                 return;
@@ -920,12 +963,13 @@ namespace brickbybrick.items
 
         private readonly struct DiagonalSnapCandidate
         {
-            public DiagonalSnapCandidate(MasonryUnitPlacement unit, int priority, string relation, MasonryUnitPlacement anchor)
+            public DiagonalSnapCandidate(MasonryUnitPlacement unit, int priority, string relation, MasonryUnitPlacement anchor, bool isSupportCandidate)
             {
                 Unit = unit;
                 Priority = priority;
                 Relation = relation;
                 Anchor = anchor;
+                IsSupportCandidate = isSupportCandidate;
             }
 
             public MasonryUnitPlacement Unit { get; }
@@ -935,6 +979,8 @@ namespace brickbybrick.items
             public string Relation { get; }
 
             public MasonryUnitPlacement Anchor { get; }
+
+            public bool IsSupportCandidate { get; }
         }
 
         private readonly struct EvaluatedSnapCandidate
@@ -962,13 +1008,53 @@ namespace brickbybrick.items
             public bool KeepsSelectedOriginCell { get; }
         }
 
+        private readonly struct PlacementAnchor
+        {
+            public PlacementAnchor(MasonryUnitPlacement unit, bool isFocusedFrozen)
+            {
+                Unit = unit;
+                IsFocusedFrozen = isFocusedFrozen;
+            }
+
+            public MasonryUnitPlacement Unit { get; }
+
+            public bool IsFocusedFrozen { get; }
+        }
+
         private static bool IsInSameOriginCell(MasonryUnitPlacement selectedUnit, MasonryUnitPlacement candidate)
         {
             return (int)Math.Floor(selectedUnit.Origin.X / 4d) == (int)Math.Floor(candidate.Origin.X / 4d)
                 && (int)Math.Floor(selectedUnit.Origin.Z / 4d) == (int)Math.Floor(candidate.Origin.Z / 4d);
         }
 
-        private static bool IsSnapCandidateValid(IBlockAccessor blockAccessor, BlockPos targetPos, MasonryUnitPlacement unit)
+        private static bool TargetsMasonryBlock(BlockPos targetPos, MasonryUnitPlacement unit, BlockPos masonryPos)
+        {
+            MasonryUnitPlacement projectedUnit = ClonePlacementUnit(unit);
+            BlockPos ownerPos = targetPos.Copy();
+            CanonicalizePlacementOwner(ref ownerPos, projectedUnit);
+            return ownerPos.Equals(masonryPos);
+        }
+
+        private static MasonryUnitPlacement FindFocusedMasonryUnit(
+            BlockSelection blockSel,
+            BlockEntityRealisticMasonry entity)
+        {
+            BlockFacing face = blockSel.Face ?? BlockFacing.UP;
+            int contactX = GameMath.Mod((int)Math.Floor((blockSel.HitPosition.X - face.Normali.X * 0.001) * MasonryVoxelGeometry.Resolution), MasonryVoxelGeometry.Resolution);
+            int contactY = GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Y - face.Normali.Y * 0.001) * MasonryVoxelGeometry.Resolution), 0, MasonryVoxelGeometry.Resolution - 1);
+            int contactZ = GameMath.Mod((int)Math.Floor((blockSel.HitPosition.Z - face.Normali.Z * 0.001) * MasonryVoxelGeometry.Resolution), MasonryVoxelGeometry.Resolution);
+
+            return entity.State.Units.Concat(entity.State.ReservedUnits).LastOrDefault(candidate =>
+                MasonryVoxelGeometry.GetVoxels(candidate).Any(voxel =>
+                    voxel.X == contactX && voxel.Y == contactY && voxel.Z == contactZ));
+        }
+
+        private static bool IsSnapCandidateValid(
+            IBlockAccessor blockAccessor,
+            BlockPos targetPos,
+            MasonryUnitPlacement unit,
+            bool allowUnsupported = false,
+            BlockPos focusedMasonryPos = null)
         {
             MasonryUnitPlacement validationUnit = ClonePlacementUnit(unit);
             BlockPos ownerPos = targetPos.Copy();
@@ -976,7 +1062,11 @@ namespace brickbybrick.items
             BlockEntityRealisticMasonry ownerEntity = blockAccessor.GetBlock(ownerPos)?.Code?.Path == "realisticmasonry"
                 ? blockAccessor.GetBlockEntity(ownerPos) as BlockEntityRealisticMasonry
                 : null;
-            if (GetProjectedPlacementFailure(blockAccessor, ownerPos, ownerEntity, validationUnit) != MasonryPlacementFailure.None) return false;
+            MasonryPlacementFailure failure = GetProjectedPlacementFailure(blockAccessor, ownerPos, ownerEntity, validationUnit);
+            bool isFocusedFrozenOwner = focusedMasonryPos?.Equals(ownerPos) == true;
+            if (failure != MasonryPlacementFailure.None
+                && (!allowUnsupported || failure != MasonryPlacementFailure.Unsupported)
+                && (!isFocusedFrozenOwner || failure != MasonryPlacementFailure.Frozen)) return false;
 
             Dictionary<(int X, int Z), List<MasonryGridPosition>> neighborReservations = BuildNeighborReservations(validationUnit);
             foreach ((int X, int Z) neighborOffset in GetNeighborOffsets(validationUnit, neighborReservations))
@@ -995,7 +1085,12 @@ namespace brickbybrick.items
             return true;
         }
 
-        private static IEnumerable<MasonryUnitPlacement> CollectPlacementAnchors(IBlockAccessor blockAccessor, BlockPos targetPos, int layer)
+        private static IEnumerable<PlacementAnchor> CollectPlacementAnchors(
+            IBlockAccessor blockAccessor,
+            BlockPos targetPos,
+            int layer,
+            BlockPos focusedMasonryPos,
+            MasonryUnitPlacement focusedFrozenUnit)
         {
             for (int offsetX = -1; offsetX <= 1; offsetX++)
             for (int offsetZ = -1; offsetZ <= 1; offsetZ++)
@@ -1006,11 +1101,13 @@ namespace brickbybrick.items
                 {
                     continue;
                 }
-                if (anchorEntity.State.Frozen) continue;
+                bool isFocusedFrozen = anchorEntity.State.Frozen && focusedMasonryPos?.Equals(anchorPos) == true;
+                if (anchorEntity.State.Frozen && !isFocusedFrozen) continue;
 
                 foreach (MasonryUnitPlacement anchor in anchorEntity.State.Units.Concat(anchorEntity.State.ReservedUnits).Where(existing => existing.Origin.Y == layer))
                 {
-                    yield return ProjectAnchorIntoTarget(anchor, offsetX, offsetZ);
+                    if (isFocusedFrozen && (focusedFrozenUnit == null || !ReferenceEquals(anchor, focusedFrozenUnit))) continue;
+                    yield return new PlacementAnchor(ProjectAnchorIntoTarget(anchor, offsetX, offsetZ), isFocusedFrozen);
                 }
             }
         }
@@ -1036,6 +1133,15 @@ namespace brickbybrick.items
             };
         }
 
+        private static void AddSupportSnapCandidate(
+            List<DiagonalSnapCandidate> candidates,
+            MasonryUnitPlacement anchor,
+            MasonryUnitPlacement unit)
+        {
+            MasonryVoxelGeometry.GetUnitCenter(anchor, out float centerX, out float centerZ);
+            AddCandidate(candidates, unit, unit.Orientation, anchor, "support", -1, centerX, centerZ, isSupportCandidate: true);
+        }
+
         private static void AddCardinalDiagonalConnectionCandidates(List<DiagonalSnapCandidate> candidates, MasonryUnitPlacement anchor, MasonryUnitPlacement unit)
         {
             MasonryVoxelGeometry.GetUnitAxes(
@@ -1058,7 +1164,10 @@ namespace brickbybrick.items
             }
         }
 
-        private static void AddAnchorPlacementCandidates(List<DiagonalSnapCandidate> candidates, MasonryUnitPlacement anchor, MasonryUnitPlacement unit)
+        private static void AddAnchorPlacementCandidates(
+            List<DiagonalSnapCandidate> candidates,
+            MasonryUnitPlacement anchor,
+            MasonryUnitPlacement unit)
         {
             if (anchor.Kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth) return;
 
@@ -1221,11 +1330,12 @@ namespace brickbybrick.items
             string relation,
             int priority,
             float centerX,
-            float centerZ)
+            float centerZ,
+            bool isSupportCandidate = false)
         {
             MasonryUnitPlacement candidate = CreatePlacementCandidate(unit, orientation, centerX, centerZ);
             if (candidates.Any(existing => IsSameSnapCandidate(existing.Unit, candidate))) return;
-            candidates.Add(new DiagonalSnapCandidate(candidate, priority, relation, anchor));
+            candidates.Add(new DiagonalSnapCandidate(candidate, priority, relation, anchor, isSupportCandidate));
         }
 
         private static bool IsSameSnapCandidate(MasonryUnitPlacement first, MasonryUnitPlacement second)
@@ -1386,7 +1496,7 @@ namespace brickbybrick.items
         private static void AppendSnapCandidateLine(StringBuilder trace, EvaluatedSnapCandidate candidate, bool chosen)
         {
             trace.AppendLine(
-                $"snap[{candidate.Index}] chosen={chosen} valid={candidate.Valid} inRange={candidate.InRange} selectedOriginCell={candidate.KeepsSelectedOriginCell} priority={candidate.Candidate.Priority} relation={candidate.Candidate.Relation ?? "none"} distanceSquared={candidate.DistanceSquared:0.####} unit={FormatRealisticUnit(candidate.Candidate.Unit)} anchor={FormatRealisticUnit(candidate.Candidate.Anchor)}");
+                $"snap[{candidate.Index}] chosen={chosen} valid={candidate.Valid} inRange={candidate.InRange} selectedOriginCell={candidate.KeepsSelectedOriginCell} support={candidate.Candidate.IsSupportCandidate} priority={candidate.Candidate.Priority} relation={candidate.Candidate.Relation ?? "none"} distanceSquared={candidate.DistanceSquared:0.####} unit={FormatRealisticUnit(candidate.Candidate.Unit)} anchor={FormatRealisticUnit(candidate.Candidate.Anchor)}");
         }
 
         private static void LogRealisticPreviewTraceIfChanged(ICoreAPI api, StringBuilder trace, BlockPos targetPos, MasonryUnitPlacement unit, bool valid)
