@@ -39,7 +39,6 @@ namespace brickbybrick
         private ICoreClientAPI? clientApi;
         private IClientNetworkChannel? realisticClientChannel;
         private HudTextNotification? hudTextNotification;
-        private ActionConsumable<KeyCombination>? vanillaToolModeHandler;
         private static ICoreServerAPI? serverApi;
         private static readonly Dictionary<string, List<BlockPos>> ProfileCellsByPlayer = new();
         private static readonly Dictionary<string, ProfileExerciseSession> ProfileExercisesByPlayer = new();
@@ -54,8 +53,6 @@ namespace brickbybrick
             LoadConfig(api);
             Mod.Logger.Event($"started '{Mod.Info.Name}' mod");
             api.RegisterItemClass(Mod.Info.ModID + ".trowel", typeof(ItemTrowel));
-            api.RegisterItemClass(Mod.Info.ModID + ".rammedearthsupply", typeof(ItemRammedEarthSupply));
-            api.RegisterBlockClass(Mod.Info.ModID + ".cobbleblock", typeof(BlockStone));
             api.RegisterBlockClass(Mod.Info.ModID + ".brickblock", typeof(BlockBrick));
             api.RegisterBlockClass(Mod.Info.ModID + ".realisticmasonry", typeof(BlockRealisticMasonry));
             api.RegisterBlockClass(Mod.Info.ModID + ".staticmasonry", typeof(BlockStaticMasonry));
@@ -155,14 +152,6 @@ namespace brickbybrick
                 .BeginSubCommand("realistic")
                     .WithArgs(api.ChatCommands.Parsers.Int("count"))
                     .HandleWith(args => SpawnRealisticBaseCorpus(api, args))
-                .EndSubCommand()
-                .BeginSubCommand("diagonal")
-                    .WithArgs(api.ChatCommands.Parsers.Int("count"))
-                    .HandleWith(args => SpawnAngledCorpus(api, args, false))
-                .EndSubCommand()
-                .BeginSubCommand("mixedangles")
-                    .WithArgs(api.ChatCommands.Parsers.Int("count"))
-                    .HandleWith(args => SpawnAngledCorpus(api, args, true))
                 .EndSubCommand()
                 .BeginSubCommand("walls")
                     .WithArgs(
@@ -284,12 +273,11 @@ namespace brickbybrick
             List<MasonryUnitPlacement> cases = new()
             {
                 CreateDiagnosticUnit("full-east", MasonryUnitKind.WholeBrick, MasonryVisualShape.Cuboid, MasonryOrientation.East, 1, 0, 1),
-                CreateDiagnosticUnit("full-southeast", MasonryUnitKind.WholeBrick, MasonryVisualShape.Cuboid, MasonryOrientation.SouthEast, 1, 0, 1),
+                CreateDiagnosticUnit("full-south", MasonryUnitKind.WholeBrick, MasonryVisualShape.Cuboid, MasonryOrientation.South, 1, 0, 1),
                 CreateDiagnosticUnit("half-east", MasonryUnitKind.HalfBrick, MasonryVisualShape.Cuboid, MasonryOrientation.East, 1, 0, 1),
-                CreateDiagnosticUnit("half-southeast", MasonryUnitKind.HalfBrick, MasonryVisualShape.Cuboid, MasonryOrientation.SouthEast, 1, 0, 1),
-                CreateDiagnosticUnit("wedge-southeast", MasonryUnitKind.HalfBrick, MasonryVisualShape.TriangleWedge, MasonryOrientation.SouthEast, 1, 0, 1),
+                CreateDiagnosticUnit("half-south", MasonryUnitKind.HalfBrick, MasonryVisualShape.Cuboid, MasonryOrientation.South, 1, 0, 1),
                 CreateDiagnosticUnit("earth-2x2-east", MasonryUnitKind.RammedEarth, MasonryVisualShape.Cuboid, MasonryOrientation.East, 1, 0, 1),
-                CreateDiagnosticUnit("earth-1x1-southeast", MasonryUnitKind.SmallRammedEarth, MasonryVisualShape.Cuboid, MasonryOrientation.SouthEast, 1, 0, 1)
+                CreateDiagnosticUnit("earth-1x1-south", MasonryUnitKind.SmallRammedEarth, MasonryVisualShape.Cuboid, MasonryOrientation.South, 1, 0, 1)
             };
 
             string report = string.Join(Environment.NewLine + Environment.NewLine, cases.Select(unit => DescribeDiagnosticUnit(unit, "CASE")));
@@ -305,7 +293,9 @@ namespace brickbybrick
                 Id = id,
                 Kind = kind,
                 VisualShape = shape,
-                MaterialCode = kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth ? "testrammedearth" : "burnedbrick-cream",
+                MaterialCode = kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth
+                    ? "testrammedearth"
+                    : "burnedbrick-cream",
                 Orientation = orientation,
                 Origin = new MasonryGridPosition(x, y, z)
             };
@@ -981,13 +971,13 @@ namespace brickbybrick
                 return TextCommandResult.Error("Realistic masonry block is unavailable.");
             }
 
-            List<(BlockPos Position, bool Diagonal)> candidates = new(length * height * 3);
+            List<BlockPos> candidates = new(length * height * 3);
             for (int section = 0; section < length; section++)
             for (int level = 0; level < height; level++)
             {
-                candidates.Add((center.AddCopy(8 + section, level, 8), false));
-                candidates.Add((center.AddCopy(8 + section, level, 24 + section), true));
-                candidates.Add((center.AddCopy(8 + section, level, length + 48), section % 3 != 0));
+                candidates.Add(center.AddCopy(8 + section, level, 8));
+                candidates.Add(center.AddCopy(8 + section, level, 24));
+                candidates.Add(center.AddCopy(8 + section, level, length + 48));
             }
 
             List<BlockPos> created = new(candidates.Count);
@@ -1003,7 +993,7 @@ namespace brickbybrick
                 int attempted = 0;
                 while (nextCandidate < candidates.Count && attempted++ < ProfileBatchSize)
                 {
-                    (BlockPos pos, bool diagonal) = candidates[nextCandidate++];
+                    BlockPos pos = candidates[nextCandidate++];
                     Block existing = api.World.BlockAccessor.GetBlock(pos);
                     if (!existing.IsReplacableBy(constructionBlock))
                     {
@@ -1013,7 +1003,7 @@ namespace brickbybrick
                     }
                     api.World.BlockAccessor.SetBlock(constructionBlock.Id, pos);
                     if (api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityRealisticMasonry entity) continue;
-                    entity.PopulateWallCellForProfiling(nextCandidate, diagonal);
+                    entity.PopulateWallCellForProfiling(nextCandidate, false);
                     created.Add(pos.Copy());
                 }
 
@@ -1024,7 +1014,7 @@ namespace brickbybrick
                 }
 
                 stopwatch.Stop();
-                string spawnReport = $"Length: {length:N0}; height: {height:N0}; cardinal, diagonal, and mixed wall cells: {created.Count:N0}; rejected: {rejected:N0}; first rejected block: {firstRejectedBlock ?? "none"}; generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.";
+                string spawnReport = $"Length: {length:N0}; height: {height:N0}; cardinal wall cells: {created.Count:N0}; rejected: {rejected:N0}; first rejected block: {firstRejectedBlock ?? "none"}; generation: {stopwatch.Elapsed.TotalMilliseconds:N1} ms.";
                 AppendProfileLog(api, automated ? "AUTOMATED SERVER WALL PROFILE SPAWN" : "WALL CORPUS SPAWN", spawnReport);
 
                 if (!automated)
@@ -1073,7 +1063,7 @@ namespace brickbybrick
             if (automated)
             {
                 HashSet<(int X, int Z)> chunkColumns = candidates
-                    .Select(candidate => (candidate.Position.X / api.WorldManager.ChunkSize, candidate.Position.Z / api.WorldManager.ChunkSize))
+                    .Select(candidate => (candidate.X / api.WorldManager.ChunkSize, candidate.Z / api.WorldManager.ChunkSize))
                     .ToHashSet();
                 foreach ((int chunkX, int chunkZ) in chunkColumns)
                 {
@@ -1116,7 +1106,7 @@ namespace brickbybrick
         }
 
         // Converts only canonical frozen shapes to entityless static blocks.
-        // Diagonal and otherwise arbitrary cells intentionally remain live.
+        // Otherwise arbitrary cells intentionally remain live.
         private static void CompactTrackedProfileCellsInBatches(
             ICoreServerAPI api,
             List<BlockPos> positions,
@@ -1569,9 +1559,6 @@ namespace brickbybrick
         {
             BlockEntityRealisticMasonry.ResetOptimizedMeshRuntimeGuard();
             clientApi = api;
-            HotKey? toolModeHotKey = api.Input.GetHotKeyByCode("toolmodeselect");
-            vanillaToolModeHandler = toolModeHotKey?.Handler;
-            api.Input.SetHotKeyHandler("toolmodeselect", HandleToolModeHotKey);
             realisticClientChannel = api.Network.GetChannel("brickbybrick-realistic");
             realisticClientChannel.SetMessageHandler<RealisticControlPacket>(packet => OnProfileControlPacket(api, packet.Code));
             realisticClientChannel.SetMessageHandler<StaticMasonryStatePacket>(packet => OnStaticMasonryStatePacket(api, packet));
@@ -1600,28 +1587,6 @@ namespace brickbybrick
                 serverApi?.Network.GetChannel("brickbybrick-realistic")
                     .SendPacket(new HudTextPacket { Message = message }, serverPlayer);
             }
-        }
-
-        private bool HandleToolModeHotKey(KeyCombination combination)
-        {
-            if (!Config.IsRealisticConstructionEnabled())
-            {
-                return vanillaToolModeHandler?.Invoke(combination) ?? false;
-            }
-
-            IClientPlayer? player = clientApi?.World?.Player;
-            if (player != null && TryGetRealisticPlacementKind(player, out MasonryUnitKind heldKind))
-            {
-                int orientation = (int)ItemTrowel.ResolveRealisticOrientation(player);
-                int variant = ItemTrowel.ResolveRealisticVariant(player);
-                CycleRealisticVariantState(heldKind, 1, ref orientation, ref variant);
-                ItemTrowel.SetRealisticPlacementState(player, orientation, variant);
-                SendRealisticPlacementState(player);
-            }
-
-            // Realistic mode owns F globally. Never delegate to vanilla, even
-            // when no item or placement material is selected.
-            return true;
         }
 
         // Resend the active pose with the click. This keeps server placement
@@ -1808,7 +1773,6 @@ namespace brickbybrick
             if (clientApi != null)
             {
                 clientApi.Event.MouseWheelMove -= OnRealisticPlacementMouseWheel;
-                clientApi.Input.SetHotKeyHandler("toolmodeselect", vanillaToolModeHandler);
                 clientApi = null;
                 realisticClientChannel = null;
             }
@@ -1833,18 +1797,23 @@ namespace brickbybrick
             var entity = player.Entity;
             if (entity == null) return;
 
-            bool primaryCycle = entity.Controls?.Sneak == true;
-            // Vintage Story exposes the generic secondary modifier here; the
-            // help text and interaction code keep it behind our binding name.
-            bool secondaryCycle = entity.Controls?.CtrlKey == true;
-            if (!primaryCycle && !secondaryCycle) return;
-
-            if (!TryGetRealisticPlacementKind(player, out MasonryUnitKind heldKind)) return;
+            bool rotate = entity.Controls?.Sneak == true;
+            bool resizeEarth = entity.Controls?.CtrlKey == true;
+            if (rotate == resizeEarth) return;
+            if (!TryGetRealisticPlacementKind(player, out MasonryUnitKind kind)) return;
 
             int orientation = (int)ItemTrowel.ResolveRealisticOrientation(player);
             int variant = ItemTrowel.ResolveRealisticVariant(player);
             int step = args.delta > 0 ? 1 : -1;
-            CycleRealisticPlacementState(heldKind, primaryCycle, step, ref orientation, ref variant);
+            if (rotate)
+            {
+                orientation = CycleIn(new[] { 0, 1, 2, 3 }, orientation, step);
+            }
+            else
+            {
+                if (kind is not MasonryUnitKind.RammedEarth and not MasonryUnitKind.SmallRammedEarth) return;
+                variant = GameMath.Mod(variant + step, 2);
+            }
 
             ItemTrowel.SetRealisticPlacementState(player, orientation, variant);
             realisticClientChannel?.SendPacket(new RealisticControlPacket
@@ -1856,83 +1825,11 @@ namespace brickbybrick
             args.SetHandled(true);
         }
 
-        private static void CycleRealisticPlacementState(MasonryUnitKind heldKind, bool primaryCycle, int step, ref int orientation, ref int variant)
-        {
-            int[] cardinal = { 0, 1, 2, 3 };
-            int[] diagonal = Config.Realism.EnableDiagonalPlacement ? new[] { 4, 5, 6, 7 } : cardinal;
-            int[] all = Config.Realism.EnableDiagonalPlacement ? new[] { 0, 4, 1, 5, 2, 6, 3, 7 } : cardinal;
-
-            switch (heldKind)
-            {
-                case MasonryUnitKind.WholeBrick:
-                    variant = 0;
-                    orientation = CycleIn(primaryCycle ? cardinal : diagonal, orientation, step);
-                    break;
-
-                case MasonryUnitKind.RammedEarth:
-                case MasonryUnitKind.SmallRammedEarth:
-                    variant = primaryCycle ? 0 : 1;
-                    orientation = CycleIn(all, orientation, step);
-                    break;
-
-                case MasonryUnitKind.HalfBrick:
-                    if (primaryCycle)
-                    {
-                        variant = 0;
-                        orientation = CycleIn(all, orientation, step);
-                    }
-                    else
-                    {
-                        if (!Config.Realism.EnableDiagonalPlacement)
-                        {
-                            variant = 0;
-                            orientation = CycleIn(cardinal, orientation, step);
-                            break;
-                        }
-
-                        variant = GameMath.Mod(Math.Max(1, variant) - 1 + step, ItemTrowel.RealisticHalfBrickVariantCount - 1) + 1;
-                        orientation = GameMath.Mod(variant - 1, 8);
-                    }
-                    break;
-
-                default:
-                    orientation = CycleIn(all, orientation, step);
-                    variant = 0;
-                    break;
-            }
-        }
-
         private static int CycleIn(int[] cycle, int current, int step)
         {
             int index = Array.IndexOf(cycle, GameMath.Mod(current, 8));
             if (index < 0) index = step > 0 ? -1 : 0;
             return cycle[GameMath.Mod(index + step, cycle.Length)];
-        }
-
-        private static void CycleRealisticVariantState(MasonryUnitKind heldKind, int step, ref int orientation, ref int variant)
-        {
-            switch (heldKind)
-            {
-                case MasonryUnitKind.RammedEarth:
-                case MasonryUnitKind.SmallRammedEarth:
-                    variant = GameMath.Mod(variant + step, 2);
-                    break;
-
-                case MasonryUnitKind.HalfBrick:
-                    if (!Config.Realism.EnableDiagonalPlacement)
-                    {
-                        variant = 0;
-                        break;
-                    }
-
-                    variant = GameMath.Mod(variant + step, ItemTrowel.RealisticHalfBrickVariantCount);
-                    if (variant > 0) orientation = GameMath.Mod(variant - 1, 8);
-                    break;
-
-                default:
-                    variant = 0;
-                    break;
-            }
         }
 
         private bool TryGetRealisticPlacementKind(IClientPlayer player, out MasonryUnitKind kind)
@@ -1956,10 +1853,8 @@ namespace brickbybrick
 
         private static void OnRealisticOrientationPacket(IPlayer fromPlayer, int packet)
         {
-            int directionCount = Config.Realism.EnableDiagonalPlacement ? 8 : 4;
-            int orientation = GameMath.Mod(packet & 0xFF, directionCount);
-            int variantCount = Config.Realism.EnableDiagonalPlacement ? ItemTrowel.RealisticHalfBrickVariantCount : 1;
-            int variant = GameMath.Mod(packet >> 8, variantCount);
+            int orientation = GameMath.Mod(packet & 0xFF, 4);
+            int variant = 0;
             ItemTrowel.SetRealisticPlacementState(fromPlayer, orientation, variant);
         }
 
@@ -2009,8 +1904,8 @@ namespace brickbybrick
             }
         }
 
-        // Disables only vanilla recipes whose outputs belong to an enabled
-        // material family. Modded recipes and unrelated decorative recipes stay intact.
+            // Disables only covered vanilla brick recipes. Modded recipes and
+            // unrelated decorative recipes stay intact.
         private static bool IsDisabledVanillaBlockRecipe(GridRecipe recipe)
         {
             if (recipe?.Name?.Domain != GlobalConstants.DefaultDomain) return false;
@@ -2023,16 +1918,6 @@ namespace brickbybrick
                 if (outputPath.StartsWith("brickcourse-", StringComparison.Ordinal)
                     || outputPath.StartsWith("brickslab", StringComparison.Ordinal)
                     || outputPath.StartsWith("brickstair", StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            if (Config.Materials.EnableStoneConstruction)
-            {
-                if (outputPath.StartsWith("cobblestone-", StringComparison.Ordinal)
-                    || outputPath.StartsWith("cobblestoneslab", StringComparison.Ordinal)
-                    || outputPath.StartsWith("cobblestonestair", StringComparison.Ordinal))
                 {
                     return true;
                 }

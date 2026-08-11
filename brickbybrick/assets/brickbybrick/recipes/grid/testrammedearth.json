@@ -8,9 +8,10 @@
   },
   "width": 1,
   "height": 1,
+  "shapeless": true,
   "output": {
     "type": "item",
-    "code": "brickbybrick:rammedearthsupply",
+    "code": "brickbybrick:testrammedearth",
     "quantity": 1
   }
 }

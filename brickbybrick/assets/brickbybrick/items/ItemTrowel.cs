@@ -34,7 +34,6 @@ namespace brickbybrick.items
         private const string FamilyAttribute = "masonryFamily";
         public const string RealisticOrientationAttribute = "brickbybrick:realisticOrientation";
         public const string RealisticVariantAttribute = "brickbybrick:realisticVariant";
-        public const string SecondaryPlacementModifierHotKeyCode = "ctrl";
         public const int RealisticHalfBrickVariantCount = 9;
         private const string RealisticPlacementLogName = "brickbybrick-placement.log";
         private static readonly object RealisticPlacementLogLock = new();
@@ -156,6 +155,32 @@ namespace brickbybrick.items
             }
 
             handling = EnumHandHandling.PreventDefault;
+            if (byEntity?.World == null || blockSel == null) return;
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            if (player == null) return;
+
+            if (byEntity.Controls.Sneak)
+            {
+                if (byEntity.World.Side != EnumAppSide.Server) return;
+                if (!TryGetRealisticMaterial(player, slot, out _, out ItemStack materialStack)) return;
+                TryPickupMatchingRealisticBrick(
+                    byEntity,
+                    player,
+                    blockSel,
+                    materialStack.Collectible?.Code?.Path ?? string.Empty);
+                return;
+            }
+
+            if (byEntity.World.Side == EnumAppSide.Server)
+            {
+                // The wheel state and attack travel on separate channels. Give
+                // the placement-state packet one short callback to arrive.
+                byEntity.World.Api.Event.RegisterCallback(_ => TryPlaceRealisticUnit(slot, byEntity, player, blockSel), 25);
+            }
+            else
+            {
+                byEntity.World.Api.ModLoader.GetModSystem<brickbybrickModSystem>()?.SendRealisticPlacementState(player);
+            }
         }
 
         public override void OnHeldInteractStart(ItemSlot slot, EntityAgent byEntity, BlockSelection blockSel, EntitySelection entitySel, bool firstEvent, ref EnumHandHandling handling)
@@ -193,28 +218,7 @@ namespace brickbybrick.items
 
             if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
             {
-                bool mortarAction = byEntity.Controls.Sneak || !TryGetRealisticMaterial(byPlayer, slot, out _, out _);
-                if (mortarAction)
-                {
-                    UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
-                }
-                else if (byEntity.World.Side == EnumAppSide.Server)
-                {
-                    // The wheel state is sent over the mod channel, while the
-                    // held interaction arrives through the game channel.
-                    // Delay one short callback so the server commits the pose
-                    // that produced the client-side placement preview.
-                    byEntity.World.Api.Event.RegisterCallback(_ =>
-                    {
-                        TryPlaceRealisticUnit(slot, byEntity, byPlayer, blockSel);
-                    }, 25);
-                }
-                else
-                {
-                    brickbybrickModSystem system = byEntity.World.Api.ModLoader.GetModSystem<brickbybrickModSystem>();
-                    system?.SendRealisticPlacementState(byPlayer);
-                }
-
+                UpdateTrowelUseAnimation(slot, byEntity, byPlayer, blockSel);
                 handling = EnumHandHandling.PreventDefault;
                 return;
             }
@@ -370,7 +374,7 @@ namespace brickbybrick.items
             SpawnConstructionParticles(byEntity.World, targetPos, placeBlock, ConstructionAction.Masonry, color, false, 0.25, true, materialStack);
 
             ConsumeOffhand(offhandSlot, brickbybrickModSystem.Config.Trowels.MasonryCostPerAction);
-            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction, player);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -462,7 +466,7 @@ namespace brickbybrick.items
                 ConsumeOffhand(materialSlot, brickbybrickModSystem.Config.Trowels.MasonryCostPerAction);
             }
 
-            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction, player);
             SetInteracted(slot.Itemstack, true);
 
             return false;
@@ -481,17 +485,6 @@ namespace brickbybrick.items
                         ? MasonryUnitKind.WholeBrick
                         : (MasonryUnitKind)(-1);
             if ((int)kind < 0) return;
-
-            bool usesRammedEarthSupply = materialStack.Collectible is ItemRammedEarthSupply;
-            int placementCost = usesRammedEarthSupply ? ItemRammedEarthSupply.GetPlacementCost(kind) : 1;
-            int minimumCost = kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth
-                ? ItemRammedEarthSupply.GapFillPoints
-                : placementCost;
-            if (usesRammedEarthSupply && !ItemRammedEarthSupply.HasPoints(materialStack, minimumCost))
-            {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-rammed-earth-insufficient"));
-                return;
-            }
 
             BlockPos targetPos = byEntity.World.BlockAccessor.GetBlock(blockSel.Position).Code?.Path == "realisticmasonry"
                 ? blockSel.Position.Copy()
@@ -515,7 +508,6 @@ namespace brickbybrick.items
             };
             StringBuilder placementTrace = new();
             AppendRealisticPlacementTraceHeader(placementTrace, "PLACE", byEntity.World.Side, blockSel, path, unit, targetPos, targetsExistingCell, gridX, gridZ, layer);
-            TrySnapRealisticPlacement(byEntity.World.BlockAccessor, targetPos, blockSel, unit, placementTrace);
             CanonicalizePlacementOwner(ref targetPos, unit);
             placementTrace.AppendLine($"finalTarget={FormatBlockPos(targetPos)} finalUnit={FormatRealisticUnit(unit)}");
             targetBlock = byEntity.World.BlockAccessor.GetBlock(targetPos);
@@ -545,29 +537,14 @@ namespace brickbybrick.items
             if ((kind is MasonryUnitKind.RammedEarth or MasonryUnitKind.SmallRammedEarth)
                 && entity.TryFillSmallEarthGap(ResolveSelectedMicroVoxel(blockSel)))
             {
-                int fillMaterialCountBefore = usesRammedEarthSupply
-                    ? ItemRammedEarthSupply.GetPoints(materialSlot.Itemstack)
-                    : materialSlot.Itemstack?.StackSize ?? 0;
-                if (usesRammedEarthSupply)
-                {
-                    ItemRammedEarthSupply.TryConsume(materialSlot, ItemRammedEarthSupply.GapFillPoints);
-                }
-                else
-                {
-                    materialSlot.TakeOut(1);
-                    materialSlot.MarkDirty();
-                }
+                int fillMaterialCountBefore = materialSlot.Itemstack?.StackSize ?? 0;
+                materialSlot.TakeOut(1);
+                materialSlot.MarkDirty();
+
                 PlayRandomSound(byEntity.World, targetPos, player, BrickSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
-                placementTrace.AppendLine($"inventory=consume material={path} points={ItemRammedEarthSupply.GapFillPoints} before={fillMaterialCountBefore} after={(usesRammedEarthSupply ? ItemRammedEarthSupply.GetPoints(materialSlot.Itemstack) : materialSlot.Itemstack?.StackSize ?? 0)}");
+                placementTrace.AppendLine($"inventory=consume material={path} count=1 before={fillMaterialCountBefore} after={materialSlot.Itemstack?.StackSize ?? 0}");
                 placementTrace.AppendLine("result=filled-small-earth-gap");
                 LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
-                return;
-            }
-
-            if (usesRammedEarthSupply && !ItemRammedEarthSupply.HasPoints(materialSlot.Itemstack, placementCost))
-            {
-                NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-rammed-earth-insufficient"));
-                CleanupCreatedEmptyTarget();
                 return;
             }
 
@@ -643,20 +620,11 @@ namespace brickbybrick.items
                 return;
             }
 
-            int materialCountBefore = usesRammedEarthSupply
-                ? ItemRammedEarthSupply.GetPoints(materialSlot.Itemstack)
-                : materialSlot.Itemstack?.StackSize ?? 0;
-            if (usesRammedEarthSupply)
-            {
-                ItemRammedEarthSupply.TryConsume(materialSlot, placementCost);
-            }
-            else
-            {
-                materialSlot.TakeOut(1);
-                materialSlot.MarkDirty();
-            }
+            int materialCountBefore = materialSlot.Itemstack?.StackSize ?? 0;
+            materialSlot.TakeOut(1);
+            materialSlot.MarkDirty();
             PlayRandomSound(byEntity.World, targetPos, player, BrickSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
-            placementTrace.AppendLine($"inventory=consume material={path} points={placementCost} before={materialCountBefore} after={(usesRammedEarthSupply ? ItemRammedEarthSupply.GetPoints(materialSlot.Itemstack) : materialSlot.Itemstack?.StackSize ?? 0)}");
+            placementTrace.AppendLine($"inventory=consume material={path} count=1 before={materialCountBefore} after={materialSlot.Itemstack?.StackSize ?? 0}");
             placementTrace.AppendLine("result=placed");
             LogRealisticPlacementTrace(byEntity.World.Api, placementTrace);
 
@@ -853,8 +821,6 @@ namespace brickbybrick.items
 
         private static void TrySnapRealisticPlacement(IBlockAccessor blockAccessor, BlockPos targetPos, BlockSelection blockSel, MasonryUnitPlacement unit, StringBuilder trace = null)
         {
-            if (!brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement) return;
-
             bool isCardinalConnection = unit.Kind == MasonryUnitKind.WholeBrick
                 && !unit.IsDiagonal
                 && unit.VisualShape == MasonryVisualShape.Cuboid;
@@ -1556,8 +1522,7 @@ namespace brickbybrick.items
 
         public static MasonryOrientation ResolveRealisticOrientation(IPlayer player)
         {
-            int directionCount = brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement ? 8 : 4;
-            return (MasonryOrientation)GameMath.Mod(GetRealisticPlacementValue(player, RealisticOrientationAttribute, 0), directionCount);
+            return (MasonryOrientation)GameMath.Mod(GetRealisticPlacementValue(player, RealisticOrientationAttribute, 0), 4);
         }
 
         public static int ResolveRealisticVariant(IPlayer player)
@@ -1572,23 +1537,11 @@ namespace brickbybrick.items
 
         public static MasonryVisualShape ResolveRealisticVisualShape(MasonryUnitKind kind, IPlayer player)
         {
-            return brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement
-                && kind == MasonryUnitKind.HalfBrick
-                && ResolveRealisticVariant(player) > 0
-                ? MasonryVisualShape.TriangleWedge
-                : MasonryVisualShape.Cuboid;
+            return MasonryVisualShape.Cuboid;
         }
 
         public static MasonryOrientation ResolveRealisticUnitOrientation(MasonryUnitKind kind, IPlayer player)
         {
-            int variant = ResolveRealisticVariant(player);
-            if (brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement
-                && kind == MasonryUnitKind.HalfBrick
-                && variant > 0)
-            {
-                return (MasonryOrientation)GameMath.Mod(variant - 1, 8);
-            }
-
             return ResolveRealisticOrientation(player);
         }
 
@@ -1596,12 +1549,8 @@ namespace brickbybrick.items
         {
             if (player?.Entity?.WatchedAttributes == null) return;
 
-            int directionCount = brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement ? 8 : 4;
-            int variantCount = brickbybrickModSystem.Config.Realism.EnableDiagonalPlacement
-                ? RealisticHalfBrickVariantCount
-                : 1;
-            int normalizedOrientation = GameMath.Mod(orientation, directionCount);
-            int normalizedVariant = GameMath.Mod(variant, variantCount);
+            int normalizedOrientation = GameMath.Mod(orientation, 4);
+            int normalizedVariant = GameMath.Mod(variant, 2);
             player.Entity.WatchedAttributes.SetInt(RealisticOrientationAttribute, normalizedOrientation);
             player.Entity.WatchedAttributes.SetInt(RealisticVariantAttribute, normalizedVariant);
 
@@ -1633,12 +1582,11 @@ namespace brickbybrick.items
                 GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.X - blockSel.Face.Normali.X * 0.001) * 4), 0, 3),
                 GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Y - blockSel.Face.Normali.Y * 0.001) * 4), 0, 255),
                 GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Z - blockSel.Face.Normali.Z * 0.001) * 4), 0, 3));
-            string color = heldPath[(heldPath.LastIndexOf('-') + 1)..];
             StringBuilder pickupTrace = new();
             pickupTrace.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] PICKUP side={byEntity.World.Side}");
             pickupTrace.AppendLine($"selection pos={FormatBlockPos(blockSel?.Position)} face={blockSel?.Face?.Code ?? "null"} hit={FormatVec(blockSel?.HitPosition)}");
-            pickupTrace.AppendLine($"heldMaterial={heldPath} color={color} targetCell=({cell.X},{cell.Y},{cell.Z})");
-            if (!entity.IsUnmortaredBrickOfColor(cell, color))
+            pickupTrace.AppendLine($"heldMaterial={heldPath} targetCell=({cell.X},{cell.Y},{cell.Z})");
+            if (!entity.IsUnmortaredBrickOfMaterial(cell, heldPath))
             {
                 pickupTrace.AppendLine("result=skipped reason=no-matching-unmortared-unit");
                 LogRealisticPlacementTrace(byEntity.World.Api, pickupTrace);
@@ -1670,7 +1618,6 @@ namespace brickbybrick.items
 
         private bool HandleRealisticMortar(float secondsUsed, ItemSlot slot, EntityAgent byEntity, IPlayer player, BlockSelection blockSel)
         {
-            if (!byEntity.Controls.Sneak && TryGetRealisticMaterial(player, slot, out _, out _)) return false;
             float duration = brickbybrickModSystem.Config.GetConstructionActionSeconds() / Math.Max(1, slot.Itemstack.Collectible.ToolTier);
             PlayActionSoundAtMidpoint(secondsUsed, slot, byEntity, player, blockSel.Position, TrowelSounds, brickbybrickModSystem.Config.Effects.ConstructionSoundRange);
             if (secondsUsed < duration) return true;
@@ -1695,7 +1642,7 @@ namespace brickbybrick.items
                     return false;
                 }
 
-                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+                ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction, player);
                 SetInteracted(slot.Itemstack, true);
                 NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-realistic-reopened"));
                 return false;
@@ -1711,9 +1658,9 @@ namespace brickbybrick.items
                     GameMath.Clamp((int)Math.Floor((blockSel.HitPosition.Z - blockSel.Face.Normali.Z * 0.001) * 4), 0, 3));
                 bool freeMortar = entity.IsMortarFree(sideCell, blockSel.Face);
                 if (!freeMortar && !HasEnoughMortar(slot, byEntity)) return false;
-                if (!entity.ApplySideMortar(sideCell, blockSel.Face)) return false;
+                if (entity.ApplySideMortar(sideCell, blockSel.Face) <= 0) return false;
 
-                if (!freeMortar) ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+                if (!freeMortar) ConsumeConfiguredMortar(slot, brickbybrickModSystem.Config.Trowels.MortarCostPerAction, player);
                 SetInteracted(slot.Itemstack, true);
                 return false;
             }
@@ -1731,7 +1678,7 @@ namespace brickbybrick.items
             int changed = entity.ApplyMortar(unit);
             if (changed <= 0) return false;
 
-            if (!freeTopMortar) ConsumeConfiguredMortar(slot, changed * brickbybrickModSystem.Config.Trowels.MortarCostPerAction);
+            if (!freeTopMortar) ConsumeConfiguredMortar(slot, changed * brickbybrickModSystem.Config.Trowels.MortarCostPerAction, player);
             SetInteracted(slot.Itemstack, true);
             return false;
         }
@@ -2009,7 +1956,9 @@ namespace brickbybrick.items
             string path = stack?.Collectible?.Code?.Path ?? string.Empty;
             if (IsRammedEarthMaterial(path))
             {
-                kind = ResolveRealisticRammedEarthVariant(player) == 1 ? MasonryUnitKind.SmallRammedEarth : MasonryUnitKind.RammedEarth;
+                kind = ResolveRealisticRammedEarthVariant(player) == 1
+                    ? MasonryUnitKind.SmallRammedEarth
+                    : MasonryUnitKind.RammedEarth;
                 return true;
             }
 
@@ -2031,7 +1980,7 @@ namespace brickbybrick.items
 
         private static bool IsRammedEarthMaterial(string path)
         {
-            return path is "testrammedearth" or "rammedearthsupply";
+            return path == "testrammedearth";
         }
 
         private static bool IsPlacementMode(int toolMode)
@@ -2399,9 +2348,9 @@ namespace brickbybrick.items
 
         // Builder mode carries fractional cost forward on the trowel so one
         // mortar portion pays for exactly two normal one-portion actions.
-        private void ConsumeConfiguredMortar(ItemSlot slot, int baseQuantity)
+        private void ConsumeConfiguredMortar(ItemSlot slot, int baseQuantity, IPlayer player)
         {
-            if (slot?.Itemstack == null || baseQuantity <= 0) return;
+            if (slot?.Itemstack == null || baseQuantity <= 0 || IsCreativePlayer(player)) return;
 
             const string CostRemainderAttribute = "mortarCostRemainder";
             float multiplier = brickbybrickModSystem.Config.GetMortarCostMultiplier();
@@ -2582,8 +2531,6 @@ namespace brickbybrick.items
             if (string.IsNullOrEmpty(path)) return null;
             if (path.StartsWith("burnedbrick-", StringComparison.Ordinal)) return "brick";
             if (path.StartsWith("refractorybrick-", StringComparison.Ordinal)) return "refractory";
-            if (path.StartsWith("stonebrick-", StringComparison.Ordinal)) return "ashlar";
-            if (path.StartsWith("stone-", StringComparison.Ordinal)) return "cobble";
 
             return null;
         }
@@ -2700,9 +2647,25 @@ namespace brickbybrick.items
             };
             if (brickbybrickModSystem.Config.IsRealisticConstructionEnabled())
             {
-                // Realistic mode is intentionally GUI-free. Its controls are
-                // handled directly by the trowel and documented in the handbook.
-                return Array.Empty<WorldInteraction>();
+                return new WorldInteraction[]
+                {
+                    new WorldInteraction
+                    {
+                        ActionLangCode = "brickbybrick:heldhelp-realistic-place",
+                        MouseButton = EnumMouseButton.Left
+                    },
+                    new WorldInteraction
+                    {
+                        ActionLangCode = "brickbybrick:heldhelp-realistic-recover",
+                        HotKeyCodes = new[] { "sneak" },
+                        MouseButton = EnumMouseButton.Left
+                    },
+                    new WorldInteraction
+                    {
+                        ActionLangCode = "brickbybrick:heldhelp-realistic-binder",
+                        MouseButton = EnumMouseButton.Right
+                    }
+                };
             }
 
             return activeInteractions == null || activeInteractions.Length == 0
@@ -2863,14 +2826,21 @@ namespace brickbybrick.items
 
         private bool HasEnoughMortar(ItemSlot slot, EntityAgent byEntity)
         {
+            IPlayer player = (byEntity as EntityPlayer)?.Player;
+            if (IsCreativePlayer(player)) return true;
+
             if (GetStoredAmount(slot.Itemstack) <= 0)
             {
-                IPlayer player = (byEntity as EntityPlayer)?.Player;
                 NotifyPlayerDebug(player, byEntity.World, Lang.Get("brickbybrick:notice-trowel-no-mortar"));
                 return false;
             }
 
             return true;
+        }
+
+        private static bool IsCreativePlayer(IPlayer player)
+        {
+            return player?.WorldData?.CurrentGameMode == EnumGameMode.Creative;
         }
 
         private bool HasInteracted(ItemStack stack)
@@ -3078,7 +3048,7 @@ namespace brickbybrick.items
                 if (!trowel.TryGetRealisticMaterial(player, activeSlot, out _, out ItemStack materialStack)) return false;
 
                 string path = materialStack.Collectible?.Code?.Path ?? string.Empty;
-                MasonryUnitKind kind = path == "testrammedearth"
+                MasonryUnitKind kind = IsRammedEarthMaterial(path)
                     ? ResolveRealisticRammedEarthVariant(player) == 1 ? MasonryUnitKind.SmallRammedEarth : MasonryUnitKind.RammedEarth
                     : path.StartsWith("halfbrick-", StringComparison.Ordinal)
                         ? MasonryUnitKind.HalfBrick
@@ -3106,7 +3076,6 @@ namespace brickbybrick.items
                 StringBuilder previewTrace = new();
                 AppendRealisticPlacementTraceHeader(previewTrace, "PREVIEW", capi.Side, blockSel, path, unit, targetPos, targetsExistingCell, gridX, gridZ, layer);
                 Block targetBlock = capi.World.BlockAccessor.GetBlock(targetPos);
-                TrySnapRealisticPlacement(capi.World.BlockAccessor, targetPos, blockSel, unit, previewTrace);
                 CanonicalizePlacementOwner(ref targetPos, unit);
                 previewTrace.AppendLine($"finalTarget={FormatBlockPos(targetPos)} finalUnit={FormatRealisticUnit(unit)}");
                 targetBlock = capi.World.BlockAccessor.GetBlock(targetPos);
@@ -3176,8 +3145,6 @@ namespace brickbybrick.items
                 Variants variants = new();
                 variants.Set("color", color);
                 MeshData meshData = behavior.GetOrCreateMesh(variants, shape, new BlockPos(0), key).Clone();
-                if (unit.VisualShape == MasonryVisualShape.TriangleWedge) MasonryVoxelGeometry.DeformTriangle(meshData);
-
                 meshData = MasonryVoxelGeometry.TransformUnitMesh(meshData, unit, RealisticJointInset);
                 meshRef = capi.Render.UploadMesh(meshData);
                 meshRefs[key] = meshRef;

@@ -688,3 +688,5 @@ docs/
 *.lnk
 research/
 bbb-meshdump-latest.txt
+DESIGN.md
+context-manifest.json

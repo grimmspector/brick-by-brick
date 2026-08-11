@@ -189,8 +189,7 @@ namespace brickbybrick.RealisticConstruction
 
             if (Kind == MasonryUnitKind.RammedEarth)
             {
-                int xStep = Orientation == MasonryOrientation.West || Orientation == MasonryOrientation.North ? -1 : 1;
-                int zStep = Orientation == MasonryOrientation.North || Orientation == MasonryOrientation.East ? -1 : 1;
+                MasonryVoxelGeometry.GetRammedEarthFootprintSteps(Orientation, out int xStep, out int zStep);
                 for (int x = 0; x < 2; x++)
                 {
                     for (int z = 0; z < 2; z++)

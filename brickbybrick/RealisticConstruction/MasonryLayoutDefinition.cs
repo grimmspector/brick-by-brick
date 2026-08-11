@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace brickbybrick.RealisticConstruction
 {
     // Describes one selectable construction ghost without tying the layout to
-    // brick, cobble, or another masonry family.
+    // brick or another masonry family supplied by a future branch.
     public sealed class MasonryLayoutDefinition
     {
         public string Code { get; set; } = string.Empty;

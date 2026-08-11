@@ -77,7 +77,7 @@ namespace brickbybrick
 
     public sealed class ConstructionSettings
     {
-        public ConstructionMode Mode { get; set; } = ConstructionMode.Immersive;
+        public ConstructionMode Mode { get; set; } = ConstructionMode.Realistic;
 
         public bool DisableVanillaBlockRecipes { get; set; } = false;
 
@@ -127,8 +127,6 @@ namespace brickbybrick
     public sealed class MaterialSettings
     {
         public bool EnableBrickConstruction { get; set; } = true;
-
-        public bool EnableStoneConstruction { get; set; } = true;
 
         public bool EnableRefractoryConstruction { get; set; } = true;
 
@@ -185,17 +183,12 @@ namespace brickbybrick
 
     public sealed class RealismSettings
     {
-        // Enables the experimental 45-degree placement steps used by realistic
-        // masonry. Disabling this preserves the original four-direction cycle.
-        public bool EnableDiagonalPlacement { get; set; } = false;
-
         // Allows mortar-free realistic masonry to seal rooms. Disabled by
         // default so dry-laid bricks remain permeable to heat and sound.
         public bool AllowUnmortaredRoomSealing { get; set; } = false;
 
-        // Experimental until visually validated across every masonry shape.
-        // Invalid meshes automatically fall back to component rendering.
-        public bool EnableOptimizedFrozenMeshes { get; set; } = false;
+        // Invalid optimized meshes automatically fall back to component rendering.
+        public bool EnableOptimizedFrozenMeshes { get; set; } = true;
 
         public int FrozenMeshCacheMiB { get; set; } = 64;
 
@@ -231,8 +224,6 @@ namespace brickbybrick
     public sealed class VisualSettings
     {
         public bool EnableMortarColorVariants { get; set; } = true;
-
-        public bool EnableImmersiveStoneShapes { get; set; } = true;
     }
 
     internal static class ConfigRange

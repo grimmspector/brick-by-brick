@@ -34,6 +34,12 @@ namespace brickbybrick.RealisticConstruction
             return 0.125f;
         }
 
+        internal static void GetRammedEarthFootprintSteps(MasonryOrientation orientation, out int xStep, out int zStep)
+        {
+            xStep = orientation is MasonryOrientation.West or MasonryOrientation.North ? -1 : 1;
+            zStep = orientation is MasonryOrientation.North or MasonryOrientation.East ? -1 : 1;
+        }
+
         internal static void GetDimensions(MasonryUnitKind kind, out float length, out float width)
         {
             length = kind is MasonryUnitKind.WholeBrick or MasonryUnitKind.RammedEarth ? 0.5f : 0.25f;
@@ -59,6 +65,12 @@ namespace brickbybrick.RealisticConstruction
                 centerX += directionX * centerOffset;
                 centerZ += directionZ * centerOffset;
             }
+            else if (unit.Kind == MasonryUnitKind.RammedEarth)
+            {
+                GetRammedEarthFootprintSteps(unit.Orientation, out int xStep, out int zStep);
+                centerX += xStep * 0.125f;
+                centerZ += zStep * 0.125f;
+            }
         }
 
         internal static void SetUnitCenter(MasonryUnitPlacement unit, float centerX, float centerZ)
@@ -69,6 +81,12 @@ namespace brickbybrick.RealisticConstruction
                 float centerOffset = GetWholeBrickCenterOffset(unit.Orientation);
                 centerX -= directionX * centerOffset;
                 centerZ -= directionZ * centerOffset;
+            }
+            else if (unit.Kind == MasonryUnitKind.RammedEarth)
+            {
+                GetRammedEarthFootprintSteps(unit.Orientation, out int xStep, out int zStep);
+                centerX -= xStep * 0.125f;
+                centerZ -= zStep * 0.125f;
             }
 
             unit.Origin.X = (int)MathF.Floor(centerX * 4);

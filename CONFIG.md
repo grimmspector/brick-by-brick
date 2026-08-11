@@ -2,7 +2,7 @@
 
 Brick-by-Brick creates `brickbybrick.json` in the Vintage Story `ModConfig` directory the first time the mod starts. Stop the game or server before editing the file, then restart it to apply changes.
 
-The default configuration preserves the mod's current immersive gameplay. Invalid numeric values are automatically moved to the nearest supported value when the configuration loads.
+The default configuration enables the Realistic brick-and-rammed-earth experience. Invalid numeric values are automatically moved to the nearest supported value when the configuration loads.
 
 > [!IMPORTANT]
 > Standard JSON does not support comments. Do not add `//` or `/* */` comments to `brickbybrick.json`.
@@ -15,8 +15,8 @@ Settings marked **Active** affect the current release. Settings marked **Planned
 
 | Setting | Values | Default | Status | Description |
 | --- | --- | --- | --- | --- |
-| `Mode` | `Cosmetic`, `Immersive`, `Realistic`, `Builder` | `Immersive` | Active | Selects the overall construction experience. Realistic uses the direct masonry placement path and is GUI-free while the trowel is held. |
-| `DisableVanillaBlockRecipes` | `true`, `false` | `false` | Active | Disables covered vanilla brick or stone block recipes when their material family is enabled. |
+| `Mode` | `Cosmetic`, `Immersive`, `Realistic`, `Builder` | `Realistic` | Active | Selects the overall construction experience. Realistic uses direct brick and rammed-earth placement and is GUI-free while the trowel is held. |
+| `DisableVanillaBlockRecipes` | `true`, `false` | `false` | Active | Disables covered vanilla brick recipes when brick construction is enabled. |
 | `EnableBloomeryConstruction` | `true`, `false` | `false` | Planned | Enables sequential bloomery construction when that system is available. |
 
 The planned construction modes are:
@@ -34,8 +34,8 @@ The planned construction modes are:
 | --- | ---: | ---: | --- | --- |
 | `CapacityPerTier` | 1–1024 | 16 | Active | Mortar capacity added for each trowel tool tier. |
 | `ConstructionActionSeconds` | 0.1–30.0 | 2.0 | Active | Seconds required in Immersive mode and the current Realistic fallback. |
-| `MortarCostPerAction` | 0–64 | 1 | Active | Mortar portions consumed by each successful action. |
-| `MasonryCostPerAction` | 0–64 | 1 | Active | Bricks or stones consumed by each masonry action. |
+| `MortarCostPerAction` | 0–64 | 1 | Active | Mortar portions consumed by each successful non-creative action. Creative players retain the trowel's current mortar value. |
+| `MasonryCostPerAction` | 0–64 | 1 | Active | Bricks consumed by each Immersive masonry action. |
 | `AllowContainerRefill` | `true`, `false` | `true` | Active | Allows trowels to collect mortar from compatible liquid containers. |
 | `EnablePlacementPreview` | `true`, `false` | `true` | Active | Shows the translucent staged masonry preview while placing masonry, without previewing mortar. |
 | `PlacementPreviewOpacity` | 0.0–1.0 | 0.52 | Active | Controls preview transparency. Zero is invisible and one is opaque. |
@@ -45,14 +45,17 @@ Setting a material or mortar cost to zero makes that resource free, but the play
 ## Realistic trowel controls
 
 Realistic mode does not open the vanilla tool-mode window and does not show
-tool-mode icons. F is consumed globally while Realistic mode is active; when a
-compatible material is selected it cycles that material's placement
-variant/profile. Plain mouse wheel remains hotbar selection;
-Shift + mouse wheel cycles orientation/ghost choices, including diagonals when
-enabled; Ctrl + mouse wheel cycles placement variants. Left click is prevented
-as an attack or block-break action, while right click remains the masonry and
-mortar interaction. The trowel's default stab animation is disabled because it
-is not a weapon.
+tool-mode icons. It adds no F binding. Left click places one visible brick;
+Shift + left click recovers a matching brick before mortar has been applied.
+Held right click applies mortar stored in the trowel. Plain mouse wheel remains
+hotbar selection, and Shift + mouse wheel cycles the four cardinal
+orientations. With rammed earth in the offhand, Ctrl + mouse wheel switches
+between 2x2 and 1x1 earth pieces. Shift+Ctrl-wheel remains unused. The trowel's
+default stab animation remains disabled because left click is a construction
+action, not a weapon attack.
+
+The beta exposes Test rammed earth directly in the creative inventory. The
+player-facing rammed-earth supply and crafting recipe are not included yet.
 
 ## Effects
 
@@ -67,11 +70,10 @@ is not a weapon.
 | Setting | Values | Default | Status | Description |
 | --- | --- | --- | --- | --- |
 | `EnableBrickConstruction` | `true`, `false` | `true` | Partially active | Controls whether vanilla brick recipes are disabled. Full construction-family filtering is planned. |
-| `EnableStoneConstruction` | `true`, `false` | `true` | Partially active | Controls whether vanilla stone recipes are disabled. Full construction-family filtering is planned. |
 | `EnableRefractoryConstruction` | `true`, `false` | `true` | Planned | Enables refractory masonry construction. |
 | `EnableModdedMaterials` | `true`, `false` | `true` | Planned | Allows compatible materials supplied by other mods. |
 
-`DisableVanillaBlockRecipes` affects a family only when its matching material setting is enabled. It does not disable recipes added by other mods.
+`DisableVanillaBlockRecipes` affects bricks only when brick construction is enabled. It does not disable recipes added by other mods.
 
 ## Mortar
 
@@ -94,7 +96,7 @@ is not a weapon.
 | `AllowWetBlockPickup` | `true`, `false` | `false` | Planned | Allows wet masonry blocks to be picked up intact. |
 | `AllowWetBlockDismantling` | `true`, `false` | `true` | Planned | Allows wet masonry to be dismantled into components. |
 | `DismantlingMortarRecovery` | 0.0–1.0 | 0.0 | Planned | Fraction of mortar recovered while dismantling. |
-| `DismantlingMasonryRecovery` | 0.0–1.0 | 1.0 | Planned | Fraction of bricks or stones recovered while dismantling. |
+| `DismantlingMasonryRecovery` | 0.0–1.0 | 1.0 | Planned | Fraction of masonry material recovered while dismantling. |
 
 Recovery values are fractions: `0.25` is 25%, `0.5` is 50%, and `1.0` is 100%.
 
@@ -102,12 +104,11 @@ Recovery values are fractions: `0.25` is 25%, `0.5` is 50%, and `1.0` is 100%.
 
 | Setting | Range | Default | Status | Description |
 | --- | ---: | ---: | --- | --- |
-| `EnableOptimizedFrozenMeshes` | `true`, `false` | `false` | Experimental | Uses validated exposed-face and greedy-merged meshes for frozen masonry, with automatic component-renderer fallback. |
-| `EnableDiagonalPlacement` | `true`, `false` | `false` | Experimental | Enables finite 45-degree realistic masonry poses. Diagonal placement snaps to named anchor continuations and triangular wedges remain half-brick gameplay units. |
+| `EnableOptimizedFrozenMeshes` | `true`, `false` | `true` | Active | Uses validated exposed-face and greedy-merged meshes for frozen masonry, with automatic component-renderer fallback. |
 | `AllowUnmortaredRoomSealing` | `true`, `false` | `false` | Active | Allows realistic masonry without complete mortar coverage in every eligible vertical side joint to seal rooms. Top mortar does not affect room sealing. |
 | `FrozenMeshCacheMiB` | 32–1024 | 64 | Active | Maximum estimated client memory retained for reusable frozen masonry meshes. |
 | `TransformedMeshCacheMiB` | 8–256 | 16 | Active | Maximum estimated client memory retained for shared transformed masonry components. |
-| `EnableGroundPlacedStacks` | `true`, `false` | `true` | Planned | Allows loose bricks and stones to form visible ground stacks. |
+| `EnableGroundPlacedStacks` | `true`, `false` | `true` | Planned | Allows loose bricks to form visible ground stacks. |
 | `EnablePathmaking` | `true`, `false` | `true` | Planned | Allows supported loose masonry materials to create paths. |
 | `EnableSledgehammer` | `true`, `false` | `true` | Planned | Enables the masonry dismantling tool. |
 | `SledgehammerRecoveryMultiplier` | 0.0–1.0 | 1.0 | Planned | Fraction of eligible materials recovered with a sledgehammer. |
@@ -117,7 +118,6 @@ Recovery values are fractions: `0.25` is 25%, `0.5` is 50%, and `1.0` is 100%.
 | Setting | Values | Default | Status | Description |
 | --- | --- | --- | --- | --- |
 | `EnableMortarColorVariants` | `true`, `false` | `true` | Planned | Displays the appropriate mortar color on supported masonry. |
-| `EnableImmersiveStoneShapes` | `true`, `false` | `true` | Planned | Uses varied dry-stone and cobblestone shapes where supported. |
 
 ## Example
 
@@ -126,7 +126,7 @@ This example contains every available setting and its default value:
 ```json
 {
   "Construction": {
-    "Mode": "Immersive",
+    "Mode": "Realistic",
     "DisableVanillaBlockRecipes": false,
     "EnableBloomeryConstruction": false
   },
@@ -146,7 +146,6 @@ This example contains every available setting and its default value:
   },
   "Materials": {
     "EnableBrickConstruction": true,
-    "EnableStoneConstruction": true,
     "EnableRefractoryConstruction": true,
     "EnableModdedMaterials": true
   },
@@ -167,19 +166,21 @@ This example contains every available setting and its default value:
     "DismantlingMortarRecovery": 0.0,
     "DismantlingMasonryRecovery": 1.0
   },
-    "Realism": {
-      "AllowUnmortaredRoomSealing": false,
-      "EnableOptimizedFrozenMeshes": false,
-      "FrozenMeshCacheMiB": 64,
-      "TransformedMeshCacheMiB": 16,
+  "Realism": {
+    "AllowUnmortaredRoomSealing": false,
+    "EnableOptimizedFrozenMeshes": true,
+    "FrozenMeshCacheMiB": 64,
+    "TransformedMeshCacheMiB": 16,
+    "StaticMeshCacheMiB": 64,
+    "MortarCapacityMultiplier": 4,
+    "FillUnitsPerItem": 2,
     "EnableGroundPlacedStacks": true,
     "EnablePathmaking": true,
     "EnableSledgehammer": true,
     "SledgehammerRecoveryMultiplier": 1.0
   },
   "Visuals": {
-    "EnableMortarColorVariants": true,
-    "EnableImmersiveStoneShapes": true
+    "EnableMortarColorVariants": true
   }
 }
 ```
